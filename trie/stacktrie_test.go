@@ -25,7 +25,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/crypto"
-	"github.com/ava-labs/libevm/trie/testutil"
+	"github.com/ava-labs/libevm/internal/testrand"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
 )
@@ -431,12 +431,12 @@ func TestPartialStackTrie(t *testing.T) {
 		for i := 0; i < n; i++ {
 			var val []byte
 			if rand.Intn(3) == 0 {
-				val = testutil.RandBytes(3)
+				val = testrand.Bytes(3)
 			} else {
-				val = testutil.RandBytes(32)
+				val = testrand.Bytes(32)
 			}
 			entries = append(entries, &kv{
-				k: testutil.RandBytes(32),
+				k: testrand.Bytes(32),
 				v: val,
 			})
 		}
