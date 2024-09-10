@@ -1,4 +1,4 @@
-name: i386 linux tests
+name: Go
 
 on:
   push:
