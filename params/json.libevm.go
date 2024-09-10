@@ -25,29 +25,20 @@ type chainConfigWithExportedExtra struct {
 
 // UnmarshalJSON implements the [json.Unmarshaler] interface.
 func (c *ChainConfig) UnmarshalJSON(data []byte) error {
-	extras := registeredExtras
-
-	if extras != nil && !extras.reuseJSONRoot {
+	switch reg := registeredExtras; {
+	case reg != nil && !reg.reuseJSONRoot:
 		return c.unmarshalJSONWithExtra(data)
-	}
 
-	if err := json.Unmarshal(data, (*chainConfigWithoutMethods)(c)); err != nil {
-		return err
+	case reg != nil && reg.reuseJSONRoot: // although the latter is redundant, it's clearer
+		c.extra = reg.chainConfig.NilPointer()
+		if err := json.Unmarshal(data, c.extra); err != nil {
+			c.extra = nil
+			return err
+		}
+		fallthrough // Important! We've only unmarshalled the extra field.
+	default: // reg == nil
+		return json.Unmarshal(data, (*chainConfigWithoutMethods)(c))
 	}
-	if extras == nil {
-		return nil
-	}
-
-	// Invariants if here:
-	// - reg.reuseJSONRoot == true
-	// - Non-extra ChainConfig fields already unmarshalled
-
-	c.extra = extras.chainConfig.NilPointer()
-	if err := json.Unmarshal(data, c.extra); err != nil {
-		c.extra = nil
-		return err
-	}
-	return nil
 }
 
 // unmarshalJSONWithExtra unmarshals JSON under the assumption that the
@@ -67,14 +58,14 @@ func (c *ChainConfig) unmarshalJSONWithExtra(data []byte) error {
 
 // MarshalJSON implements the [json.Marshaler] interface.
 func (c *ChainConfig) MarshalJSON() ([]byte, error) {
-	switch extras := registeredExtras; {
-	case extras == nil:
+	switch reg := registeredExtras; {
+	case reg == nil:
 		return json.Marshal((*chainConfigWithoutMethods)(c))
 
-	case !extras.reuseJSONRoot:
+	case !reg.reuseJSONRoot:
 		return c.marshalJSONWithExtra()
 
-	default:
+	default: // reg.reuseJSONRoot == true
 		// The inverse of reusing the JSON root is merging two JSON buffers,
 		// which isn't supported by the native package. So we use
 		// map[string]json.RawMessage intermediates.
