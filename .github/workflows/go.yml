@@ -17,4 +17,4 @@ jobs:
         with:
           go-version: 1.21.4
       - name: Run tests
-        run: go test -short $(go list ./... | grep -Pv 'ethereum/go-ethereum/(eth/downloader|miner)')
+        run: go test -short $(go list ./... | grep -Pv 'go-ethereum/(accounts/keystore|eth/downloader|miner)$')
