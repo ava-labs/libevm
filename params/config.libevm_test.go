@@ -10,15 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// testOnlyClearRegisteredExtras SHOULD be called before every call to
-// [RegisterExtras] and then defer-called afterwards. This is a workaround for
-// the single-call limitation on [RegisterExtras].
-func testOnlyClearRegisteredExtras() {
-	registeredExtras = nil
-}
-
 type rawJSON struct {
 	json.RawMessage
+	NOOPHooks
 }
 
 var _ interface {
@@ -30,15 +24,19 @@ func TestRegisterExtras(t *testing.T) {
 	type (
 		ccExtraA struct {
 			A string `json:"a"`
+			ChainConfigHooks
 		}
 		rulesExtraA struct {
 			A string
+			RulesHooks
 		}
 		ccExtraB struct {
 			B string `json:"b"`
+			ChainConfigHooks
 		}
 		rulesExtraB struct {
 			B string
+			RulesHooks
 		}
 	)
 
@@ -79,20 +77,20 @@ func TestRegisterExtras(t *testing.T) {
 		{
 			name: "custom JSON handling honoured",
 			register: func() {
-				RegisterExtras(Extras[rawJSON, struct{}]{})
+				RegisterExtras(Extras[rawJSON, struct{ RulesHooks }]{})
 			},
 			ccExtra: pseudo.From(&rawJSON{
 				RawMessage: []byte(`"hello, world"`),
 			}).Type,
-			wantRulesExtra: (*struct{})(nil),
+			wantRulesExtra: (*struct{ RulesHooks })(nil),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testOnlyClearRegisteredExtras()
+			TestOnlyClearRegisteredExtras()
 			tt.register()
-			defer testOnlyClearRegisteredExtras()
+			defer TestOnlyClearRegisteredExtras()
 
 			in := &ChainConfig{
 				ChainID: big.NewInt(142857),
@@ -116,22 +114,8 @@ func TestRegisterExtras(t *testing.T) {
 }
 
 func TestExtrasPanic(t *testing.T) {
-	testOnlyClearRegisteredExtras()
-	defer testOnlyClearRegisteredExtras()
-
-	assertPanics(
-		t, func() {
-			RegisterExtras(Extras[int, struct{}]{})
-		},
-		notStructMessage[int](),
-	)
-
-	assertPanics(
-		t, func() {
-			RegisterExtras(Extras[struct{}, bool]{})
-		},
-		notStructMessage[bool](),
-	)
+	TestOnlyClearRegisteredExtras()
+	defer TestOnlyClearRegisteredExtras()
 
 	assertPanics(
 		t, func() {
@@ -147,11 +131,18 @@ func TestExtrasPanic(t *testing.T) {
 		"before RegisterExtras",
 	)
 
-	RegisterExtras(Extras[struct{}, struct{}]{})
+	assertPanics(
+		t, func() {
+			mustBeStruct[int]()
+		},
+		notStructMessage[int](),
+	)
+
+	RegisterExtras(Extras[struct{ ChainConfigHooks }, struct{ RulesHooks }]{})
 
 	assertPanics(
 		t, func() {
-			RegisterExtras(Extras[struct{}, struct{}]{})
+			RegisterExtras(Extras[struct{ ChainConfigHooks }, struct{ RulesHooks }]{})
 		},
 		"re-registration",
 	)

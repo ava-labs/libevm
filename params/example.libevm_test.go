@@ -15,12 +15,16 @@ import (
 	"log"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/libevm"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 // In practice this would be a regular init() function but nuances around the
 // testing of this package require it to be called in the Example().
 func initFn() {
+	params.TestOnlyClearRegisteredExtras() // not necessary outside of the example
 	// This registration makes *all* [params.ChainConfig] and [params.Rules]
 	// instances respect the payload types. They do not need to be modified to
 	// know about `extraparams`.
@@ -60,6 +64,33 @@ func FromChainConfig(c *params.ChainConfig) *ChainConfigExtra {
 // FromRules returns the extra payload carried by the Rules.
 func FromRules(r *params.Rules) *RulesExtra {
 	return getter.FromRules(r)
+}
+
+// myForkPrecompiledContracts is analogous to the vm.PrecompiledContracts<Fork>
+// maps. Note [RulesExtra.PrecompileOverride] treatment of nil values here.
+var myForkPrecompiledContracts = map[common.Address]vm.PrecompiledContract{
+	//...
+	common.BytesToAddress([]byte{0x2}): nil, // i.e disabled
+	//...
+}
+
+// PrecompileOverride implements the required [params.RuleHooks] method.
+func (r RulesExtra) PrecompileOverride(addr common.Address) (_ libevm.PrecompiledContract, override bool) {
+	if !r.IsMyFork {
+		return nil, false
+	}
+	p, ok := myForkPrecompiledContracts[addr]
+	// The returned boolean indicates whether or not [vm.EVMInterpreter] MUST
+	// override the address, not what it returns as its own `isPrecompile`
+	// boolean.
+	//
+	// Therefore returning `nil, true` here indicates that the precompile will
+	// be disabled. Returning `false` here indicates that the default precompile
+	// behaviour will be exhibited.
+	//
+	// The same pattern can alternatively be implemented with an explicit
+	// `disabledPrecompiles` set to make the behaviour clearer.
+	return p, ok
 }
 
 // This example demonstrates how the rest of this file would be used from a
