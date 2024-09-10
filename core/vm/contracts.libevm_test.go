@@ -1,14 +1,15 @@
-package vm
+package vm_test
 
 import (
 	"fmt"
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/libevm"
+	"github.com/ethereum/go-ethereum/libevm/ethtest"
+	"github.com/ethereum/go-ethereum/libevm/hookstest"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
@@ -16,20 +17,6 @@ import (
 	"golang.org/x/exp/rand"
 )
 
-// precompileOverrides is a [params.RulesHooks] that overrides precompiles from
-// a map of predefined addresses.
-type precompileOverrides struct {
-	contracts        map[common.Address]PrecompiledContract
-	params.NOOPHooks // all other hooks
-}
-
-func (o precompileOverrides) PrecompileOverride(a common.Address) (libevm.PrecompiledContract, bool) {
-	c, ok := o.contracts[a]
-	return c, ok
-}
-
-// A precompileStub is a [PrecompiledContract] that always returns the same
-// values.
 type precompileStub struct {
 	requiredGas uint64
 	returnData  []byte
@@ -58,7 +45,7 @@ func TestPrecompileOverride(t *testing.T) {
 	}
 
 	rng := rand.New(rand.NewSource(42))
-	for _, addr := range PrecompiledAddressesCancun {
+	for _, addr := range vm.PrecompiledAddressesCancun {
 		tests = append(tests, test{
 			name:        fmt.Sprintf("existing precompile %v", addr),
 			addr:        addr,
@@ -69,24 +56,19 @@ func TestPrecompileOverride(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			precompile := &precompileStub{
-				requiredGas: tt.requiredGas,
-				returnData:  tt.stubData,
-			}
-
-			params.TestOnlyClearRegisteredExtras()
-			params.RegisterExtras(params.Extras[params.NOOPHooks, precompileOverrides]{
-				NewRules: func(_ *params.ChainConfig, _ *params.Rules, _ *params.NOOPHooks, blockNum *big.Int, isMerge bool, timestamp uint64) *precompileOverrides {
-					return &precompileOverrides{
-						contracts: map[common.Address]PrecompiledContract{
-							tt.addr: precompile,
-						},
-					}
+			hooks := &hookstest.Stub{
+				PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+					tt.addr: &precompileStub{
+						requiredGas: tt.requiredGas,
+						returnData:  tt.stubData,
+					},
 				},
-			})
+			}
+			hooks.RegisterForRules(t)
 
-			t.Run(fmt.Sprintf("%T.Call([overridden precompile address = %v])", &EVM{}, tt.addr), func(t *testing.T) {
-				gotData, gotGasLeft, err := newEVM(t).Call(AccountRef{}, tt.addr, nil, gasLimit, uint256.NewInt(0))
+			t.Run(fmt.Sprintf("%T.Call([overridden precompile address = %v])", &vm.EVM{}, tt.addr), func(t *testing.T) {
+				_, evm := ethtest.NewZeroEVM(t)
+				gotData, gotGasLeft, err := evm.Call(vm.AccountRef{}, tt.addr, nil, gasLimit, uint256.NewInt(0))
 				require.NoError(t, err)
 				assert.Equal(t, tt.stubData, gotData, "contract's return data")
 				assert.Equal(t, gasLimit-tt.requiredGas, gotGasLeft, "gas left")
@@ -95,19 +77,102 @@ func TestPrecompileOverride(t *testing.T) {
 	}
 }
 
-func newEVM(t *testing.T) *EVM {
-	t.Helper()
+func TestNewStatefulPrecompile(t *testing.T) {
+	rng := ethtest.NewPseudoRand(314159)
+	precompile := rng.Address()
+	slot := rng.Hash()
 
-	sdb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	require.NoError(t, err, "state.New()")
+	const gasLimit = 1e6
+	gasCost := rng.Uint64n(gasLimit)
 
-	return NewEVM(
-		BlockContext{
-			Transfer: func(_ StateDB, _, _ common.Address, _ *uint256.Int) {},
+	makeOutput := func(caller, self common.Address, input []byte, stateVal common.Hash) []byte {
+		return []byte(fmt.Sprintf(
+			"Caller: %v Precompile: %v State: %v Input: %#x",
+			caller, self, stateVal, input,
+		))
+	}
+	hooks := &hookstest.Stub{
+		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+			precompile: vm.NewStatefulPrecompile(
+				func(state vm.StateDB, _ *params.Rules, caller, self common.Address, input []byte) ([]byte, error) {
+					return makeOutput(caller, self, input, state.GetState(precompile, slot)), nil
+				},
+				func(b []byte) uint64 {
+					return gasCost
+				},
+			),
 		},
-		TxContext{},
-		sdb,
-		&params.ChainConfig{},
-		Config{},
-	)
+	}
+	hooks.RegisterForRules(t)
+
+	caller := rng.Address()
+	input := rng.Bytes(8)
+	value := rng.Hash()
+
+	state, evm := ethtest.NewZeroEVM(t)
+	state.SetState(precompile, slot, value)
+	wantReturnData := makeOutput(caller, precompile, input, value)
+	wantGasLeft := gasLimit - gasCost
+
+	gotReturnData, gotGasLeft, err := evm.Call(vm.AccountRef(caller), precompile, input, gasLimit, uint256.NewInt(0))
+	require.NoError(t, err)
+	assert.Equal(t, wantReturnData, gotReturnData)
+	assert.Equal(t, wantGasLeft, gotGasLeft)
+}
+
+func TestCanCreateContract(t *testing.T) {
+	rng := ethtest.NewPseudoRand(142857)
+	account := rng.Address()
+	slot := rng.Hash()
+
+	makeErr := func(cc *libevm.AddressContext, stateVal common.Hash) error {
+		return fmt.Errorf("Origin: %v Caller: %v Contract: %v State: %v", cc.Origin, cc.Caller, cc.Self, stateVal)
+	}
+	hooks := &hookstest.Stub{
+		CanCreateContractFn: func(cc *libevm.AddressContext, s libevm.StateReader) error {
+			return makeErr(cc, s.GetState(account, slot))
+		},
+	}
+	hooks.RegisterForRules(t)
+
+	origin := rng.Address()
+	caller := rng.Address()
+	value := rng.Hash()
+	code := rng.Bytes(8)
+	salt := rng.Hash()
+
+	create := crypto.CreateAddress(caller, 0)
+	create2 := crypto.CreateAddress2(caller, salt, crypto.Keccak256(code))
+
+	tests := []struct {
+		name    string
+		create  func(*vm.EVM) ([]byte, common.Address, uint64, error)
+		wantErr error
+	}{
+		{
+			name: "Create",
+			create: func(evm *vm.EVM) ([]byte, common.Address, uint64, error) {
+				return evm.Create(vm.AccountRef(caller), code, 1e6, uint256.NewInt(0))
+			},
+			wantErr: makeErr(&libevm.AddressContext{Origin: origin, Caller: caller, Self: create}, value),
+		},
+		{
+			name: "Create2",
+			create: func(evm *vm.EVM) ([]byte, common.Address, uint64, error) {
+				return evm.Create2(vm.AccountRef(caller), code, 1e6, uint256.NewInt(0), new(uint256.Int).SetBytes(salt[:]))
+			},
+			wantErr: makeErr(&libevm.AddressContext{Origin: origin, Caller: caller, Self: create2}, value),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state, evm := ethtest.NewZeroEVM(t)
+			state.SetState(account, slot, value)
+			evm.TxContext.Origin = origin
+
+			_, _, _, err := tt.create(evm)
+			require.EqualError(t, err, tt.wantErr.Error())
+		})
+	}
 }

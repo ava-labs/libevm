@@ -60,17 +60,25 @@ func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPaylo
 }
 
 // TestOnlyClearRegisteredExtras clears the [Extras] previously passed to
-// [RegisterExtras]. It panics if called from a non-test file.
+// [RegisterExtras]. It panics if called from a non-testing call stack.
 //
 // In tests it SHOULD be called before every call to [RegisterExtras] and then
-// defer-called afterwards. This is a workaround for the single-call limitation
-// on [RegisterExtras].
+// defer-called afterwards, either directly or via testing.TB.Cleanup(). This is
+// a workaround for the single-call limitation on [RegisterExtras].
 func TestOnlyClearRegisteredExtras() {
-	_, file, _, ok := runtime.Caller(1 /* 0 would be here, not our caller */)
-	if !ok || !strings.HasSuffix(file, "_test.go") {
-		panic("call from non-test file")
+	pc := make([]uintptr, 10)
+	runtime.Callers(0, pc)
+	frames := runtime.CallersFrames(pc)
+	for {
+		f, more := frames.Next()
+		if strings.Contains(f.File, "/testing/") || strings.HasSuffix(f.File, "_test.go") {
+			registeredExtras = nil
+			return
+		}
+		if !more {
+			panic("no _test.go file in call stack")
+		}
 	}
-	registeredExtras = nil
 }
 
 // registeredExtras holds non-generic constructors for the [Extras] types

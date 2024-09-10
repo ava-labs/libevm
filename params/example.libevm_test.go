@@ -11,9 +11,11 @@ package params_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -40,7 +42,8 @@ var getter params.ExtraPayloadGetter[ChainConfigExtra, RulesExtra]
 // [params.Rules] but it MAY also modify the [params.Rules].
 func constructRulesExtra(c *params.ChainConfig, r *params.Rules, cEx *ChainConfigExtra, blockNum *big.Int, isMerge bool, timestamp uint64) *RulesExtra {
 	return &RulesExtra{
-		IsMyFork: cEx.MyForkTime != nil && *cEx.MyForkTime <= timestamp,
+		IsMyFork:  cEx.MyForkTime != nil && *cEx.MyForkTime <= timestamp,
+		timestamp: timestamp,
 	}
 }
 
@@ -53,7 +56,13 @@ type ChainConfigExtra struct {
 // RulesExtra can be any struct. It too mirrors a common pattern in
 // [params.Rules].
 type RulesExtra struct {
-	IsMyFork bool
+	IsMyFork  bool
+	timestamp uint64
+
+	// (Optional) If not all hooks are desirable then embedding a [NOOPHooks]
+	// allows the type to satisfy the [RulesHooks] interface, resulting in
+	// default Ethereum behaviour.
+	params.NOOPHooks
 }
 
 // FromChainConfig returns the extra payload carried by the ChainConfig.
@@ -93,6 +102,16 @@ func (r RulesExtra) PrecompileOverride(addr common.Address) (_ libevm.Precompile
 	return p, ok
 }
 
+// CanCreateContract implements the required [params.RuleHooks] method. Access
+// to state allows it to be configured on-chain however this is an optional
+// implementation detail.
+func (r RulesExtra) CanCreateContract(*libevm.AddressContext, libevm.StateReader) error {
+	if time.Unix(int64(r.timestamp), 0).UTC().Day() != int(time.Tuesday) {
+		return errors.New("uh oh!")
+	}
+	return nil
+}
+
 // This example demonstrates how the rest of this file would be used from a
 // *different* package.
 func ExampleExtraPayloadGetter() {
@@ -126,14 +145,14 @@ func ExampleExtraPayloadGetter() {
 		rules := config.Rules(nil, false, time)
 		rExtra := FromRules(&rules) // extraparams.FromRules() in practice
 		if rExtra != nil {
-			fmt.Printf("%+v\n", rExtra)
+			fmt.Printf("IsMyFork at %v: %t\n", rExtra.timestamp, rExtra.IsMyFork)
 		}
 	}
 
 	// Output:
 	// Chain ID 1234
 	// Fork time 530003640
-	// &{IsMyFork:false}
-	// &{IsMyFork:true}
-	// &{IsMyFork:true}
+	// IsMyFork at 530003639: false
+	// IsMyFork at 530003640: true
+	// IsMyFork at 530003641: true
 }
