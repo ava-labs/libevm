@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  go_test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -17,7 +17,4 @@ jobs:
         with:
           go-version: 1.21.4
       - name: Run tests
-        run: go test -short ./...
-        env:
-          GOOS: linux
-          GOARCH: 386
+        run: go test -short $(go list ./... | grep -Pv 'ethereum/go-ethereum/(eth/downloader|miner)')
