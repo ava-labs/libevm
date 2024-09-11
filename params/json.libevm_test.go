@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/libevm/pseudo"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -83,7 +82,7 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 			t.Run("json.Unmarshal()", func(t *testing.T) {
 				got := new(ChainConfig)
 				require.NoError(t, json.Unmarshal([]byte(tt.jsonInput), got))
-				assert.Equal(t, tt.want, got)
+				require.Equal(t, tt.want, got)
 			})
 
 			t.Run("json.Marshal()", func(t *testing.T) {
@@ -91,8 +90,8 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 				require.NoError(t, json.Compact(&want, []byte(tt.jsonInput)), "json.Compact()")
 
 				got, err := json.Marshal(tt.want)
-				require.NoError(t, err)
-				assert.Equal(t, want.String(), string(got))
+				require.NoError(t, err, "json.Marshal()")
+				require.Equal(t, want.String(), string(got))
 			})
 		})
 	}
