@@ -61,11 +61,11 @@ func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPaylo
 
 	getter := e.getter()
 	registeredExtras = &extraConstructors{
-		chainConfig:   pseudo.NewConstructor[C](),
-		rules:         pseudo.NewConstructor[R](),
-		reuseJSONRoot: e.ReuseJSONRoot,
-		newForRules:   e.newForRules,
-		getter:        getter,
+		newChainConfig: pseudo.NewConstructor[C]().Zero,
+		newRules:       pseudo.NewConstructor[R]().Zero,
+		reuseJSONRoot:  e.ReuseJSONRoot,
+		newForRules:    e.newForRules,
+		getter:         getter,
 	}
 	return getter
 }
@@ -97,9 +97,9 @@ func TestOnlyClearRegisteredExtras() {
 var registeredExtras *extraConstructors
 
 type extraConstructors struct {
-	chainConfig, rules pseudo.Constructor
-	reuseJSONRoot      bool
-	newForRules        func(_ *ChainConfig, _ *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) *pseudo.Type
+	newChainConfig, newRules func() *pseudo.Type
+	reuseJSONRoot            bool
+	newForRules              func(_ *ChainConfig, _ *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) *pseudo.Type
 	// use top-level hooksFrom<X>() functions instead of these as they handle
 	// instances where no [Extras] were registered.
 	getter interface {
@@ -110,7 +110,7 @@ type extraConstructors struct {
 
 func (e *Extras[C, R]) newForRules(c *ChainConfig, r *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) *pseudo.Type {
 	if e.NewRules == nil {
-		return registeredExtras.rules.Zero()
+		return registeredExtras.newRules()
 	}
 	rExtra := e.NewRules(c, r, e.getter().FromChainConfig(c), blockNum, isMerge, timestamp)
 	return pseudo.From(rExtra).Type
@@ -190,7 +190,7 @@ func (c *ChainConfig) extraPayload() *pseudo.Type {
 		panic(fmt.Sprintf("%T.ExtraPayload() called before RegisterExtras()", c))
 	}
 	if c.extra == nil {
-		c.extra = registeredExtras.chainConfig.Zero()
+		c.extra = registeredExtras.newChainConfig()
 	}
 	return c.extra
 }
@@ -202,7 +202,7 @@ func (r *Rules) extraPayload() *pseudo.Type {
 		panic(fmt.Sprintf("%T.ExtraPayload() called before RegisterExtras()", r))
 	}
 	if r.extra == nil {
-		r.extra = registeredExtras.rules.Zero()
+		r.extra = registeredExtras.newRules()
 	}
 	return r.extra
 }
