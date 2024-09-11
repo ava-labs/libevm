@@ -50,26 +50,36 @@ func TestRegisterExtras(t *testing.T) {
 			name: "Rules payload copied from ChainConfig payload",
 			register: func() {
 				RegisterExtras(Extras[ccExtraA, rulesExtraA]{
-					NewRules: func(cc *ChainConfig, r *Rules, ex *ccExtraA, _ *big.Int, _ bool, _ uint64) *rulesExtraA {
-						return &rulesExtraA{
+					NewRules: func(cc *ChainConfig, r *Rules, ex ccExtraA, _ *big.Int, _ bool, _ uint64) rulesExtraA {
+						return rulesExtraA{
 							A: ex.A,
 						}
 					},
 				})
 			},
-			ccExtra: pseudo.From(&ccExtraA{
+			ccExtra: pseudo.From(ccExtraA{
 				A: "hello",
 			}).Type,
-			wantRulesExtra: &rulesExtraA{
+			wantRulesExtra: rulesExtraA{
 				A: "hello",
 			},
 		},
 		{
-			name: "no NewForRules() function results in typed but nil pointer",
+			name: "no NewForRules() function results in zero value",
 			register: func() {
 				RegisterExtras(Extras[ccExtraB, rulesExtraB]{})
 			},
-			ccExtra: pseudo.From(&ccExtraB{
+			ccExtra: pseudo.From(ccExtraB{
+				B: "world",
+			}).Type,
+			wantRulesExtra: rulesExtraB{},
+		},
+		{
+			name: "no NewForRules() function results in nil pointer",
+			register: func() {
+				RegisterExtras(Extras[ccExtraB, *rulesExtraB]{})
+			},
+			ccExtra: pseudo.From(ccExtraB{
 				B: "world",
 			}).Type,
 			wantRulesExtra: (*rulesExtraB)(nil),
@@ -79,10 +89,10 @@ func TestRegisterExtras(t *testing.T) {
 			register: func() {
 				RegisterExtras(Extras[rawJSON, struct{ RulesHooks }]{})
 			},
-			ccExtra: pseudo.From(&rawJSON{
+			ccExtra: pseudo.From(rawJSON{
 				RawMessage: []byte(`"hello, world"`),
 			}).Type,
-			wantRulesExtra: (*struct{ RulesHooks })(nil),
+			wantRulesExtra: struct{ RulesHooks }{},
 		},
 	}
 
@@ -131,7 +141,7 @@ func TestExtrasPanic(t *testing.T) {
 
 	assertPanics(
 		t, func() {
-			mustBeStruct[int]()
+			mustBeStructOrPointerToOne[int]()
 		},
 		notStructMessage[int](),
 	)
