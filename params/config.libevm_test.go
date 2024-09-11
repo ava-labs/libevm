@@ -121,6 +121,57 @@ func TestRegisterExtras(t *testing.T) {
 	}
 }
 
+func TestZeroExtrasAndPointers(t *testing.T) {
+	type (
+		ccExtra struct {
+			X int
+			NOOPHooks
+		}
+		rulesExtra struct {
+			X int
+			NOOPHooks
+		}
+	)
+
+	TestOnlyClearRegisteredExtras()
+	t.Cleanup(TestOnlyClearRegisteredExtras)
+	getter := RegisterExtras(Extras[ccExtra, rulesExtra]{})
+
+	var (
+		config ChainConfig
+		rules  Rules
+	)
+	// These assertion helpers are defined before any modifications so that the
+	// closure is demonstrably over the original zero values.
+	assertChainConfigExtra := func(t *testing.T, want ccExtra, msg string) {
+		t.Helper()
+		assert.Equalf(t, want, getter.FromChainConfig(&config), "%T: "+msg, &config)
+	}
+	assertRulesExtra := func(t *testing.T, want rulesExtra, msg string) {
+		t.Helper()
+		assert.Equalf(t, want, getter.FromRules(&rules), "%T: "+msg, &rules)
+	}
+
+	assertChainConfigExtra(t, ccExtra{}, "zero value")
+	assertRulesExtra(t, rulesExtra{}, "zero value")
+
+	const answer = 42
+	getter.PointerFromChainConfig(&config).X = answer
+	assertChainConfigExtra(t, ccExtra{X: answer}, "after setting via pointer field")
+
+	const pi = 314159
+	getter.PointerFromRules(&rules).X = pi
+	assertRulesExtra(t, rulesExtra{X: pi}, "after setting via pointer field")
+
+	ccReplace := ccExtra{X: 142857}
+	*getter.PointerFromChainConfig(&config) = ccReplace
+	assertChainConfigExtra(t, ccReplace, "after replacement of entire extra via `*pointer = x`")
+
+	rulesReplace := rulesExtra{X: 18101986}
+	*getter.PointerFromRules(&rules) = rulesReplace
+	assertRulesExtra(t, rulesReplace, "after replacement of entire extra via `*pointer = x`")
+}
+
 func TestExtrasPanic(t *testing.T) {
 	TestOnlyClearRegisteredExtras()
 	defer TestOnlyClearRegisteredExtras()

@@ -152,6 +152,12 @@ func (ExtraPayloadGetter[C, R]) FromChainConfig(c *ChainConfig) C {
 	return pseudo.MustNewValue[C](c.extraPayload()).Get()
 }
 
+// PointerFromChainConfig returns a pointer to the ChainConfig's extra payload.
+// This is guaranteed to be non-nil.
+func (ExtraPayloadGetter[C, R]) PointerFromChainConfig(c *ChainConfig) *C {
+	return pseudo.MustPointerTo[C](c.extraPayload()).Value.Get()
+}
+
 // hooksFromChainConfig is equivalent to FromChainConfig(), but returns an
 // interface instead of the concrete type implementing it; this allows it to be
 // used in non-generic code.
@@ -162,6 +168,12 @@ func (e ExtraPayloadGetter[C, R]) hooksFromChainConfig(c *ChainConfig) ChainConf
 // FromRules returns the Rules' extra payload.
 func (ExtraPayloadGetter[C, R]) FromRules(r *Rules) R {
 	return pseudo.MustNewValue[R](r.extraPayload()).Get()
+}
+
+// PointerFromRules returns a pointer to the Rules's extra payload. This is
+// guaranteed to be non-nil.
+func (ExtraPayloadGetter[C, R]) PointerFromRules(r *Rules) *R {
+	return pseudo.MustPointerTo[R](r.extraPayload()).Value.Get()
 }
 
 // hooksFromRules is the [RulesHooks] equivalent of hooksFromChainConfig().
