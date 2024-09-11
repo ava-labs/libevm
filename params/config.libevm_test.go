@@ -121,7 +121,7 @@ func TestRegisterExtras(t *testing.T) {
 	}
 }
 
-func TestZeroExtrasAndPointers(t *testing.T) {
+func TestModificationOfZeroExtras(t *testing.T) {
 	type (
 		ccExtra struct {
 			X int
@@ -137,39 +137,57 @@ func TestZeroExtrasAndPointers(t *testing.T) {
 	t.Cleanup(TestOnlyClearRegisteredExtras)
 	getter := RegisterExtras(Extras[ccExtra, rulesExtra]{})
 
-	var (
-		config ChainConfig
-		rules  Rules
-	)
+	config := new(ChainConfig)
+	rules := new(Rules)
 	// These assertion helpers are defined before any modifications so that the
 	// closure is demonstrably over the original zero values.
 	assertChainConfigExtra := func(t *testing.T, want ccExtra, msg string) {
 		t.Helper()
-		assert.Equalf(t, want, getter.FromChainConfig(&config), "%T: "+msg, &config)
+		assert.Equalf(t, want, getter.FromChainConfig(config), "%T: "+msg, &config)
 	}
 	assertRulesExtra := func(t *testing.T, want rulesExtra, msg string) {
 		t.Helper()
-		assert.Equalf(t, want, getter.FromRules(&rules), "%T: "+msg, &rules)
+		assert.Equalf(t, want, getter.FromRules(rules), "%T: "+msg, &rules)
 	}
 
 	assertChainConfigExtra(t, ccExtra{}, "zero value")
 	assertRulesExtra(t, rulesExtra{}, "zero value")
 
 	const answer = 42
-	getter.PointerFromChainConfig(&config).X = answer
+	getter.PointerFromChainConfig(config).X = answer
 	assertChainConfigExtra(t, ccExtra{X: answer}, "after setting via pointer field")
 
 	const pi = 314159
-	getter.PointerFromRules(&rules).X = pi
+	getter.PointerFromRules(rules).X = pi
 	assertRulesExtra(t, rulesExtra{X: pi}, "after setting via pointer field")
 
 	ccReplace := ccExtra{X: 142857}
-	*getter.PointerFromChainConfig(&config) = ccReplace
+	*getter.PointerFromChainConfig(config) = ccReplace
 	assertChainConfigExtra(t, ccReplace, "after replacement of entire extra via `*pointer = x`")
 
 	rulesReplace := rulesExtra{X: 18101986}
-	*getter.PointerFromRules(&rules) = rulesReplace
+	*getter.PointerFromRules(rules) = rulesReplace
 	assertRulesExtra(t, rulesReplace, "after replacement of entire extra via `*pointer = x`")
+
+	if t.Failed() {
+		// The test of shallow copying is now guaranteed to fail.
+		return
+	}
+	t.Run("shallow copy", func(t *testing.T) {
+		ccCopy := *config
+		rCopy := *rules
+
+		assert.Equal(t, getter.FromChainConfig(&ccCopy), ccReplace, "ChainConfig extras copied")
+		assert.Equal(t, getter.FromRules(&rCopy), rulesReplace, "Rules extras copied")
+
+		const seqUp = 123456789
+		getter.PointerFromChainConfig(&ccCopy).X = seqUp
+		assertChainConfigExtra(t, ccExtra{X: seqUp}, "original changed because copy only shallow")
+
+		const seqDown = 987654321
+		getter.PointerFromRules(&rCopy).X = seqDown
+		assertRulesExtra(t, rulesExtra{X: seqDown}, "original changed because copy only shallow")
+	})
 }
 
 func TestExtrasPanic(t *testing.T) {
