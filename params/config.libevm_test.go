@@ -5,9 +5,10 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/libevm/pseudo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ethereum/go-ethereum/libevm/pseudo"
 )
 
 type rawJSON struct {
@@ -102,18 +103,18 @@ func TestRegisterExtras(t *testing.T) {
 			tt.register()
 			defer TestOnlyClearRegisteredExtras()
 
-			in := &ChainConfig{
+			input := &ChainConfig{
 				ChainID: big.NewInt(142857),
 				extra:   tt.ccExtra,
 			}
 
-			buf, err := json.Marshal(in)
+			buf, err := json.Marshal(input)
 			require.NoError(t, err)
 
 			got := new(ChainConfig)
 			require.NoError(t, json.Unmarshal(buf, got))
 			assert.Equal(t, tt.ccExtra.Interface(), got.extraPayload().Interface())
-			assert.Equal(t, in, got)
+			assert.Equal(t, input, got)
 
 			gotRules := got.Rules(nil, false, 0)
 			assert.Equal(t, tt.wantRulesExtra, gotRules.extraPayload().Interface())
@@ -135,7 +136,7 @@ func TestModificationOfZeroExtras(t *testing.T) {
 
 	TestOnlyClearRegisteredExtras()
 	t.Cleanup(TestOnlyClearRegisteredExtras)
-	getter := RegisterExtras(Extras[ccExtra, rulesExtra]{})
+	extras := RegisterExtras(Extras[ccExtra, rulesExtra]{})
 
 	config := new(ChainConfig)
 	rules := new(Rules)
@@ -143,30 +144,30 @@ func TestModificationOfZeroExtras(t *testing.T) {
 	// closure is demonstrably over the original zero values.
 	assertChainConfigExtra := func(t *testing.T, want ccExtra, msg string) {
 		t.Helper()
-		assert.Equalf(t, want, getter.FromChainConfig(config), "%T: "+msg, &config)
+		assert.Equalf(t, want, extras.FromChainConfig(config), "%T: "+msg, &config)
 	}
 	assertRulesExtra := func(t *testing.T, want rulesExtra, msg string) {
 		t.Helper()
-		assert.Equalf(t, want, getter.FromRules(rules), "%T: "+msg, &rules)
+		assert.Equalf(t, want, extras.FromRules(rules), "%T: "+msg, &rules)
 	}
 
 	assertChainConfigExtra(t, ccExtra{}, "zero value")
 	assertRulesExtra(t, rulesExtra{}, "zero value")
 
 	const answer = 42
-	getter.PointerFromChainConfig(config).X = answer
+	extras.PointerFromChainConfig(config).X = answer
 	assertChainConfigExtra(t, ccExtra{X: answer}, "after setting via pointer field")
 
 	const pi = 314159
-	getter.PointerFromRules(rules).X = pi
+	extras.PointerFromRules(rules).X = pi
 	assertRulesExtra(t, rulesExtra{X: pi}, "after setting via pointer field")
 
 	ccReplace := ccExtra{X: 142857}
-	*getter.PointerFromChainConfig(config) = ccReplace
+	extras.SetOnChainConfig(config, ccReplace)
 	assertChainConfigExtra(t, ccReplace, "after replacement of entire extra via `*pointer = x`")
 
 	rulesReplace := rulesExtra{X: 18101986}
-	*getter.PointerFromRules(rules) = rulesReplace
+	extras.SetOnRules(rules, rulesReplace)
 	assertRulesExtra(t, rulesReplace, "after replacement of entire extra via `*pointer = x`")
 
 	if t.Failed() {
@@ -177,15 +178,15 @@ func TestModificationOfZeroExtras(t *testing.T) {
 		ccCopy := *config
 		rCopy := *rules
 
-		assert.Equal(t, getter.FromChainConfig(&ccCopy), ccReplace, "ChainConfig extras copied")
-		assert.Equal(t, getter.FromRules(&rCopy), rulesReplace, "Rules extras copied")
+		assert.Equal(t, extras.FromChainConfig(&ccCopy), ccReplace, "ChainConfig extras copied")
+		assert.Equal(t, extras.FromRules(&rCopy), rulesReplace, "Rules extras copied")
 
 		const seqUp = 123456789
-		getter.PointerFromChainConfig(&ccCopy).X = seqUp
+		extras.PointerFromChainConfig(&ccCopy).X = seqUp
 		assertChainConfigExtra(t, ccExtra{X: seqUp}, "original changed because copy only shallow")
 
 		const seqDown = 987654321
-		getter.PointerFromRules(&rCopy).X = seqDown
+		extras.PointerFromRules(&rCopy).X = seqDown
 		assertRulesExtra(t, rulesExtra{X: seqDown}, "original changed because copy only shallow")
 	})
 }
