@@ -14,9 +14,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-tags: true
-      - name: Diff libevm-base..[workflow trigger sha]
-        run: |
-          .github/workflows/diff_from_libevm-base.sh ${{ github.sha }}
       - name: Diff libevm-base..libevm
         run: |
           .github/workflows/diff_from_libevm-base.sh libevm
+      - name: Diff libevm-base..HEAD
+        run: |
+          .github/workflows/diff_from_libevm-base.sh HEAD
