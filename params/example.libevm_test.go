@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"math/big"
 	"time"
 
@@ -106,7 +107,7 @@ func (r RulesExtra) PrecompileOverride(addr common.Address) (_ libevm.Precompile
 // to state allows it to be configured on-chain however this is an optional
 // implementation detail.
 func (r RulesExtra) CanCreateContract(*libevm.AddressContext, libevm.StateReader) error {
-	if time.Unix(int64(r.timestamp), 0).UTC().Day() != int(time.Tuesday) {
+	if r.timestamp > math.MaxInt64 || time.Unix(int64(r.timestamp), 0).UTC().Day() != int(time.Tuesday) {
 		return errors.New("uh oh")
 	}
 	return nil
