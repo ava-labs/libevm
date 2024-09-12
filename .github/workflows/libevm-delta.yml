@@ -12,9 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Diff libevm-base..{github.ref_name}
+      - name: Diff libevm-base..[workflow trigger sha]
         run: |
-          .github/workflows/diff_from_libevm-base.sh ${{ github.ref_name }}
+          .github/workflows/diff_from_libevm-base.sh ${{ github.sha }}
       - name: Diff libevm-base..libevm
         run: |
           .github/workflows/diff_from_libevm-base.sh libevm
