@@ -67,6 +67,7 @@ func testType[T any](t *testing.T, name string, ctor func() *Pseudo[T], init T, 
 	})
 }
 
+//nolint:ineffassign // Although `typ` is overwritten it's to demonstrate different approaches.
 func ExamplePseudo_TypeAndValue() {
 	typ, val := From("hello").TypeAndValue()
 
@@ -98,5 +99,4 @@ func TestPointer(t *testing.T) {
 		ptr.payload = 314159
 		assert.Equal(t, 314159, val.Get().payload, "after setting via pointer")
 	})
-
 }

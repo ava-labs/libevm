@@ -12,7 +12,7 @@ import (
 )
 
 // Register clears any registered [params.Extras] and then registers `extras`
-// for the liftime of the current test, clearing them via tb's
+// for the lifetime of the current test, clearing them via tb's
 // [testing.TB.Cleanup].
 func Register[C params.ChainConfigHooks, R params.RulesHooks](tb testing.TB, extras params.Extras[C, R]) {
 	params.TestOnlyClearRegisteredExtras()
