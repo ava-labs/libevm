@@ -140,7 +140,7 @@ func notStructMessage[T any]() string {
 	return fmt.Sprintf("%T is not a struct nor a pointer to a struct", x)
 }
 
-// An ExtraPayloadGettter provides strongly typed access to the extra payloads
+// An ExtraPayloadGetter provides strongly typed access to the extra payloads
 // carried by [ChainConfig] and [Rules] structs. The only valid way to construct
 // a getter is by a call to [RegisterExtras].
 type ExtraPayloadGetter[C ChainConfigHooks, R RulesHooks] struct {

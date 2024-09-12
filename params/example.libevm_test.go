@@ -107,7 +107,7 @@ func (r RulesExtra) PrecompileOverride(addr common.Address) (_ libevm.Precompile
 // implementation detail.
 func (r RulesExtra) CanCreateContract(*libevm.AddressContext, libevm.StateReader) error {
 	if time.Unix(int64(r.timestamp), 0).UTC().Day() != int(time.Tuesday) {
-		return errors.New("uh oh!")
+		return errors.New("uh oh")
 	}
 	return nil
 }

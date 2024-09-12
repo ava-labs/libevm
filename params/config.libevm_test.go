@@ -102,18 +102,18 @@ func TestRegisterExtras(t *testing.T) {
 			tt.register()
 			defer TestOnlyClearRegisteredExtras()
 
-			in := &ChainConfig{
+			input := &ChainConfig{
 				ChainID: big.NewInt(142857),
 				extra:   tt.ccExtra,
 			}
 
-			buf, err := json.Marshal(in)
+			buf, err := json.Marshal(input)
 			require.NoError(t, err)
 
 			got := new(ChainConfig)
 			require.NoError(t, json.Unmarshal(buf, got))
 			assert.Equal(t, tt.ccExtra.Interface(), got.extraPayload().Interface())
-			assert.Equal(t, in, got)
+			assert.Equal(t, input, got)
 
 			gotRules := got.Rules(nil, false, 0)
 			assert.Equal(t, tt.wantRulesExtra, gotRules.extraPayload().Interface())
