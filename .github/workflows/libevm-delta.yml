@@ -18,6 +18,6 @@ jobs:
       - name: Diff libevm-base..libevm
         run: |
           .github/workflows/diff_from_libevm-base.sh libevm
-      - name: Diff libevm-base..HEAD
+      - name: Diff libevm-base..${{ github.sha }}
         run: |
-          .github/workflows/diff_from_libevm-base.sh HEAD
+          .github/workflows/diff_from_libevm-base.sh ${{ github.sha }}
