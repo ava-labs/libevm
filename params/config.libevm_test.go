@@ -162,11 +162,11 @@ func TestModificationOfZeroExtras(t *testing.T) {
 	assertRulesExtra(t, rulesExtra{X: pi}, "after setting via pointer field")
 
 	ccReplace := ccExtra{X: 142857}
-	*getter.PointerFromChainConfig(config) = ccReplace
+	getter.SetOnChainConfig(config, ccReplace)
 	assertChainConfigExtra(t, ccReplace, "after replacement of entire extra via `*pointer = x`")
 
 	rulesReplace := rulesExtra{X: 18101986}
-	*getter.PointerFromRules(rules) = rulesReplace
+	getter.SetOnRules(rules, rulesReplace)
 	assertRulesExtra(t, rulesReplace, "after replacement of entire extra via `*pointer = x`")
 
 	if t.Failed() {
