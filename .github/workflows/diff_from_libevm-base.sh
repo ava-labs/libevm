@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -u;
+set -ux;
 
 git checkout "${1}";
 git diff --diff-filter=a --word-diff --unified=0 libevm-base.."${1}" \
