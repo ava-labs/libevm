@@ -1,0 +1,20 @@
+name: libevm delta
+
+on:
+  push:
+    branches: [ libevm ]
+  pull_request:
+    branches: [ libevm ]
+  workflow_dispatch:
+
+jobs:
+  go_test_short:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Diff libevm-base..HEAD
+        run: |
+          .github/workflows/diff_from_libevm-base.sh HEAD
+      - name: Diff libevm-base..libevm
+        run: |
+          .github/workflows/diff_from_libevm-base.sh libevm
