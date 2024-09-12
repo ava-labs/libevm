@@ -15,16 +15,17 @@ jobs:
         with:
           fetch-depth: 0 # everything
           fetch-tags: true
-      - name: Diff libevm-base..libevm
+      
+      - name: git diff libevm-base
+        run: |
+          git diff --diff-filter=a --word-diff --unified=0 libevm-base \
+            ':(exclude).golangci.yml' \
+            ':(exclude).github/**';
+      
+      - name: git diff libevm-base..libevm
         run: |
           git checkout libevm --;
           git diff --diff-filter=a --word-diff --unified=0 libevm-base..libevm \
             ':(exclude).golangci.yml' \
             ':(exclude).github/**';
 
-      - name: Diff libevm-base..${{ github.ref_name }}
-        run: |
-          git checkout ${{ github.ref }} --;
-          git diff --diff-filter=a --word-diff --unified=0 libevm-base..${{ github.ref }} \
-            ':(exclude).golangci.yml' \
-            ':(exclude).github/**';
