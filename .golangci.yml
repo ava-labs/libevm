@@ -9,11 +9,11 @@ linters:
     # Every available linter at the time of writing was considered (quickly) and
     # inclusion was liberal. Linters are good at detecting code smells, but if
     # we find that a particular one causes too many false positives then we can
-    # first configure it better or, as a last resort, remove it..
+    # configure it better or, as a last resort, remove it.
     - containedctx
     - errcheck
     - forcetypeassert
-    # TODO(arr4n) add and configure gci
+    - gci
     - gocheckcompilerdirectives
     - gofmt
     - goimports
@@ -42,20 +42,29 @@ linters:
     - whitespace
 
 linters-settings:
-  gofmt:
-    simplify: true
-  revive:
-    rules:
-      - name: unused-parameter
-        # Method parameters may be equired by interfaces and forcing them to be
-        # named _ is of questionable benefit.
-        disabled: true
+  gci:
+    custom-order: true
+    sections:
+      - standard
+      - default
+      - localmodule
+      # The rest of these break developer expections, in increasing order of
+      # divergence, so are at the end to increase the chance of being seen.
+      - alias
+      - dot
+      - blank
   gomodguard:
     blocked:
       modules:
         - github.com/ava-labs/avalanchego:
         - github.com/ava-labs/coreth:
         - github.com/ava-labs/subnet-evm:
+  revive:
+    rules:
+      - name: unused-parameter
+        # Method parameters may be equired by interfaces and forcing them to be
+        # named _ is of questionable benefit.
+        disabled: true
 
 issues:
    exclude-dirs-use-default: false
@@ -67,6 +76,7 @@ issues:
         - containedctx
         - forcetypeassert
         - errcheck
+        - gci
         - gofmt
         - gosec
         - gosimple

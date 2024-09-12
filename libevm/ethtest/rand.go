@@ -1,8 +1,9 @@
 package ethtest
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/rand"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // PseudoRand extends [rand.Rand] (*not* crypto/rand).

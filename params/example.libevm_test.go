@@ -106,7 +106,7 @@ func (r RulesExtra) PrecompileOverride(addr common.Address) (_ libevm.Precompile
 // to state allows it to be configured on-chain however this is an optional
 // implementation detail.
 func (r RulesExtra) CanCreateContract(*libevm.AddressContext, libevm.StateReader) error {
-	if time.Unix(int64(r.timestamp), 0).UTC().Day() != int(time.Tuesday) { //nolint:gosec // triggering G115 overflow
+	if time.Unix(int64(r.timestamp), 0).UTC().Day() != int(time.Tuesday) { //nolint:gosec // G115 timestamp won't overflow int64 for millions of years so this is someone else's problem
 		return errors.New("uh oh")
 	}
 	return nil
