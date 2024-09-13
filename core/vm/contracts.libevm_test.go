@@ -115,33 +115,48 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	state.SetState(precompile, slot, value)
 
 	tests := []struct {
-		name           string
-		call           func() ([]byte, uint64, error)
-		wantReturnData []byte
+		name         string
+		call         func() ([]byte, uint64, error)
+		wantReadOnly bool
 	}{
 		{
-			name: "EVM.Call() not read-only",
+			name: "EVM.Call()",
 			call: func() ([]byte, uint64, error) {
 				return evm.Call(vm.AccountRef(caller), precompile, input, gasLimit, uint256.NewInt(0))
 			},
-			wantReturnData: makeOutput(caller, precompile, input, value, false),
+			wantReadOnly: false,
 		},
 		{
-			name: "EVM.StaticCall() is read-only",
+			name: "EVM.CallCode()",
+			call: func() ([]byte, uint64, error) {
+				return evm.CallCode(vm.AccountRef(caller), precompile, input, gasLimit, uint256.NewInt(0))
+			},
+			wantReadOnly: false,
+		},
+		{
+			name: "EVM.DelegateCall()",
+			call: func() ([]byte, uint64, error) {
+				return evm.DelegateCall(vm.AccountRef(caller), precompile, input, gasLimit)
+			},
+			wantReadOnly: false,
+		},
+		{
+			name: "EVM.StaticCall()",
 			call: func() ([]byte, uint64, error) {
 				return evm.StaticCall(vm.AccountRef(caller), precompile, input, gasLimit)
 			},
-			wantReturnData: makeOutput(caller, precompile, input, value, true),
+			wantReadOnly: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			wantReturnData := makeOutput(caller, precompile, input, value, tt.wantReadOnly)
 			wantGasLeft := gasLimit - gasCost
 
 			gotReturnData, gotGasLeft, err := tt.call()
 			require.NoError(t, err)
-			assert.Equal(t, string(tt.wantReturnData), string(gotReturnData))
+			assert.Equal(t, string(wantReturnData), string(gotReturnData))
 			assert.Equal(t, wantGasLeft, gotGasLeft)
 		})
 	}
