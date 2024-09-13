@@ -107,7 +107,19 @@ type PrecompileEnvironment interface {
 var _ PrecompileEnvironment = (*evmCallArgs)(nil)
 
 func (args *evmCallArgs) Rules() params.Rules { return args.evm.chainRules }
-func (args *evmCallArgs) ReadOnly() bool      { return args.forceReadOnly || args.evm.interpreter.readOnly }
+
+func (args *evmCallArgs) ReadOnly() bool {
+	// Not using `return a || b` as this verbose pattern allows better
+	// inspection of code coverage.
+	switch {
+	case args.evm.interpreter.readOnly: // already in a read-only context
+		return true
+	case args.forceReadOnly: // precompile called via StaticCall
+		return true
+	default:
+		return false
+	}
+}
 
 func (args *evmCallArgs) StateDB() StateDB {
 	if args.ReadOnly() {

@@ -2,6 +2,7 @@ package vm_test
 
 import (
 	"fmt"
+	"math/big"
 	"testing"
 
 	"github.com/holiman/uint256"
@@ -15,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/libevm"
 	"github.com/ethereum/go-ethereum/libevm/ethtest"
 	"github.com/ethereum/go-ethereum/libevm/hookstest"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type precompileStub struct {
@@ -165,6 +167,128 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			assert.Equal(t, wantGasLeft, gotGasLeft)
 		})
 	}
+}
+
+func TestPrecompileFromReadOnlyState(t *testing.T) {
+	// The regular test of stateful precompiles only checks the read-only state
+	// when called directly via vm.EVM.*Call*() methods. This will hit the
+	// [evmCallArgs.forceReadOnly] branch of [PrecompileEnvironment.ReadOnly],
+	// but not the [EVMInterpreter.readOnly] branch. The latter occurs when we
+	// are already in a read-only environment and there is a non-static call to
+	// a precompile.
+	//
+	// Test strategy:
+	//
+	// 1. Create a precompile that reflects its read-only status in the return
+	//    data. We MUST NOT assert inside the precompile as we need proof that
+	//    the precompile was actually called.
+	//
+	// 2. Create a bytecode contract that calls the precompile with CALL and
+	//    propagates the return data. Using CALL (i.e. not STATICCALL) means
+	//    that we know for certain that evmCallArgs.forceReadOnly isn't being
+	//    set to true and, instead, the read-only state is being read from
+	//    evm.interpreter.readOnly.
+	//
+	// 3. Assert that the returned input is as expected for the read-only state.
+
+	// (1)
+
+	var precompile common.Address
+	const precompileAddr = 255
+	precompile[common.AddressLength-1] = precompileAddr
+
+	const (
+		ifReadOnly = iota + 1 // see contract bytecode for rationale
+		ifNotReadOnly
+	)
+	hooks := &hookstest.Stub{
+		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+			precompile: vm.NewStatefulPrecompile(
+				func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
+					if env.ReadOnly() {
+						return []byte{ifReadOnly}, nil
+					}
+					return []byte{ifNotReadOnly}, nil
+				},
+				func([]byte) uint64 { return 0 },
+			),
+		},
+	}
+	hookstest.Register(t, params.Extras[*hookstest.Stub, *hookstest.Stub]{
+		NewRules: func(_ *params.ChainConfig, r *params.Rules, _ *hookstest.Stub, blockNum *big.Int, isMerge bool, timestamp uint64) *hookstest.Stub {
+			r.IsCancun = true // enable PUSH0
+			return hooks
+		},
+	})
+
+	// (2)
+
+	// See CALL signature: https://www.evm.codes/#f1?fork=cancun
+	const p0 = vm.PUSH0
+	contract := []vm.OpCode{
+		vm.PUSH1, 1, // retSize (bytes)
+		p0, // retOffset
+		p0, // argSize
+		p0, // argOffset
+		p0, // value
+		vm.PUSH1, precompileAddr,
+		p0, // gas
+		vm.CALL,
+		// It's ok to ignore the return status. If the CALL failed then we'll
+		// return []byte{0} next, and both non-failure return buffers are
+		// non-zero because of the `iota + 1`.
+		vm.PUSH1, 1, // size (byte)
+		p0,
+		vm.RETURN,
+	}
+
+	state, evm := ethtest.NewZeroEVM(t)
+	rng := ethtest.NewPseudoRand(42)
+	contractAddr := rng.Address()
+	state.CreateAccount(contractAddr)
+	state.SetCode(contractAddr, contractCode(contract))
+
+	// (3)
+
+	caller := vm.AccountRef(rng.Address())
+	tests := []struct {
+		name string
+		call func() ([]byte, uint64, error)
+		want byte
+	}{
+		{
+			name: "EVM.Call()",
+			call: func() ([]byte, uint64, error) {
+				return evm.Call(caller, contractAddr, []byte{}, 1e6, uint256.NewInt(0))
+			},
+			want: ifNotReadOnly,
+		},
+		{
+			name: "EVM.StaticCall()",
+			call: func() ([]byte, uint64, error) {
+				return evm.StaticCall(vm.AccountRef(rng.Address()), contractAddr, []byte{}, 1e6)
+			},
+			want: ifReadOnly,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, _, err := tt.call()
+			require.NoError(t, err)
+			require.Equalf(t, []byte{tt.want}, got, "want %d if read-only, otherwise %d", ifReadOnly, ifNotReadOnly)
+		})
+	}
+}
+
+// contractCode converts a slice of op codes into a byte buffer for storage as
+// contract code.
+func contractCode(ops []vm.OpCode) []byte {
+	ret := make([]byte, len(ops))
+	for i, o := range ops {
+		ret[i] = byte(o)
+	}
+	return ret
 }
 
 func TestCanCreateContract(t *testing.T) {
