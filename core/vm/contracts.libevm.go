@@ -6,6 +6,7 @@ import (
 	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/libevm"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -42,14 +43,14 @@ type evmCallArgs struct {
 // regular types.
 func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, err error) {
 	if p, ok := p.(statefulPrecompile); ok {
-		return p.run(args, &args.evm.chainRules, args.caller.Address(), args.addr, input)
+		return p.run(args, input)
 	}
 	return p.Run(input)
 }
 
 // PrecompiledStatefulRun is the stateful equivalent of the Run() method of a
 // [PrecompiledContract].
-type PrecompiledStatefulRun func(_ PrecompileEnvironment, _ *params.Rules, caller, self common.Address, input []byte) ([]byte, error)
+type PrecompiledStatefulRun func(env PrecompileEnvironment, input []byte) ([]byte, error)
 
 // NewStatefulPrecompile constructs a new PrecompiledContract that can be used
 // via an [EVM] instance but MUST NOT be called directly; a direct call to Run()
@@ -83,12 +84,23 @@ func (p statefulPrecompile) Run([]byte) ([]byte, error) {
 type PrecompileEnvironment interface {
 	StateDB() StateDB
 	ReadOnly() bool
+	Rules() params.Rules
+	Addresses() *libevm.AddressContext
 }
 
 var _ PrecompileEnvironment = (*evmCallArgs)(nil)
 
-func (args *evmCallArgs) StateDB() StateDB { return args.evm.StateDB }
-func (args *evmCallArgs) ReadOnly() bool   { return args.forceReadOnly || args.evm.interpreter.readOnly }
+func (args *evmCallArgs) StateDB() StateDB    { return args.evm.StateDB }
+func (args *evmCallArgs) ReadOnly() bool      { return args.forceReadOnly || args.evm.interpreter.readOnly }
+func (args *evmCallArgs) Rules() params.Rules { return args.evm.chainRules }
+
+func (args *evmCallArgs) Addresses() *libevm.AddressContext {
+	return &libevm.AddressContext{
+		Origin: args.evm.TxContext.Origin,
+		Caller: args.caller.Address(),
+		Self:   args.addr,
+	}
+}
 
 var (
 	// These lock in the assumptions made when implementing [evmCallArgs]. If

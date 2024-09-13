@@ -15,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/libevm"
 	"github.com/ethereum/go-ethereum/libevm/ethtest"
 	"github.com/ethereum/go-ethereum/libevm/hookstest"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 type precompileStub struct {
@@ -95,9 +94,10 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	hooks := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
 			precompile: vm.NewStatefulPrecompile(
-				func(env vm.PrecompileEnvironment, _ *params.Rules, caller, self common.Address, input []byte) ([]byte, error) {
+				func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
+					addrs := env.Addresses()
 					val := env.StateDB().GetState(precompile, slot)
-					return makeOutput(caller, self, input, val, env.ReadOnly()), nil
+					return makeOutput(addrs.Caller, addrs.Self, input, val, env.ReadOnly()), nil
 				},
 				func(b []byte) uint64 {
 					return gasCost
