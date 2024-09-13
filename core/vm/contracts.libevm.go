@@ -32,10 +32,11 @@ type evmCallArgs struct {
 	value  *uint256.Int
 	// args:end
 
-	// evm.interpreter.readOnly is only set in a call to EVMInterpreter.Run().
-	// If a precompile is called directly with StaticCall() then it won't have
-	// been set yet. StaticCall() MUST set this to true and all others to false;
-	// i.e. the same boolean passed to EVMInterpreter.Run().
+	// evm.interpreter.readOnly is only set to true via a call to
+	// EVMInterpreter.Run() so, if a precompile is called directly with
+	// StaticCall(), then readOnly might not be set yet. StaticCall() MUST set
+	// this to true and all other methods MUST set it to false; i.e. the same
+	// boolean as they each pass to EVMInterpreter.Run().
 	forceReadOnly bool
 }
 
@@ -90,6 +91,18 @@ type PrecompileEnvironment interface {
 	ReadOnlyState() libevm.StateReader
 	Addresses() *libevm.AddressContext
 }
+
+//
+// ****** SECURITY ******
+//
+// If you are updating PrecompileEnvironment to provide the ability to call back
+// into another contract, you MUST revisit the evmCallArgs.forceReadOnly flag.
+//
+// It is possible that forceReadOnly is true but evm.interpreter.readOnly is
+// false. This is safe for now, but may not be if recursive calling *from* a
+// precompile is enabled.
+//
+// ****** SECURITY ******
 
 var _ PrecompileEnvironment = (*evmCallArgs)(nil)
 
