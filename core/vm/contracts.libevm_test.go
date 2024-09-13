@@ -91,14 +91,19 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			caller, self, stateVal, readOnly, input,
 		))
 	}
+	run := func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
+		if got, want := env.StateDB() != nil, !env.ReadOnly(); got != want {
+			return nil, fmt.Errorf("PrecompileEnvironment().StateDB() must be non-nil i.f.f. not read-only; got non-nil? %t; want %t", got, want)
+		}
+
+		addrs := env.Addresses()
+		val := env.ReadOnlyState().GetState(precompile, slot)
+		return makeOutput(addrs.Caller, addrs.Self, input, val, env.ReadOnly()), nil
+	}
 	hooks := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
 			precompile: vm.NewStatefulPrecompile(
-				func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
-					addrs := env.Addresses()
-					val := env.StateDB().GetState(precompile, slot)
-					return makeOutput(addrs.Caller, addrs.Self, input, val, env.ReadOnly()), nil
-				},
+				run,
 				func(b []byte) uint64 {
 					return gasCost
 				},

@@ -82,17 +82,33 @@ func (p statefulPrecompile) Run([]byte) ([]byte, error) {
 // A PrecompileEnvironment provides information about the context in which a
 // precompiled contract is being run.
 type PrecompileEnvironment interface {
-	StateDB() StateDB
-	ReadOnly() bool
 	Rules() params.Rules
+	ReadOnly() bool
+	// StateDB will be non-nil i.f.f !ReadOnly().
+	StateDB() StateDB
+	// ReadOnlyState will always be non-nil.
+	ReadOnlyState() libevm.StateReader
 	Addresses() *libevm.AddressContext
 }
 
 var _ PrecompileEnvironment = (*evmCallArgs)(nil)
 
-func (args *evmCallArgs) StateDB() StateDB    { return args.evm.StateDB }
-func (args *evmCallArgs) ReadOnly() bool      { return args.forceReadOnly || args.evm.interpreter.readOnly }
 func (args *evmCallArgs) Rules() params.Rules { return args.evm.chainRules }
+func (args *evmCallArgs) ReadOnly() bool      { return args.forceReadOnly || args.evm.interpreter.readOnly }
+
+func (args *evmCallArgs) StateDB() StateDB {
+	if args.ReadOnly() {
+		return nil
+	}
+	return args.evm.StateDB
+}
+
+func (args *evmCallArgs) ReadOnlyState() libevm.StateReader {
+	// Even though we're actually returning a full state database, the user
+	// would have to actively circumvent the returned interface to use it. At
+	// that point they're off-piste and it's not our problem.
+	return args.evm.StateDB
+}
 
 func (args *evmCallArgs) Addresses() *libevm.AddressContext {
 	return &libevm.AddressContext{
