@@ -11,36 +11,45 @@ import (
 
 // evmCallArgs mirrors the parameters of the [EVM] methods Call(), CallCode(),
 // DelegateCall() and StaticCall(). Its fields are identical to those of the
-// parameters, prepended with the receiver name. As {Delegate,Static}Call don't
-// accept a value, they MUST set the respective field to nil.
+// parameters, prepended with the receiver name and appended with additional
+// values. As {Delegate,Static}Call don't accept a value, they MUST set the
+// respective field to nil.
 //
 // Instantiation can be achieved by merely copying the parameter names, in
 // order, which is trivially achieved with AST manipulation:
 //
 //	func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int) ... {
-//		...
-//		args := &evmCallArgs{evm, caller, addr, input, gas, value}
+//	    ...
+//	    args := &evmCallArgs{evm, caller, addr, input, gas, value, false}
 type evmCallArgs struct {
-	evm    *EVM
+	evm *EVM
+	// args:start
 	caller ContractRef
 	addr   common.Address
 	input  []byte
 	gas    uint64
 	value  *uint256.Int
+	// args:end
+
+	// evm.interpreter.readOnly is only set in a call to EVMInterpreter.Run().
+	// If a precompile is called directly with StaticCall() then it won't have
+	// been set yet. StaticCall() MUST set this to true and all others to false;
+	// i.e. the same boolean passed to EVMInterpreter.Run().
+	forceReadOnly bool
 }
 
 // run runs the [PrecompiledContract], differentiating between stateful and
 // regular types.
 func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, err error) {
 	if p, ok := p.(statefulPrecompile); ok {
-		return p.run(args.evm.StateDB, &args.evm.chainRules, args.caller.Address(), args.addr, input)
+		return p.run(args, &args.evm.chainRules, args.caller.Address(), args.addr, input)
 	}
 	return p.Run(input)
 }
 
 // PrecompiledStatefulRun is the stateful equivalent of the Run() method of a
 // [PrecompiledContract].
-type PrecompiledStatefulRun func(_ StateDB, _ *params.Rules, caller, self common.Address, input []byte) ([]byte, error)
+type PrecompiledStatefulRun func(_ PrecompileEnvironment, _ *params.Rules, caller, self common.Address, input []byte) ([]byte, error)
 
 // NewStatefulPrecompile constructs a new PrecompiledContract that can be used
 // via an [EVM] instance but MUST NOT be called directly; a direct call to Run()
@@ -68,6 +77,18 @@ func (p statefulPrecompile) Run([]byte) ([]byte, error) {
 	// production.
 	panic(fmt.Sprintf("BUG: call to %T.Run(); MUST call %T", p, p.run))
 }
+
+// A PrecompileEnvironment provides information about the context in which a
+// precompiled contract is being run.
+type PrecompileEnvironment interface {
+	StateDB() StateDB
+	ReadOnly() bool
+}
+
+var _ PrecompileEnvironment = (*evmCallArgs)(nil)
+
+func (args *evmCallArgs) StateDB() StateDB { return args.evm.StateDB }
+func (args *evmCallArgs) ReadOnly() bool   { return args.forceReadOnly || args.evm.interpreter.readOnly }
 
 var (
 	// These lock in the assumptions made when implementing [evmCallArgs]. If
