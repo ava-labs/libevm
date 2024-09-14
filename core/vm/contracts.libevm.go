@@ -118,9 +118,7 @@ func (args *evmCallArgs) Rules() params.Rules { return args.evm.chainRules }
 
 func (args *evmCallArgs) ReadOnly() bool {
 	if args.readWrite == inheritReadOnly {
-		// The verbose `if true { return true }` pattern allows better
-		// inspection of code coverage.
-		if args.evm.interpreter.readOnly {
+		if args.evm.interpreter.readOnly { //nolint:gosimple // Clearer code coverage for difficult-to-test branch
 			return true
 		}
 		return false
