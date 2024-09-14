@@ -122,8 +122,10 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	state.SetState(precompile, slot, value)
 
 	tests := []struct {
-		name         string
-		call         func() ([]byte, uint64, error)
+		name string
+		call func() ([]byte, uint64, error)
+		// Note that this only covers evm.readWrite being set to forceReadOnly,
+		// via StaticCall(). See TestInheritReadOnly for alternate case.
 		wantReadOnly bool
 	}{
 		{
@@ -169,24 +171,22 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	}
 }
 
-func TestPrecompileFromReadOnlyState(t *testing.T) {
+func TestInheritReadOnly(t *testing.T) {
 	// The regular test of stateful precompiles only checks the read-only state
-	// when called directly via vm.EVM.*Call*() methods. This will hit the
-	// [evmCallArgs.forceReadOnly] branch of [PrecompileEnvironment.ReadOnly],
-	// but not the [EVMInterpreter.readOnly] branch. The latter occurs when we
-	// are already in a read-only environment and there is a non-static call to
-	// a precompile.
+	// when called directly via vm.EVM.*Call*() methods. That approach will not
+	// result in a read-only state via inheritance, which occurs when already in
+	// a read-only environment there is a non-static call to a precompile.
 	//
 	// Test strategy:
 	//
-	// 1. Create a precompile that reflects its read-only status in the return
+	// 1. Create a precompile that echoes its read-only status in the return
 	//    data. We MUST NOT assert inside the precompile as we need proof that
 	//    the precompile was actually called.
 	//
 	// 2. Create a bytecode contract that calls the precompile with CALL and
 	//    propagates the return data. Using CALL (i.e. not STATICCALL) means
-	//    that we know for certain that evmCallArgs.forceReadOnly isn't being
-	//    set to true and, instead, the read-only state is being read from
+	//    that we know for certain that [forceReadOnly] isn't being used and,
+	//    instead, the read-only state is being read from
 	//    evm.interpreter.readOnly.
 	//
 	// 3. Assert that the returned input is as expected for the read-only state.

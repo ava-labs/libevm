@@ -35,10 +35,18 @@ type evmCallArgs struct {
 	// evm.interpreter.readOnly is only set to true via a call to
 	// EVMInterpreter.Run() so, if a precompile is called directly with
 	// StaticCall(), then readOnly might not be set yet. StaticCall() MUST set
-	// this to true and all other methods MUST set it to false; i.e. the same
-	// boolean as they each pass to EVMInterpreter.Run().
-	forceReadOnly bool
+	// this to forceReadOnly and all other methods MUST set it to
+	// inheritReadOnly; i.e. equivalent to the boolean they each pass to
+	// EVMInterpreter.Run().
+	readWrite rwInheritance
 }
+
+type rwInheritance uint8
+
+const (
+	inheritReadOnly rwInheritance = iota + 1
+	forceReadOnly
+)
 
 // run runs the [PrecompiledContract], differentiating between stateful and
 // regular types.
@@ -109,16 +117,18 @@ var _ PrecompileEnvironment = (*evmCallArgs)(nil)
 func (args *evmCallArgs) Rules() params.Rules { return args.evm.chainRules }
 
 func (args *evmCallArgs) ReadOnly() bool {
-	// Not using `return a || b` as this verbose pattern allows better
-	// inspection of code coverage.
-	switch {
-	case args.evm.interpreter.readOnly: // already in a read-only context
-		return true
-	case args.forceReadOnly: // precompile called via StaticCall
-		return true
-	default:
+	if args.readWrite == inheritReadOnly {
+		// The verbose `if true { return true }` pattern allows better
+		// inspection of code coverage.
+		if args.evm.interpreter.readOnly {
+			return true
+		}
 		return false
 	}
+	// Even though args.readWrite may be some value other than forceReadOnly,
+	// that would be an invalid use of the API so we default to read-only as the
+	// safest failure mode.
+	return true
 }
 
 func (args *evmCallArgs) StateDB() StateDB {
