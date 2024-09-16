@@ -14,7 +14,7 @@ func (evm *EVM) canCreateContract(
 ) ([]byte, common.Address, uint64, error) {
 	if err == nil && address != (common.Address{}) { // NOTE `err ==` not !=
 		addrs := &libevm.AddressContext{Origin: evm.Origin, Caller: caller.Address(), Self: address}
-		err = evm.chainRules.Hooks().CanCreateContract(addrs, evm.StateDB)
+		gas, err = evm.chainRules.Hooks().CanCreateContract(addrs, gas, evm.StateDB)
 	}
 	return deployedCode, address, gas, err
 }
