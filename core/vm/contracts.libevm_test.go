@@ -348,7 +348,7 @@ func TestCanCreateContract(t *testing.T) {
 			_, _, gasRemaining, err := tt.create(evm)
 			require.EqualError(t, err, tt.wantErr.Error())
 			// require prints uint64s in hex
-			require.Equal(t, int(gasLimit-gasUsage), int(gasRemaining), "gas remaining")
+			require.Equal(t, int(gasLimit-gasUsage), int(gasRemaining), "gas remaining") //nolint:gosec // G115 won't overflow as <= 1e6
 		})
 	}
 }
