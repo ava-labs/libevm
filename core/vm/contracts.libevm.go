@@ -72,10 +72,14 @@ func NewStatefulPrecompile(run PrecompiledStatefulContract) PrecompiledContract 
 	return statefulPrecompile(run)
 }
 
+// statefulPrecompile implements the [PrecompiledContract] interface to allow a
+// [PrecompiledStatefulContract] to be carried with regular geth plumbing. The
+// methods are defined on this unexported type instead of directly on
+// [PrecompiledStatefulContract] to hide implementation details.
 type statefulPrecompile PrecompiledStatefulContract
 
-// RequiredGas always returns zero as this gas is consumed before the contract
-// is run.
+// RequiredGas always returns zero as this gas is consumed by native geth code
+// before the contract is run.
 func (statefulPrecompile) RequiredGas([]byte) uint64 { return 0 }
 
 func (p statefulPrecompile) Run([]byte) ([]byte, error) {
