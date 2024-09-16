@@ -76,7 +76,7 @@ type statefulPrecompile PrecompiledStatefulContract
 
 // RequiredGas always returns zero as this gas is consumed before the contract
 // is run.
-func (p statefulPrecompile) RequiredGas(input []byte) uint64 { return 0 }
+func (statefulPrecompile) RequiredGas([]byte) uint64 { return 0 }
 
 func (p statefulPrecompile) Run([]byte) ([]byte, error) {
 	// https://google.github.io/styleguide/go/best-practices.html#when-to-panic
