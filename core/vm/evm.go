@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/libevm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -427,11 +426,10 @@ func (c *codeAndHash) Hash() common.Hash {
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
-	cc := &libevm.AddressContext{Origin: evm.Origin, Caller: caller.Address(), Self: address}
-	if err := evm.chainRules.Hooks().CanCreateContract(cc, evm.StateDB); err != nil {
-		return nil, common.Address{}, gas, err
-	}
+func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode) (deployedCode []byte, deployedAddress common.Address, gasRemaining uint64, retErr error) {
+	defer func() {
+		deployedCode, deployedAddress, gasRemaining, retErr = evm.canCreateContract(caller, deployedCode, deployedAddress, gasRemaining, retErr)
+	}()
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
