@@ -32,6 +32,8 @@ type RulesHooks interface {
 // RulesAllowlistHooks are a subset of [RulesHooks] that gate actions, signalled
 // by returning a nil (allowed) or non-nil (blocked) error.
 type RulesAllowlistHooks interface {
+	// CanCreateContract is called after the deployer's nonce is incremented but
+	// before all other state-modifying actions.
 	CanCreateContract(_ *libevm.AddressContext, gas uint64, _ libevm.StateReader) (gasRemaining uint64, _ error)
 	CanExecuteTransaction(from common.Address, to *common.Address, _ libevm.StateReader) error
 }
