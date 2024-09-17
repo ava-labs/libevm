@@ -6,10 +6,11 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/ethereum/go-ethereum/libevm/ethtest"
 	"github.com/ethereum/go-ethereum/libevm/hookstest"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/stretchr/testify/require"
 )
 
 func TestChainConfigHooks_Description(t *testing.T) {
