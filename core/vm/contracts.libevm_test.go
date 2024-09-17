@@ -116,13 +116,13 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	const gasLimit = 1e6
 	gasCost := rng.Uint64n(gasLimit)
 
-	run := func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
+	run := func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) ([]byte, uint64, error) {
 		if got, want := env.StateDB() != nil, !env.ReadOnly(); got != want {
-			return nil, fmt.Errorf("PrecompileEnvironment().StateDB() must be non-nil i.f.f. not read-only; got non-nil? %t; want %t", got, want)
+			return nil, 0, fmt.Errorf("PrecompileEnvironment().StateDB() must be non-nil i.f.f. not read-only; got non-nil? %t; want %t", got, want)
 		}
 		hdr, err := env.BlockHeader()
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		addrs := env.Addresses()
@@ -136,16 +136,11 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			Difficulty:  hdr.Difficulty,
 			Input:       input,
 		}
-		return []byte(out.String()), nil
+		return []byte(out.String()), suppliedGas - gasCost, nil
 	}
 	hooks := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
-			precompile: vm.NewStatefulPrecompile(
-				run,
-				func(b []byte) uint64 {
-					return gasCost
-				},
-			),
+			precompile: vm.NewStatefulPrecompile(run),
 		},
 	}
 	hooks.Register(t)
@@ -256,13 +251,12 @@ func TestInheritReadOnly(t *testing.T) {
 	hooks := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
 			precompile: vm.NewStatefulPrecompile(
-				func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
+				func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) ([]byte, uint64, error) {
 					if env.ReadOnly() {
-						return []byte{ifReadOnly}, nil
+						return []byte{ifReadOnly}, suppliedGas, nil
 					}
-					return []byte{ifNotReadOnly}, nil
+					return []byte{ifNotReadOnly}, suppliedGas, nil
 				},
-				func([]byte) uint64 { return 0 },
 			),
 		},
 	}
@@ -348,12 +342,15 @@ func TestCanCreateContract(t *testing.T) {
 	account := rng.Address()
 	slot := rng.Hash()
 
+	const gasLimit uint64 = 1e6
+	gasUsage := rng.Uint64n(gasLimit)
+
 	makeErr := func(cc *libevm.AddressContext, stateVal common.Hash) error {
 		return fmt.Errorf("Origin: %v Caller: %v Contract: %v State: %v", cc.Origin, cc.Caller, cc.Self, stateVal)
 	}
 	hooks := &hookstest.Stub{
-		CanCreateContractFn: func(cc *libevm.AddressContext, s libevm.StateReader) error {
-			return makeErr(cc, s.GetState(account, slot))
+		CanCreateContractFn: func(cc *libevm.AddressContext, gas uint64, s libevm.StateReader) (uint64, error) {
+			return gas - gasUsage, makeErr(cc, s.GetState(account, slot))
 		},
 	}
 	hooks.Register(t)
@@ -361,7 +358,7 @@ func TestCanCreateContract(t *testing.T) {
 	origin := rng.Address()
 	caller := rng.Address()
 	value := rng.Hash()
-	code := rng.Bytes(8)
+	code := []byte{byte(vm.STOP)}
 	salt := rng.Hash()
 
 	create := crypto.CreateAddress(caller, 0)
@@ -375,14 +372,14 @@ func TestCanCreateContract(t *testing.T) {
 		{
 			name: "Create",
 			create: func(evm *vm.EVM) ([]byte, common.Address, uint64, error) {
-				return evm.Create(vm.AccountRef(caller), code, 1e6, uint256.NewInt(0))
+				return evm.Create(vm.AccountRef(caller), code, gasLimit, uint256.NewInt(0))
 			},
 			wantErr: makeErr(&libevm.AddressContext{Origin: origin, Caller: caller, Self: create}, value),
 		},
 		{
 			name: "Create2",
 			create: func(evm *vm.EVM) ([]byte, common.Address, uint64, error) {
-				return evm.Create2(vm.AccountRef(caller), code, 1e6, uint256.NewInt(0), new(uint256.Int).SetBytes(salt[:]))
+				return evm.Create2(vm.AccountRef(caller), code, gasLimit, uint256.NewInt(0), new(uint256.Int).SetBytes(salt[:]))
 			},
 			wantErr: makeErr(&libevm.AddressContext{Origin: origin, Caller: caller, Self: create2}, value),
 		},
@@ -394,8 +391,10 @@ func TestCanCreateContract(t *testing.T) {
 			state.SetState(account, slot, value)
 			evm.TxContext.Origin = origin
 
-			_, _, _, err := tt.create(evm)
+			_, _, gasRemaining, err := tt.create(evm)
 			require.EqualError(t, err, tt.wantErr.Error())
+			// require prints uint64s in hex
+			require.Equal(t, int(gasLimit-gasUsage), int(gasRemaining), "gas remaining") //nolint:gosec // G115 won't overflow as <= 1e6
 		})
 	}
 }
