@@ -72,14 +72,17 @@ var _ interface {
 	RulesHooks
 } = NOOPHooks{}
 
+// CheckConfigForkOrder verifies all (otherwise valid) fork orders.
 func (NOOPHooks) CheckConfigForkOrder() error {
 	return nil
 }
 
+// CheckConfigCompatible verifies all (otherwise valid) new configs.
 func (NOOPHooks) CheckConfigCompatible(*ChainConfig, *big.Int, uint64) *ConfigCompatError {
 	return nil
 }
 
+// Description returns the empty string.
 func (NOOPHooks) Description() string {
 	return ""
 }
