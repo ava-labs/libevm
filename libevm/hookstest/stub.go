@@ -73,7 +73,7 @@ func (s Stub) CheckConfigCompatible(newcfg *params.ChainConfig, headNumber *big.
 	return nil
 }
 
-// Description returns s.DescriptionValue.
+// Description returns s.DescriptionSuffix.
 func (s Stub) Description() string {
 	return s.DescriptionSuffix
 }
