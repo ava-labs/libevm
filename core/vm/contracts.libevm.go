@@ -2,10 +2,12 @@ package vm
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/libevm"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -50,42 +52,43 @@ const (
 
 // run runs the [PrecompiledContract], differentiating between stateful and
 // regular types.
-func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, err error) {
+func (args *evmCallArgs) run(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
 	if p, ok := p.(statefulPrecompile); ok {
-		return p.run(args, input)
+		return p(args, input, suppliedGas)
 	}
-	return p.Run(input)
+	// Gas consumption for regular precompiles was already handled by the native
+	// RunPrecompiledContract(), which called this method.
+	ret, err = p.Run(input)
+	return ret, suppliedGas, err
 }
 
-// PrecompiledStatefulRun is the stateful equivalent of the Run() method of a
+// PrecompiledStatefulContract is the stateful equivalent of a
 // [PrecompiledContract].
-type PrecompiledStatefulRun func(env PrecompileEnvironment, input []byte) ([]byte, error)
+type PrecompiledStatefulContract func(env PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error)
 
 // NewStatefulPrecompile constructs a new PrecompiledContract that can be used
 // via an [EVM] instance but MUST NOT be called directly; a direct call to Run()
 // reserves the right to panic. See other requirements defined in the comments
 // on [PrecompiledContract].
-func NewStatefulPrecompile(run PrecompiledStatefulRun, requiredGas func([]byte) uint64) PrecompiledContract {
-	return statefulPrecompile{
-		gas: requiredGas,
-		run: run,
-	}
+func NewStatefulPrecompile(run PrecompiledStatefulContract) PrecompiledContract {
+	return statefulPrecompile(run)
 }
 
-type statefulPrecompile struct {
-	gas func([]byte) uint64
-	run PrecompiledStatefulRun
-}
+// statefulPrecompile implements the [PrecompiledContract] interface to allow a
+// [PrecompiledStatefulContract] to be carried with regular geth plumbing. The
+// methods are defined on this unexported type instead of directly on
+// [PrecompiledStatefulContract] to hide implementation details.
+type statefulPrecompile PrecompiledStatefulContract
 
-func (p statefulPrecompile) RequiredGas(input []byte) uint64 {
-	return p.gas(input)
-}
+// RequiredGas always returns zero as this gas is consumed by native geth code
+// before the contract is run.
+func (statefulPrecompile) RequiredGas([]byte) uint64 { return 0 }
 
 func (p statefulPrecompile) Run([]byte) ([]byte, error) {
 	// https://google.github.io/styleguide/go/best-practices.html#when-to-panic
 	// This would indicate an API misuse and would occur in tests, not in
 	// production.
-	panic(fmt.Sprintf("BUG: call to %T.Run(); MUST call %T", p, p.run))
+	panic(fmt.Sprintf("BUG: call to %T.Run(); MUST call %T itself", p, p))
 }
 
 // A PrecompileEnvironment provides information about the context in which a
@@ -98,6 +101,10 @@ type PrecompileEnvironment interface {
 	// ReadOnlyState will always be non-nil.
 	ReadOnlyState() libevm.StateReader
 	Addresses() *libevm.AddressContext
+
+	BlockHeader() (types.Header, error)
+	BlockNumber() *big.Int
+	BlockTime() uint64
 }
 
 //
@@ -150,6 +157,24 @@ func (args *evmCallArgs) Addresses() *libevm.AddressContext {
 		Self:   args.addr,
 	}
 }
+
+func (args *evmCallArgs) BlockHeader() (types.Header, error) {
+	hdr := args.evm.Context.Header
+	if hdr == nil {
+		// Although [core.NewEVMBlockContext] sets the field and is in the
+		// typical hot path (e.g. miner), there are other ways to create a
+		// [vm.BlockContext] (e.g. directly in tests) that may result in no
+		// available header.
+		return types.Header{}, fmt.Errorf("nil %T in current %T", hdr, args.evm.Context)
+	}
+	return *hdr, nil
+}
+
+func (args *evmCallArgs) BlockNumber() *big.Int {
+	return new(big.Int).Set(args.evm.Context.BlockNumber)
+}
+
+func (args *evmCallArgs) BlockTime() uint64 { return args.evm.Context.Time }
 
 var (
 	// These lock in the assumptions made when implementing [evmCallArgs]. If
