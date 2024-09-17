@@ -25,6 +25,9 @@ func Register[C params.ChainConfigHooks, R params.RulesHooks](tb testing.TB, ext
 // [params.RulesHooks]. Each of the fields, if non-nil, back their respective
 // hook methods, which otherwise fall back to the default behaviour.
 type Stub struct {
+	CheckConfigForkOrderFn  func() error
+	CheckConfigCompatibleFn func(*params.ChainConfig, *big.Int, uint64) *params.ConfigCompatError
+	DescriptionValue        string
 	PrecompileOverrides     map[common.Address]libevm.PrecompiledContract
 	CanExecuteTransactionFn func(common.Address, *common.Address, libevm.StateReader) error
 	CanCreateContractFn     func(*libevm.AddressContext, libevm.StateReader) error
@@ -50,6 +53,29 @@ func (s Stub) PrecompileOverride(a common.Address) (libevm.PrecompiledContract, 
 	}
 	p, ok := s.PrecompileOverrides[a]
 	return p, ok
+}
+
+// CheckConfigForkOrder proxies arguments to the s.CheckConfigForkOrderFn
+// function if non-nil, otherwise it acts as a noop.
+func (s Stub) CheckConfigForkOrder() error {
+	if f := s.CheckConfigForkOrderFn; f != nil {
+		return f()
+	}
+	return nil
+}
+
+// CheckConfigCompatible proxies arguments to the s.CheckConfigCompatibleFn
+// function if non-nil, otherwise it acts as a noop.
+func (s Stub) CheckConfigCompatible(newcfg *params.ChainConfig, headNumber *big.Int, headTimestamp uint64) *params.ConfigCompatError {
+	if f := s.CheckConfigCompatibleFn; f != nil {
+		return f(newcfg, headNumber, headTimestamp)
+	}
+	return nil
+}
+
+// Description returns s.DescriptionValue.
+func (s Stub) Description() string {
+	return s.DescriptionValue
 }
 
 // CanExecuteTransaction proxies arguments to the s.CanExecuteTransactionFn
