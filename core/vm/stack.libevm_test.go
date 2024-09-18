@@ -19,7 +19,7 @@ func TestMutableStack(t *testing.T) {
 		return *u256
 	}
 
-	require.Len(t, s.Data(), 0)
+	require.Empty(t, s.Data(), "new stack")
 	want := []uint256.Int{push(42), push(314159), push(142857)}
 	require.Equalf(t, want, s.Data(), "after pushing %d values to empty stack", len(want))
 	require.Equal(t, want[len(want)-1], m.Pop(), "popped value")
