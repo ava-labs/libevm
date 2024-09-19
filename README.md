@@ -357,7 +357,7 @@ The go-ethereum binaries (i.e. all code inside of the `cmd` directory) are licen
 [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html), also
 included in our repository in the `COPYING` file.
 
-The libevm (i) _extensions_ to the go-ethereum library (i.e. all code in files with `libevm` in their full path,
+The libevm (i) _additions_ to the go-ethereum library (i.e. all code in files with `libevm` in their full path,
 be it a directory or file name); and (ii) _modifications_ to existing go-ethereum code; are licensed under the
 [GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.en.html),
 also included in our repository in the `COPYING.LESSER` file. A comprehensive outline of _modifications_ is
