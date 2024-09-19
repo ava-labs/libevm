@@ -109,6 +109,7 @@ func (p statefulPrecompile) Run([]byte) ([]byte, error) {
 // A PrecompileEnvironment provides information about the context in which a
 // precompiled contract is being run.
 type PrecompileEnvironment interface {
+	ChainConfig() *params.ChainConfig
 	Rules() params.Rules
 	ReadOnly() bool
 	// StateDB will be non-nil i.f.f !ReadOnly().
@@ -136,7 +137,8 @@ type PrecompileEnvironment interface {
 
 var _ PrecompileEnvironment = (*evmCallArgs)(nil)
 
-func (args *evmCallArgs) Rules() params.Rules { return args.evm.chainRules }
+func (args *evmCallArgs) ChainConfig() *params.ChainConfig { return args.evm.chainConfig }
+func (args *evmCallArgs) Rules() params.Rules              { return args.evm.chainRules }
 
 func (args *evmCallArgs) ReadOnly() bool {
 	if args.readWrite == inheritReadOnly {
