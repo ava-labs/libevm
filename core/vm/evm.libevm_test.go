@@ -12,15 +12,15 @@ type chainIDOverrider struct {
 	chainID int64
 }
 
-func (o chainIDOverrider) OverrideNewEVMArgs(BlockContext, TxContext, StateDB, *params.ChainConfig, Config) (BlockContext, TxContext, StateDB, *params.ChainConfig, Config) {
-	return BlockContext{}, TxContext{}, nil, &params.ChainConfig{ChainID: big.NewInt(o.chainID)}, Config{}
+func (o chainIDOverrider) OverrideNewEVMArgs(args *NewEVMArgs) *NewEVMArgs {
+	args.ChainConfig = &params.ChainConfig{ChainID: big.NewInt(o.chainID)}
+	return args
 }
 
 func TestOverrideNewEVMArgs(t *testing.T) {
-	// The OverrideNewEVMArgs hook accepts and returns all arguments to
+	// The overrideNewEVMArgs function accepts and returns all arguments to
 	// NewEVM(), in order. Here we lock in our assumption of that order. If this
-	// breaks then the Hooks.OverrideNewEVMArgs() signature MUST be changed to
-	// match.
+	// breaks then all functionality overriding the args MUST be updated.
 	var _ func(BlockContext, TxContext, StateDB, *params.ChainConfig, Config) *EVM = NewEVM
 
 	const chainID = 13579

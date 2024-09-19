@@ -15,7 +15,16 @@ var libevmHooks Hooks
 
 // Hooks are arbitrary configuration functions to modify default VM behaviour.
 type Hooks interface {
-	OverrideNewEVMArgs(BlockContext, TxContext, StateDB, *params.ChainConfig, Config) (BlockContext, TxContext, StateDB, *params.ChainConfig, Config)
+	OverrideNewEVMArgs(*NewEVMArgs) *NewEVMArgs
+}
+
+// NewEVMArgs are the arguments received by [NewEVM], available for override.
+type NewEVMArgs struct {
+	BlockContext BlockContext
+	TxContext    TxContext
+	StateDB      StateDB
+	ChainConfig  *params.ChainConfig
+	Config       Config
 }
 
 func overrideNewEVMArgs(
@@ -28,5 +37,6 @@ func overrideNewEVMArgs(
 	if libevmHooks == nil {
 		return blockCtx, txCtx, statedb, chainConfig, config
 	}
-	return libevmHooks.OverrideNewEVMArgs(blockCtx, txCtx, statedb, chainConfig, config)
+	args := libevmHooks.OverrideNewEVMArgs(&NewEVMArgs{blockCtx, txCtx, statedb, chainConfig, config})
+	return args.BlockContext, args.TxContext, args.StateDB, args.ChainConfig, args.Config
 }
