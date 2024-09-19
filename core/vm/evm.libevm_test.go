@@ -27,6 +27,7 @@ func TestOverrideNewEVMArgs(t *testing.T) {
 	const chainID = 13579
 	libevmHooks = nil
 	RegisterHooks(chainIDOverrider{chainID: chainID})
+	defer func() { libevmHooks = nil }()
 
 	got := NewEVM(BlockContext{}, TxContext{}, nil, nil, Config{}).ChainConfig().ChainID
 	require.Equal(t, big.NewInt(chainID), got)
