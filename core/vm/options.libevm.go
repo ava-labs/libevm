@@ -21,13 +21,16 @@ type CallOption interface {
 	libevmCallOption() // noop to only allow internally defined options
 }
 
-// WithCaller overrides the default caller.
-func WithCaller(c ContractRef) CallOption {
-	return withCallerOpt{c}
+// WithUNSAFEForceDelegate results in precompiles making contract calls acting
+// as if they themselves were DELEGATECALLed. This is not safe for regular use
+// as the precompile will act as its own caller even when not expected to.
+//
+// Deprecated: this option MUST NOT be used other than to allow migration to
+// libevm when backwards compatibility is required.
+func WithUNSAFEForceDelegate() CallOption {
+	return callOptForceDelegate{}
 }
 
-type withCallerOpt struct {
-	ContractRef
-}
+type callOptForceDelegate struct{}
 
-func (withCallerOpt) libevmCallOption() {}
+func (callOptForceDelegate) libevmCallOption() {}
