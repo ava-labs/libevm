@@ -57,6 +57,11 @@ type evmCallArgs struct {
 	// inheritReadOnly; i.e. equivalent to the boolean they each pass to
 	// EVMInterpreter.Run().
 	readWrite rwInheritance
+
+	// If a precompile issues its own Call() then caller semantics are dependent
+	// on whether the precompile was delegate-called or not. DelegateCall() MUST
+	// set this to delegated and all other methods MUST set it to notDelegated.
+	delegation delegation
 }
 
 type rwInheritance uint8
@@ -64,6 +69,13 @@ type rwInheritance uint8
 const (
 	inheritReadOnly rwInheritance = iota + 1
 	forceReadOnly
+)
+
+type delegation uint8
+
+const (
+	delegated delegation = iota + 1
+	notDelegated
 )
 
 // run runs the [PrecompiledContract], differentiating between stateful and
@@ -201,7 +213,14 @@ func (args *evmCallArgs) Call(addr common.Address, input []byte, gas uint64, val
 		defer func() { in.readOnly = false }()
 	}
 
-	return args.evm.Call(AccountRef(args.self()), addr, input, gas, value)
+	// This is equivalent to the `contract` variables created by evm.*Call*()
+	// methods to pass to [EVMInterpreter.Run], which are then propagated by the
+	// *CALL* opcodes as the caller.
+	precompile := NewContract(args.caller, AccountRef(args.self()), args.value, args.gas)
+	if args.delegation == delegated {
+		precompile = precompile.AsDelegate()
+	}
+	return args.evm.Call(precompile, addr, input, gas, value)
 }
 
 var (
