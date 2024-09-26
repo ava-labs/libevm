@@ -122,19 +122,9 @@ type PrecompileEnvironment interface {
 	BlockHeader() (types.Header, error)
 	BlockNumber() *big.Int
 	BlockTime() uint64
-}
 
-//
-// ****** SECURITY ******
-//
-// If you are updating PrecompileEnvironment to provide the ability to call back
-// into another contract, you MUST revisit the evmCallArgs.forceReadOnly flag.
-//
-// It is possible that forceReadOnly is true but evm.interpreter.readOnly is
-// false. This is safe for now, but may not be if recursive calling *from* a
-// precompile is enabled.
-//
-// ****** SECURITY ******
+	Call(common.Address, []byte, uint64, *uint256.Int) ([]byte, uint64, error)
+}
 
 var _ PrecompileEnvironment = (*evmCallArgs)(nil)
 
@@ -168,11 +158,13 @@ func (args *evmCallArgs) ReadOnlyState() libevm.StateReader {
 	return args.evm.StateDB
 }
 
+func (args *evmCallArgs) self() common.Address { return args.addr }
+
 func (args *evmCallArgs) Addresses() *libevm.AddressContext {
 	return &libevm.AddressContext{
 		Origin: args.evm.TxContext.Origin,
 		Caller: args.caller.Address(),
-		Self:   args.addr,
+		Self:   args.self(),
 	}
 }
 
@@ -193,6 +185,24 @@ func (args *evmCallArgs) BlockNumber() *big.Int {
 }
 
 func (args *evmCallArgs) BlockTime() uint64 { return args.evm.Context.Time }
+
+func (args *evmCallArgs) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int) ([]byte, uint64, error) {
+	in := args.evm.interpreter
+
+	// The precompile run didn't increment the depth so this is necessary even
+	// though Call() will eventually result in it being done again.
+	in.evm.depth++
+	defer func() { in.evm.depth-- }()
+
+	// This will happen if the precompile was invoked via StaticCall() from a
+	// non read-only state.
+	if args.readWrite == forceReadOnly && !in.readOnly {
+		in.readOnly = true
+		defer func() { in.readOnly = false }()
+	}
+
+	return args.evm.Call(AccountRef(args.self()), addr, input, gas, value)
+}
 
 var (
 	// These lock in the assumptions made when implementing [evmCallArgs]. If
