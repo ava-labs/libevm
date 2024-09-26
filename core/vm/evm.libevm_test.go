@@ -36,7 +36,7 @@ func (o evmArgOverrider) OverrideNewEVMArgs(args *NewEVMArgs) *NewEVMArgs {
 	return args
 }
 
-func (o evmArgOverrider) OverrideEVMResetArgs(*EVMResetArgs) *EVMResetArgs {
+func (o evmArgOverrider) OverrideEVMResetArgs(params.Rules, *EVMResetArgs) *EVMResetArgs {
 	return &EVMResetArgs{
 		TxContext: o.resetTxCtx,
 		StateDB:   o.resetStateDB,
