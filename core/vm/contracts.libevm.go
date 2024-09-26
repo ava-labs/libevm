@@ -135,7 +135,10 @@ type PrecompileEnvironment interface {
 	BlockNumber() *big.Int
 	BlockTime() uint64
 
-	Call(common.Address, []byte, uint64, *uint256.Int) ([]byte, uint64, error)
+	// Call is equivalent to [EVM.Call], with the caller defaulting to the
+	// precompile receiving the environment, or to its own caller if invoked via
+	// a delegated call.
+	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...CallOption) (ret []byte, gasRemaining uint64, _ error)
 }
 
 var _ PrecompileEnvironment = (*evmCallArgs)(nil)
@@ -198,7 +201,7 @@ func (args *evmCallArgs) BlockNumber() *big.Int {
 
 func (args *evmCallArgs) BlockTime() uint64 { return args.evm.Context.Time }
 
-func (args *evmCallArgs) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int) ([]byte, uint64, error) {
+func (args *evmCallArgs) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, uint64, error) {
 	in := args.evm.interpreter
 
 	// The precompile run didn't increment the depth so this is necessary even
@@ -220,7 +223,19 @@ func (args *evmCallArgs) Call(addr common.Address, input []byte, gas uint64, val
 	if args.delegation == delegated {
 		precompile = precompile.AsDelegate()
 	}
-	return args.evm.Call(precompile, addr, input, gas, value)
+	var caller ContractRef = precompile
+
+	for _, o := range opts {
+		switch o := o.(type) {
+		case withCallerOpt:
+			caller = o.ContractRef
+		case nil:
+		default:
+			return nil, gas, fmt.Errorf("unsupported option %T", o)
+		}
+	}
+
+	return args.evm.Call(caller, addr, input, gas, value)
 }
 
 var (
