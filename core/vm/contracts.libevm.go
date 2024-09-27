@@ -220,23 +220,24 @@ func (args *evmCallArgs) Call(addr common.Address, input []byte, gas uint64, val
 	// methods to pass to [EVMInterpreter.Run], which are then propagated by the
 	// *CALL* opcodes as the caller.
 	precompile := NewContract(args.caller, AccountRef(args.self()), args.value, args.gas)
+	if args.delegation == delegated {
+		precompile = precompile.AsDelegate()
+	}
+	var caller ContractRef = precompile
 
-	asDelegate := args.delegation == delegated // precompile was DELEGATECALLed
 	for _, o := range opts {
 		switch o := o.(type) {
-		case callOptForceDelegate:
-			// See documentation of [WithUNSAFEForceDelegate].
-			asDelegate = true
+		case callOptUNSAFECallerAddressProxy:
+			// Note that, in addition to being unsafe, this breaks an EVM
+			// assumption that the caller ContractRef is always a *Contract.
+			caller = AccountRef(args.caller.Address())
 		case nil:
 		default:
 			return nil, gas, fmt.Errorf("unsupported option %T", o)
 		}
 	}
-	if asDelegate {
-		precompile = precompile.AsDelegate()
-	}
 
-	return args.evm.Call(precompile, addr, input, gas, value)
+	return args.evm.Call(caller, addr, input, gas, value)
 }
 
 var (
