@@ -31,6 +31,9 @@ package pseudo
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // A Type wraps a strongly-typed value without exposing information about its
@@ -139,12 +142,24 @@ func (v *Value[T]) MarshalJSON() ([]byte, error) { return v.t.MarshalJSON() }
 // UnmarshalJSON implements the [json.Unmarshaler] interface.
 func (v *Value[T]) UnmarshalJSON(b []byte) error { return v.t.UnmarshalJSON(b) }
 
+func (t *Type) EncodeRLP(w io.Writer) error { return t.val.EncodeRLP(w) }
+
+func (t *Type) DecodeRLP(s *rlp.Stream) error { return t.val.DecodeRLP(s) }
+
 var _ = []interface {
 	json.Marshaler
 	json.Unmarshaler
 }{
 	(*Type)(nil),
 	(*Value[struct{}])(nil),
+	(*concrete[struct{}])(nil),
+}
+
+var _ = []interface {
+	rlp.Encoder
+	rlp.Decoder
+}{
+	(*Type)(nil),
 	(*concrete[struct{}])(nil),
 }
 
@@ -157,6 +172,8 @@ type value interface {
 
 	json.Marshaler
 	json.Unmarshaler
+	rlp.Encoder
+	rlp.Decoder
 }
 
 type concrete[T any] struct {
@@ -209,4 +226,11 @@ func (c *concrete[T]) UnmarshalJSON(b []byte) error {
 	}
 	c.val = v
 	return nil
+}
+
+func (c *concrete[T]) EncodeRLP(w io.Writer) error { return rlp.Encode(w, c.val) }
+
+func (c *concrete[T]) DecodeRLP(s *rlp.Stream) error {
+	s.Kind() // is this required?
+	return s.Decode(c.val)
 }

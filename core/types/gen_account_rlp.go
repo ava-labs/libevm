@@ -16,6 +16,12 @@ func (obj *StateAccount) EncodeRLP(_w io.Writer) error {
 	}
 	w.WriteBytes(obj.Root[:])
 	w.WriteBytes(obj.CodeHash)
+	_tmp1 := obj.Extra != nil
+	if _tmp1 {
+		if err := obj.Extra.EncodeRLP(w); err != nil {
+			return err
+		}
+	}
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }

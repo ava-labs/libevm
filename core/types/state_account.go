@@ -33,6 +33,8 @@ type StateAccount struct {
 	Balance  *uint256.Int
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
+
+	Extra *RLPPayload `rlp:"optional"`
 }
 
 // NewEmptyStateAccount constructs an empty state account.
