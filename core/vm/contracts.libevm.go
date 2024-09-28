@@ -41,7 +41,9 @@ import (
 //	    ...
 //	    args := &evmCallArgs{evm, caller, addr, input, gas, value, false}
 type evmCallArgs struct {
-	evm *EVM
+	evm      *EVM
+	callType callType
+
 	// args:start
 	caller ContractRef
 	addr   common.Address
@@ -56,26 +58,19 @@ type evmCallArgs struct {
 	// this to forceReadOnly and all other methods MUST set it to
 	// inheritReadOnly; i.e. equivalent to the boolean they each pass to
 	// EVMInterpreter.Run().
-	readWrite rwInheritance
 
 	// If a precompile issues its own Call() then caller semantics are dependent
 	// on whether the precompile was delegate-called or not. DelegateCall() MUST
 	// set this to delegated and all other methods MUST set it to notDelegated.
-	delegation delegation
 }
 
-type rwInheritance uint8
+type callType uint8
 
 const (
-	inheritReadOnly rwInheritance = iota + 1
-	forceReadOnly
-)
-
-type delegation uint8
-
-const (
-	delegated delegation = iota + 1
-	notDelegated
+	call callType = iota + 1
+	callCode
+	delegateCall
+	staticCall
 )
 
 // run runs the [PrecompiledContract], differentiating between stateful and
@@ -147,16 +142,16 @@ func (args *evmCallArgs) ChainConfig() *params.ChainConfig { return args.evm.cha
 func (args *evmCallArgs) Rules() params.Rules              { return args.evm.chainRules }
 
 func (args *evmCallArgs) ReadOnly() bool {
-	if args.readWrite == inheritReadOnly {
-		if args.evm.interpreter.readOnly { //nolint:gosimple // Clearer code coverage for difficult-to-test branch
-			return true
-		}
+	// A switch statement provides clearer code coverage for difficult-to-test
+	// cases.
+	switch {
+	case args.callType == staticCall:
+		return true
+	case args.evm.interpreter.readOnly:
+		return true
+	default:
 		return false
 	}
-	// Even though args.readWrite may be some value other than forceReadOnly,
-	// that would be an invalid use of the API so we default to read-only as the
-	// safest failure mode.
-	return true
 }
 
 func (args *evmCallArgs) StateDB() StateDB {
@@ -209,9 +204,7 @@ func (args *evmCallArgs) Call(addr common.Address, input []byte, gas uint64, val
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
 
-	// This will happen if the precompile was invoked via StaticCall() from a
-	// non read-only state.
-	if args.readWrite == forceReadOnly && !in.readOnly {
+	if args.callType == staticCall && !in.readOnly {
 		in.readOnly = true
 		defer func() { in.readOnly = false }()
 	}
@@ -220,7 +213,7 @@ func (args *evmCallArgs) Call(addr common.Address, input []byte, gas uint64, val
 	// methods to pass to [EVMInterpreter.Run], which are then propagated by the
 	// *CALL* opcodes as the caller.
 	precompile := NewContract(args.caller, AccountRef(args.self()), args.value, args.gas)
-	if args.delegation == delegated {
+	if args.callType == delegateCall {
 		precompile = precompile.AsDelegate()
 	}
 	var caller ContractRef = precompile
