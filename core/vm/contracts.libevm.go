@@ -30,16 +30,16 @@ import (
 
 // evmCallArgs mirrors the parameters of the [EVM] methods Call(), CallCode(),
 // DelegateCall() and StaticCall(). Its fields are identical to those of the
-// parameters, prepended with the receiver name and appended with additional
-// values. As {Delegate,Static}Call don't accept a value, they MUST set the
-// respective field to nil.
+// parameters, prepended with the receiver name and call type. As
+// {Delegate,Static}Call don't accept a value, they MUST set the respective
+// field to nil.
 //
 // Instantiation can be achieved by merely copying the parameter names, in
 // order, which is trivially achieved with AST manipulation:
 //
 //	func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int) ... {
 //	    ...
-//	    args := &evmCallArgs{evm, caller, addr, input, gas, value, false}
+//	    args := &evmCallArgs{evm, callCode, caller, addr, input, gas, value}
 type evmCallArgs struct {
 	evm      *EVM
 	callType callType
@@ -51,17 +51,6 @@ type evmCallArgs struct {
 	gas    uint64
 	value  *uint256.Int
 	// args:end
-
-	// evm.interpreter.readOnly is only set to true via a call to
-	// EVMInterpreter.Run() so, if a precompile is called directly with
-	// StaticCall(), then readOnly might not be set yet. StaticCall() MUST set
-	// this to forceReadOnly and all other methods MUST set it to
-	// inheritReadOnly; i.e. equivalent to the boolean they each pass to
-	// EVMInterpreter.Run().
-
-	// If a precompile issues its own Call() then caller semantics are dependent
-	// on whether the precompile was delegate-called or not. DelegateCall() MUST
-	// set this to delegated and all other methods MUST set it to notDelegated.
 }
 
 type callType uint8
@@ -146,6 +135,9 @@ func (args *evmCallArgs) ReadOnly() bool {
 	// cases.
 	switch {
 	case args.callType == staticCall:
+		// evm.interpreter.readOnly is only set to true via a call to
+		// EVMInterpreter.Run() so, if a precompile is called directly with
+		// StaticCall(), then readOnly might not be set yet.
 		return true
 	case args.evm.interpreter.readOnly:
 		return true
