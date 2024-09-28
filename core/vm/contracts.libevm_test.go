@@ -265,9 +265,7 @@ func TestInheritReadOnly(t *testing.T) {
 
 	// (1)
 
-	var precompile common.Address
-	const precompileAddr = 255
-	precompile[common.AddressLength-1] = precompileAddr
+	precompile := common.Address{255}
 
 	const (
 		ifReadOnly = iota + 1 // see contract bytecode for rationale
@@ -293,31 +291,13 @@ func TestInheritReadOnly(t *testing.T) {
 	})
 
 	// (2)
-
-	// See CALL signature: https://www.evm.codes/#f1?fork=cancun
-	const p0 = vm.PUSH0
-	contract := []vm.OpCode{
-		vm.PUSH1, 1, // retSize (bytes)
-		p0, // retOffset
-		p0, // argSize
-		p0, // argOffset
-		p0, // value
-		vm.PUSH1, precompileAddr,
-		p0, // gas
-		vm.CALL,
-		// It's ok to ignore the return status. If the CALL failed then we'll
-		// return []byte{0} next, and both non-failure return buffers are
-		// non-zero because of the `iota + 1`.
-		vm.PUSH1, 1, // size (byte)
-		p0,
-		vm.RETURN,
-	}
+	contract := makeReturnProxy(t, precompile, vm.CALL)
 
 	state, evm := ethtest.NewZeroEVM(t)
 	rng := ethtest.NewPseudoRand(42)
 	contractAddr := rng.Address()
 	state.CreateAccount(contractAddr)
-	state.SetCode(contractAddr, contractCode(contract))
+	state.SetCode(contractAddr, convertBytes[vm.OpCode, byte](contract))
 
 	// (3)
 
@@ -352,14 +332,54 @@ func TestInheritReadOnly(t *testing.T) {
 	}
 }
 
-// contractCode converts a slice of op codes into a byte buffer for storage as
-// contract code.
-func contractCode(ops []vm.OpCode) []byte {
-	ret := make([]byte, len(ops))
-	for i, o := range ops {
-		ret[i] = byte(o)
+// makeReturnProxy returns the bytecode of a contract that will call `dest` with
+// the specified call type and propagated the returned value.
+//
+// The contract does NOT check if the call reverted. In this case, the
+// propagated return value will always be an empty slice. Tests using these
+// proxies MUST use non-empty slices as test values.
+//
+// TODO(arr4n): convert this to arr4n/specops for clarity and to make it easier
+// to generate a revert check.
+func makeReturnProxy(t *testing.T, dest common.Address, call vm.OpCode) []vm.OpCode {
+	t.Helper()
+	const p0 = vm.PUSH0
+	contract := []vm.OpCode{
+		vm.PUSH1, 1, // retSize (bytes)
+		p0, // retOffset
+		p0, // argSize
+		p0, // argOffset
 	}
-	return ret
+
+	// See CALL signature: https://www.evm.codes/#f1?fork=cancun
+	switch call {
+	case vm.CALL, vm.CALLCODE:
+		contract = append(contract, p0) // value
+	case vm.DELEGATECALL, vm.STATICCALL:
+	default:
+		t.Fatalf("Bad test setup: invalid non-CALL-type opcode %s", call)
+	}
+
+	contract = append(contract, vm.PUSH20)
+	contract = append(contract, convertBytes[byte, vm.OpCode](dest[:])...)
+
+	contract = append(contract,
+		p0, // gas
+		call,
+
+		// See function comment re ignored reverts.
+		vm.RETURNDATASIZE, p0, p0, vm.RETURNDATACOPY,
+		vm.RETURNDATASIZE, p0, vm.RETURN,
+	)
+	return contract
+}
+
+func convertBytes[From ~byte, To ~byte](buf []From) []To {
+	out := make([]To, len(buf))
+	for i, b := range buf {
+		out[i] = To(b)
+	}
+	return out
 }
 
 func TestCanCreateContract(t *testing.T) {
