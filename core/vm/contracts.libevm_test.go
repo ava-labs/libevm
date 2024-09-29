@@ -127,6 +127,10 @@ func (o statefulPrecompileOutput) String() string {
 	return strings.Join(lines, "\n")
 }
 
+func (o statefulPrecompileOutput) Bytes() []byte {
+	return []byte(o.String())
+}
+
 func TestNewStatefulPrecompile(t *testing.T) {
 	precompile := common.HexToAddress("60C0DE") // GO CODE
 	rng := ethtest.NewPseudoRand(314159)
@@ -154,7 +158,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			Difficulty:  hdr.Difficulty,
 			Input:       input,
 		}
-		return []byte(out.String()), suppliedGas - gasCost, nil
+		return out.Bytes(), suppliedGas - gasCost, nil
 	}
 	hooks := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
@@ -490,4 +494,105 @@ func TestActivePrecompilesOverride(t *testing.T) {
 	hooks.Register(t)
 
 	require.Equal(t, precompiles, vm.ActivePrecompiles(newRules()), "vm.ActivePrecompiles() returns overridden addresses")
+}
+
+func TestPrecompileMakeCall(t *testing.T) {
+	// Each test runs as follows:
+	// 1. `eoa` makes a call to a bytecode contract, `caller`
+	// 2. `caller` calls `sut`, the precompile under test, via all *CALL* op codes
+	// 3. `sut` makes a Call() to `dest`, which reflects env data for testing
+	eoa := common.HexToAddress("E0A")
+	caller := common.HexToAddress("CA11E12")
+	sut := common.HexToAddress("7E57ED")
+	dest := common.HexToAddress("DE57")
+
+	hooks := &hookstest.Stub{
+		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+			sut: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+				// We are ultimately testing env.Call(), hence why this is the SUT.
+				return env.Call(dest, input, suppliedGas, uint256.NewInt(0))
+			}),
+			dest: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+				out := &statefulPrecompileOutput{
+					Addresses: env.Addresses(),
+					ReadOnly:  env.ReadOnly(),
+				}
+				return out.Bytes(), suppliedGas, nil
+			}),
+		},
+	}
+	hookstest.Register(t, params.Extras[*hookstest.Stub, *hookstest.Stub]{
+		NewRules: func(_ *params.ChainConfig, r *params.Rules, _ *hookstest.Stub, blockNum *big.Int, isMerge bool, timestamp uint64) *hookstest.Stub {
+			r.IsCancun = true // enable PUSH0
+			return hooks
+		},
+	})
+
+	tests := []struct {
+		incomingCallType vm.OpCode
+		// Unlike TestNewStatefulPrecompile, which tests the AddressContext of
+		// the precompile itself, these test the AddressContext of a contract
+		// called by the precompile.
+		want statefulPrecompileOutput
+	}{
+		{
+			incomingCallType: vm.CALL,
+			want: statefulPrecompileOutput{
+				Addresses: &libevm.AddressContext{
+					Origin: eoa,
+					Caller: sut,
+					Self:   dest,
+				},
+			},
+		},
+		{
+			incomingCallType: vm.CALLCODE,
+			want: statefulPrecompileOutput{
+				Addresses: &libevm.AddressContext{
+					Origin: eoa,
+					Caller: caller, // SUT runs as its own caller because of CALLCODE
+					Self:   dest,
+				},
+			},
+		},
+		{
+			incomingCallType: vm.DELEGATECALL,
+			want: statefulPrecompileOutput{
+				Addresses: &libevm.AddressContext{
+					Origin: eoa,
+					Caller: caller, // as with CALLCODE
+					Self:   dest,
+				},
+			},
+		},
+		{
+			incomingCallType: vm.STATICCALL,
+			want: statefulPrecompileOutput{
+				Addresses: &libevm.AddressContext{
+					Origin: eoa,
+					Caller: sut,
+					Self:   dest,
+				},
+				// This demonstrates that even though the precompile makes a
+				// (non-static) CALL, the read-only state is inherited. Yes,
+				// this is _another_ way to get a read-only state, different to
+				// the other tests.
+				ReadOnly: true,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("via %s", tt.incomingCallType), func(t *testing.T) {
+			state, evm := ethtest.NewZeroEVM(t)
+			evm.Origin = eoa
+			state.CreateAccount(caller)
+			proxy := makeReturnProxy(t, sut, tt.incomingCallType)
+			state.SetCode(caller, convertBytes[vm.OpCode, byte](proxy))
+
+			got, _, err := evm.Call(vm.AccountRef(eoa), caller, nil, 1e6, uint256.NewInt(0))
+			require.NoError(t, err)
+			require.Equal(t, tt.want.String(), string(got))
+		})
+	}
 }
