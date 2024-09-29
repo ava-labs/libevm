@@ -31,20 +31,25 @@ import (
 var _ PrecompileEnvironment = (*environment)(nil)
 
 type environment struct {
-	evm      *EVM
-	readOnly bool
-	addrs    libevm.AddressContext
-	self     *Contract
-	callType callType
+	evm           *EVM
+	self          *Contract
+	forceReadOnly bool
 }
 
 func (e *environment) ChainConfig() *params.ChainConfig  { return e.evm.chainConfig }
 func (e *environment) Rules() params.Rules               { return e.evm.chainRules }
-func (e *environment) ReadOnly() bool                    { return e.readOnly }
+func (e *environment) ReadOnly() bool                    { return e.forceReadOnly || e.evm.interpreter.readOnly }
 func (e *environment) ReadOnlyState() libevm.StateReader { return e.evm.StateDB }
-func (e *environment) Addresses() *libevm.AddressContext { return &e.addrs }
 func (e *environment) BlockNumber() *big.Int             { return new(big.Int).Set(e.evm.Context.BlockNumber) }
 func (e *environment) BlockTime() uint64                 { return e.evm.Context.Time }
+
+func (e *environment) Addresses() *libevm.AddressContext {
+	return &libevm.AddressContext{
+		Origin: e.evm.Origin,
+		Caller: e.self.CallerAddress,
+		Self:   e.self.Address(),
+	}
+}
 
 func (e *environment) StateDB() StateDB {
 	if e.ReadOnly() {
@@ -66,14 +71,18 @@ func (e *environment) BlockHeader() (types.Header, error) {
 }
 
 func (e *environment) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, uint64, error) {
+	return e.callContract(call, addr, input, gas, value, opts...)
+}
+
+func (e *environment) callContract(typ callType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, uint64, error) {
+	// Depth and read-only setting are handled by [EVMInterpreter.Run], which
+	// isn't used for precompiles, so we need to do it ourselves.
 	in := e.evm.interpreter
 
-	// The precompile run didn't increment the depth so this is necessary even
-	// though Call() will eventually result in it being done again.
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
 
-	if e.callType == staticCall && !in.readOnly {
+	if e.forceReadOnly && !in.readOnly { // i.e. the precompile was StaticCall()ed
 		in.readOnly = true
 		defer func() { in.readOnly = false }()
 	}
@@ -84,12 +93,24 @@ func (e *environment) Call(addr common.Address, input []byte, gas uint64, value 
 		case callOptUNSAFECallerAddressProxy:
 			// Note that, in addition to being unsafe, this breaks an EVM
 			// assumption that the caller ContractRef is always a *Contract.
-			caller = AccountRef(e.addrs.Caller)
+			caller = AccountRef(e.self.CallerAddress)
 		case nil:
 		default:
 			return nil, gas, fmt.Errorf("unsupported option %T", o)
 		}
 	}
 
-	return e.evm.Call(caller, addr, input, gas, value)
+	switch typ {
+	case call:
+		return e.evm.Call(caller, addr, input, gas, value)
+	case callCode, delegateCall, staticCall:
+		// TODO(arr4n): these cases should be very similar to CALL, hence the
+		// early abstraction, to signal to future maintainers. If implementing
+		// them, there's likely no need to honour the
+		// [callOptUNSAFECallerAddressProxy] because it's purely for backwards
+		// compatibility.
+		fallthrough
+	default:
+		return nil, gas, fmt.Errorf("unimplemented precompile call type %v", typ)
+	}
 }

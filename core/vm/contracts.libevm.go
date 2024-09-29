@@ -31,15 +31,15 @@ import (
 // evmCallArgs mirrors the parameters of the [EVM] methods Call(), CallCode(),
 // DelegateCall() and StaticCall(). Its fields are identical to those of the
 // parameters, prepended with the receiver name and call type. As
-// {Delegate,Static}Call don't accept a value, they MUST set the respective
-// field to nil.
+// {Delegate,Static}Call don't accept a value, they MAY set the respective field
+// to nil as it will be ignored.
 //
 // Instantiation can be achieved by merely copying the parameter names, in
 // order, which is trivially achieved with AST manipulation:
 //
 //	func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int) ... {
 //	    ...
-//	    args := &evmCallArgs{evm, callCode, caller, addr, input, gas, value}
+//	    args := &evmCallArgs{evm, staticCall, caller, addr, input, gas, nil /*value*/}
 type evmCallArgs struct {
 	evm      *EVM
 	callType callType
@@ -103,8 +103,9 @@ func (p statefulPrecompile) Run([]byte) ([]byte, error) {
 	panic(fmt.Sprintf("BUG: call to %T.Run(); MUST call %T itself", p, p))
 }
 
-// A PrecompileEnvironment provides information about the context in which a
-// precompiled contract is being run.
+// A PrecompileEnvironment provides (a) information about the context in which a
+// precompiled contract is being run; and (b) a means of calling other
+// contracts.
 type PrecompileEnvironment interface {
 	ChainConfig() *params.ChainConfig
 	Rules() params.Rules
@@ -120,46 +121,42 @@ type PrecompileEnvironment interface {
 	BlockTime() uint64
 
 	// Call is equivalent to [EVM.Call] except that the `caller` argument is
-	// automatically determined according to the type of call that invoked the
-	// precompile.
+	// removed and automatically determined according to the type of call that
+	// invoked the precompile.
 	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...CallOption) (ret []byte, gasRemaining uint64, _ error)
 }
 
 func (args *evmCallArgs) env() *environment {
-	env := &environment{
-		evm:      args.evm,
-		readOnly: args.readOnly(),
-		callType: args.callType,
-	}
-
-	var self common.Address
+	var (
+		self  common.Address
+		value = args.value
+	)
 	switch args.callType {
 	case staticCall:
-		args.value = new(uint256.Int)
+		value = new(uint256.Int)
 		fallthrough
 	case call:
 		self = args.addr
 
 	case delegateCall:
-		args.value = nil
+		value = nil
 		fallthrough
 	case callCode:
 		self = args.caller.Address()
 	}
 
 	// This is equivalent to the `contract` variables created by evm.*Call*()
-	// methods to pass to [EVMInterpreter.Run].
-	env.self = NewContract(args.caller, AccountRef(self), args.value, args.gas)
+	// methods, for non precompiles, to pass to [EVMInterpreter.Run].
+	contract := NewContract(args.caller, AccountRef(self), value, args.gas)
 	if args.callType == delegateCall {
-		env.self = env.self.AsDelegate()
+		contract = contract.AsDelegate()
 	}
 
-	env.addrs = libevm.AddressContext{
-		Origin: args.evm.Origin,
-		Caller: env.self.CallerAddress,
-		Self:   self,
+	return &environment{
+		evm:           args.evm,
+		self:          contract,
+		forceReadOnly: args.readOnly(),
 	}
-	return env
 }
 
 func (args *evmCallArgs) readOnly() bool {
