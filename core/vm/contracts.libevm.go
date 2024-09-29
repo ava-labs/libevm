@@ -37,7 +37,7 @@ import (
 // Instantiation can be achieved by merely copying the parameter names, in
 // order, which is trivially achieved with AST manipulation:
 //
-//	func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int) ... {
+//	func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte, gas uint64) ... {
 //	    ...
 //	    args := &evmCallArgs{evm, staticCall, caller, addr, input, gas, nil /*value*/}
 type evmCallArgs struct {
