@@ -100,7 +100,7 @@ func TestPrecompileOverride(t *testing.T) {
 
 type statefulPrecompileOutput struct {
 	ChainID                 *big.Int
-	Caller, Self            common.Address
+	Addresses               *libevm.AddressContext
 	StateValue              common.Hash
 	ReadOnly                bool
 	BlockNumber, Difficulty *big.Int
@@ -116,8 +116,11 @@ func (o statefulPrecompileOutput) String() string {
 		fld := out.Field(i).Interface()
 
 		verb := "%v"
-		if _, ok := fld.([]byte); ok {
+		switch fld.(type) {
+		case []byte:
 			verb = "%#x"
+		case *libevm.AddressContext:
+			verb = "%+v"
 		}
 		lines = append(lines, fmt.Sprintf("%s: "+verb, name, fld))
 	}
@@ -125,8 +128,8 @@ func (o statefulPrecompileOutput) String() string {
 }
 
 func TestNewStatefulPrecompile(t *testing.T) {
+	precompile := common.HexToAddress("60C0DE") // GO CODE
 	rng := ethtest.NewPseudoRand(314159)
-	precompile := rng.Address()
 	slot := rng.Hash()
 
 	const gasLimit = 1e6
@@ -141,11 +144,9 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			return nil, 0, err
 		}
 
-		addrs := env.Addresses()
 		out := &statefulPrecompileOutput{
 			ChainID:     env.ChainConfig().ChainID,
-			Caller:      addrs.Caller,
-			Self:        addrs.Self,
+			Addresses:   env.Addresses(),
 			StateValue:  env.ReadOnlyState().GetState(precompile, slot),
 			ReadOnly:    env.ReadOnly(),
 			BlockNumber: env.BlockNumber(),
@@ -167,10 +168,13 @@ func TestNewStatefulPrecompile(t *testing.T) {
 		Time:       rng.Uint64(),
 		Difficulty: rng.BigUint64(),
 	}
-	caller := rng.Address()
 	input := rng.Bytes(8)
 	value := rng.Hash()
 	chainID := rng.BigUint64()
+
+	caller := common.HexToAddress("CA11E12") // caller of the precompile
+	eoa := common.HexToAddress("E0A")        // caller of the precompile-caller
+	callerContract := vm.NewContract(vm.AccountRef(eoa), vm.AccountRef(caller), uint256.NewInt(0), 1e6)
 
 	state, evm := ethtest.NewZeroEVM(
 		t,
@@ -182,39 +186,61 @@ func TestNewStatefulPrecompile(t *testing.T) {
 		),
 	)
 	state.SetState(precompile, slot, value)
+	evm.Origin = eoa
 
 	tests := []struct {
-		name string
-		call func() ([]byte, uint64, error)
-		// Note that this only covers evm.readWrite being set to forceReadOnly,
-		// via StaticCall(). See TestInheritReadOnly for alternate case.
+		name          string
+		call          func() ([]byte, uint64, error)
+		wantAddresses *libevm.AddressContext
+		// Note that this only covers evm.readOnly being true because of the
+		// precompile's call. See TestInheritReadOnly for alternate case.
 		wantReadOnly bool
 	}{
 		{
 			name: "EVM.Call()",
 			call: func() ([]byte, uint64, error) {
-				return evm.Call(vm.AccountRef(caller), precompile, input, gasLimit, uint256.NewInt(0))
+				return evm.Call(callerContract, precompile, input, gasLimit, uint256.NewInt(0))
+			},
+			wantAddresses: &libevm.AddressContext{
+				Origin: eoa,
+				Caller: caller,
+				Self:   precompile,
 			},
 			wantReadOnly: false,
 		},
 		{
 			name: "EVM.CallCode()",
 			call: func() ([]byte, uint64, error) {
-				return evm.CallCode(vm.AccountRef(caller), precompile, input, gasLimit, uint256.NewInt(0))
+				return evm.CallCode(callerContract, precompile, input, gasLimit, uint256.NewInt(0))
+			},
+			wantAddresses: &libevm.AddressContext{
+				Origin: eoa,
+				Caller: caller,
+				Self:   caller,
 			},
 			wantReadOnly: false,
 		},
 		{
 			name: "EVM.DelegateCall()",
 			call: func() ([]byte, uint64, error) {
-				return evm.DelegateCall(vm.AccountRef(caller), precompile, input, gasLimit)
+				return evm.DelegateCall(callerContract, precompile, input, gasLimit)
+			},
+			wantAddresses: &libevm.AddressContext{
+				Origin: eoa,
+				Caller: eoa, // inherited from caller
+				Self:   caller,
 			},
 			wantReadOnly: false,
 		},
 		{
 			name: "EVM.StaticCall()",
 			call: func() ([]byte, uint64, error) {
-				return evm.StaticCall(vm.AccountRef(caller), precompile, input, gasLimit)
+				return evm.StaticCall(callerContract, precompile, input, gasLimit)
+			},
+			wantAddresses: &libevm.AddressContext{
+				Origin: eoa,
+				Caller: caller,
+				Self:   precompile,
 			},
 			wantReadOnly: true,
 		},
@@ -222,22 +248,22 @@ func TestNewStatefulPrecompile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wantReturnData := statefulPrecompileOutput{
+			wantOutput := statefulPrecompileOutput{
 				ChainID:     chainID,
-				Caller:      caller,
-				Self:        precompile,
+				Addresses:   tt.wantAddresses,
 				StateValue:  value,
 				ReadOnly:    tt.wantReadOnly,
 				BlockNumber: header.Number,
 				BlockTime:   header.Time,
 				Difficulty:  header.Difficulty,
 				Input:       input,
-			}.String()
+			}
+
 			wantGasLeft := gasLimit - gasCost
 
 			gotReturnData, gotGasLeft, err := tt.call()
 			require.NoError(t, err)
-			assert.Equal(t, wantReturnData, string(gotReturnData))
+			assert.Equal(t, wantOutput.String(), string(gotReturnData))
 			assert.Equal(t, wantGasLeft, gotGasLeft)
 		})
 	}

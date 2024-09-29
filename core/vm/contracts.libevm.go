@@ -66,7 +66,7 @@ const (
 // regular types.
 func (args *evmCallArgs) run(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
 	if p, ok := p.(statefulPrecompile); ok {
-		return p(args, input, suppliedGas)
+		return p(args.env(), input, suppliedGas)
 	}
 	// Gas consumption for regular precompiles was already handled by the native
 	// RunPrecompiledContract(), which called this method.
@@ -125,12 +125,44 @@ type PrecompileEnvironment interface {
 	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...CallOption) (ret []byte, gasRemaining uint64, _ error)
 }
 
-var _ PrecompileEnvironment = (*evmCallArgs)(nil)
+func (args *evmCallArgs) env() *environment {
+	env := &environment{
+		evm:      args.evm,
+		readOnly: args.readOnly(),
+		callType: args.callType,
+	}
 
-func (args *evmCallArgs) ChainConfig() *params.ChainConfig { return args.evm.chainConfig }
-func (args *evmCallArgs) Rules() params.Rules              { return args.evm.chainRules }
+	var self common.Address
+	switch addr := args.addr; args.callType {
+	case staticCall:
+		args.value = new(uint256.Int)
+		fallthrough
+	case call:
+		self = addr
 
-func (args *evmCallArgs) ReadOnly() bool {
+	case delegateCall:
+		args.value = nil
+		fallthrough
+	case callCode:
+		self = args.caller.Address()
+	}
+
+	// This is equivalent to the `contract` variables created by evm.*Call*()
+	// methods to pass to [EVMInterpreter.Run].
+	env.self = NewContract(args.caller, AccountRef(self), args.value, args.gas)
+	if args.callType == delegateCall {
+		env.self = env.self.AsDelegate()
+	}
+
+	env.addrs = libevm.AddressContext{
+		Origin: args.evm.Origin,
+		Caller: env.self.CallerAddress,
+		Self:   self,
+	}
+	return env
+}
+
+func (args *evmCallArgs) readOnly() bool {
 	// A switch statement provides clearer code coverage for difficult-to-test
 	// cases.
 	switch {
@@ -144,85 +176,6 @@ func (args *evmCallArgs) ReadOnly() bool {
 	default:
 		return false
 	}
-}
-
-func (args *evmCallArgs) StateDB() StateDB {
-	if args.ReadOnly() {
-		return nil
-	}
-	return args.evm.StateDB
-}
-
-func (args *evmCallArgs) ReadOnlyState() libevm.StateReader {
-	// Even though we're actually returning a full state database, the user
-	// would have to actively circumvent the returned interface to use it. At
-	// that point they're off-piste and it's not our problem.
-	return args.evm.StateDB
-}
-
-func (args *evmCallArgs) self() common.Address { return args.addr }
-
-func (args *evmCallArgs) Addresses() *libevm.AddressContext {
-	return &libevm.AddressContext{
-		Origin: args.evm.TxContext.Origin,
-		Caller: args.caller.Address(),
-		Self:   args.self(),
-	}
-}
-
-func (args *evmCallArgs) BlockHeader() (types.Header, error) {
-	hdr := args.evm.Context.Header
-	if hdr == nil {
-		// Although [core.NewEVMBlockContext] sets the field and is in the
-		// typical hot path (e.g. miner), there are other ways to create a
-		// [vm.BlockContext] (e.g. directly in tests) that may result in no
-		// available header.
-		return types.Header{}, fmt.Errorf("nil %T in current %T", hdr, args.evm.Context)
-	}
-	return *hdr, nil
-}
-
-func (args *evmCallArgs) BlockNumber() *big.Int {
-	return new(big.Int).Set(args.evm.Context.BlockNumber)
-}
-
-func (args *evmCallArgs) BlockTime() uint64 { return args.evm.Context.Time }
-
-func (args *evmCallArgs) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, uint64, error) {
-	in := args.evm.interpreter
-
-	// The precompile run didn't increment the depth so this is necessary even
-	// though Call() will eventually result in it being done again.
-	in.evm.depth++
-	defer func() { in.evm.depth-- }()
-
-	if args.callType == staticCall && !in.readOnly {
-		in.readOnly = true
-		defer func() { in.readOnly = false }()
-	}
-
-	// This is equivalent to the `contract` variables created by evm.*Call*()
-	// methods to pass to [EVMInterpreter.Run], which are then propagated by the
-	// *CALL* opcodes as the caller.
-	precompile := NewContract(args.caller, AccountRef(args.self()), args.value, args.gas)
-	if args.callType == delegateCall {
-		precompile = precompile.AsDelegate()
-	}
-	var caller ContractRef = precompile
-
-	for _, o := range opts {
-		switch o := o.(type) {
-		case callOptUNSAFECallerAddressProxy:
-			// Note that, in addition to being unsafe, this breaks an EVM
-			// assumption that the caller ContractRef is always a *Contract.
-			caller = AccountRef(args.caller.Address())
-		case nil:
-		default:
-			return nil, gas, fmt.Errorf("unsupported option %T", o)
-		}
-	}
-
-	return args.evm.Call(caller, addr, input, gas, value)
 }
 
 var (
