@@ -119,9 +119,9 @@ type PrecompileEnvironment interface {
 	BlockNumber() *big.Int
 	BlockTime() uint64
 
-	// Call is equivalent to [EVM.Call], with the caller defaulting to the
-	// precompile receiving the environment, or to its own caller if invoked via
-	// a delegated call.
+	// Call is equivalent to [EVM.Call] except that the `caller` argument is
+	// automatically determined according to the type of call that invoked the
+	// precompile.
 	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...CallOption) (ret []byte, gasRemaining uint64, _ error)
 }
 
@@ -133,12 +133,12 @@ func (args *evmCallArgs) env() *environment {
 	}
 
 	var self common.Address
-	switch addr := args.addr; args.callType {
+	switch args.callType {
 	case staticCall:
 		args.value = new(uint256.Int)
 		fallthrough
 	case call:
-		self = addr
+		self = args.addr
 
 	case delegateCall:
 		args.value = nil
