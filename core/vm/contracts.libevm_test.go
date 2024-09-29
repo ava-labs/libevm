@@ -497,25 +497,33 @@ func TestActivePrecompilesOverride(t *testing.T) {
 }
 
 func TestPrecompileMakeCall(t *testing.T) {
-	// Each test runs as follows:
-	// 1. `eoa` makes a call to a bytecode contract, `caller`
-	// 2. `caller` calls `sut`, the precompile under test, via all *CALL* op codes
-	// 3. `sut` makes a Call() to `dest`, which reflects env data for testing
+	// There is one test per *CALL* op code:
+	//
+	// 1. `eoa` makes a call to a bytecode contract, `caller`;
+	// 2. `caller` calls `sut`, the precompile under test, via the test's *CALL* op code;
+	// 3. `sut` makes a Call() to `dest`, which reflects env data for testing.
+	//
+	// This acts as a full integration test of a precompile being invoked before
+	// making an "outbound" call.
 	eoa := common.HexToAddress("E0A")
 	caller := common.HexToAddress("CA11E12")
 	sut := common.HexToAddress("7E57ED")
 	dest := common.HexToAddress("DE57")
 
+	rng := ethtest.NewPseudoRand(142857)
+	callData := rng.Bytes(8)
+
 	hooks := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
 			sut: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
 				// We are ultimately testing env.Call(), hence why this is the SUT.
-				return env.Call(dest, input, suppliedGas, uint256.NewInt(0))
+				return env.Call(dest, callData, suppliedGas, uint256.NewInt(0))
 			}),
 			dest: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
 				out := &statefulPrecompileOutput{
 					Addresses: env.Addresses(),
 					ReadOnly:  env.ReadOnly(),
+					Input:     input, // expected to be callData
 				}
 				return out.Bytes(), suppliedGas, nil
 			}),
@@ -543,6 +551,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 					Caller: sut,
 					Self:   dest,
 				},
+				Input: callData,
 			},
 		},
 		{
@@ -553,6 +562,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 					Caller: caller, // SUT runs as its own caller because of CALLCODE
 					Self:   dest,
 				},
+				Input: callData,
 			},
 		},
 		{
@@ -563,6 +573,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 					Caller: caller, // as with CALLCODE
 					Self:   dest,
 				},
+				Input: callData,
 			},
 		},
 		{
@@ -573,6 +584,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 					Caller: sut,
 					Self:   dest,
 				},
+				Input: callData,
 				// This demonstrates that even though the precompile makes a
 				// (non-static) CALL, the read-only state is inherited. Yes,
 				// this is _another_ way to get a read-only state, different to

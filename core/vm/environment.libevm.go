@@ -76,7 +76,8 @@ func (e *environment) Call(addr common.Address, input []byte, gas uint64, value 
 
 func (e *environment) callContract(typ callType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, uint64, error) {
 	// Depth and read-only setting are handled by [EVMInterpreter.Run], which
-	// isn't used for precompiles, so we need to do it ourselves.
+	// isn't used for precompiles, so we need to do it ourselves to maintain the
+	// expected invariants.
 	in := e.evm.interpreter
 
 	in.evm.depth++
