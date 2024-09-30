@@ -103,6 +103,9 @@ func (e *environment) callContract(typ callType, addr common.Address, input []by
 
 	switch typ {
 	case call:
+		if in.readOnly && !value.IsZero() {
+			return nil, gas, ErrWriteProtection
+		}
 		return e.evm.Call(caller, addr, input, gas, value)
 	case callCode, delegateCall, staticCall:
 		// TODO(arr4n): these cases should be very similar to CALL, hence the
