@@ -34,7 +34,7 @@ type StateAccount struct {
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
 
-	Extra *RLPPayload `rlp:"optional"`
+	Extra *StateAccountExtra
 }
 
 // NewEmptyStateAccount constructs an empty state account.

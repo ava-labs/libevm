@@ -7,33 +7,46 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-type RLPPayload struct {
+type Extras[SA any] struct{}
+
+func RegisterExtras[SA any](extras Extras[SA]) {
+	if registeredExtras != nil {
+		panic("re-registration of Extras")
+	}
+	registeredExtras = &extraConstructors{
+		newStateAccount: pseudo.NewConstructor[SA]().Zero,
+	}
+}
+
+var registeredExtras *extraConstructors
+
+type extraConstructors struct {
+	newStateAccount func() *pseudo.Type
+}
+
+type StateAccountExtra struct {
 	t *pseudo.Type
-}
-
-func NewRLPPayload[T any]() (*RLPPayload, *pseudo.Value[T]) {
-	var x T
-	return RLPPayloadOf(x)
-}
-
-func RLPPayloadOf[T any](x T) (*RLPPayload, *pseudo.Value[T]) {
-	p := pseudo.From(x)
-	return &RLPPayload{p.Type}, p.Value
 }
 
 var _ interface {
 	rlp.Encoder
 	rlp.Decoder
-} = (*RLPPayload)(nil)
+} = (*StateAccountExtra)(nil)
 
-func (p *RLPPayload) EncodeRLP(w io.Writer) error {
-	if p == nil || p.t == nil {
+func (p *StateAccountExtra) EncodeRLP(w io.Writer) error {
+	switch r := registeredExtras; {
+	case r == nil:
 		return nil
+	case p == nil:
+		p = &StateAccountExtra{}
+		fallthrough
+	case p.t == nil:
+		p.t = r.newStateAccount()
 	}
 	return p.t.EncodeRLP(w)
 }
 
-func (p *RLPPayload) DecodeRLP(s *rlp.Stream) error {
+func (p *StateAccountExtra) DecodeRLP(s *rlp.Stream) error {
 	// DO NOT MERGE without implementation
 	return nil
 }
