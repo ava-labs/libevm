@@ -81,6 +81,13 @@ func (e *StateAccountExtra) EncodeRLP(w io.Writer) error {
 }
 
 func (e *StateAccountExtra) DecodeRLP(s *rlp.Stream) error {
-	// DO NOT MERGE without implementation
-	return nil
+	switch r := registeredExtras; {
+	case r == nil:
+		return nil
+	case e.t == nil:
+		e.t = r.newStateAccount()
+		fallthrough
+	default:
+		return s.Decode(e.t)
+	}
 }

@@ -30,6 +30,15 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+func (e *StateAccountExtra) Equal(f *StateAccountExtra) bool {
+	eNil := e == nil || e.t == nil
+	fNil := f == nil || f.t == nil
+	if eNil && fNil || eNil && f.t.IsZero() || fNil && e.t.IsZero() {
+		return true
+	}
+	return e.t.Equal(f.t)
+}
+
 func TestStateAccountRLP(t *testing.T) {
 	// RLP encodings that don't involve extra payloads were generated on raw
 	// geth StateAccounts *before* any libevm modifications, thus locking in
@@ -121,6 +130,15 @@ func TestStateAccountRLP(t *testing.T) {
 				})
 			}
 			assertRLPEncodingAndReturn(t, tt.acc, tt.wantHex)
+
+			t.Run("RLP round trip via SlimAccount", func(t *testing.T) {
+				got, err := FullAccount(SlimAccountRLP(*tt.acc))
+				require.NoError(t, err)
+
+				if diff := cmp.Diff(tt.acc, got); diff != "" {
+					t.Errorf("FullAccount(SlimAccountRLP(x)) != x; diff (-want +got):\n%s", diff)
+				}
+			})
 		})
 	}
 }
@@ -190,14 +208,6 @@ func TestSlimAccountRLP(t *testing.T) {
 				// The require package differentiates between empty and nil
 				// slices and doesn't have a configuration mechanism.
 				cmpopts.EquateEmpty(),
-				cmp.Comparer(func(a, b *StateAccountExtra) bool {
-					aNil := a == nil || a.t == nil
-					bNil := b == nil || b.t == nil
-					if aNil && bNil {
-						return true
-					}
-					return false // DO NOT MERGE
-				}),
 			}
 
 			if diff := cmp.Diff(tt.acc, got, opts...); diff != "" {

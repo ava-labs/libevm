@@ -41,6 +41,7 @@ func (c *concrete[T]) equal(t *Type) bool {
 	case EqualityChecker[T]:
 		return v.Equal(d.val)
 	default:
+		// See rationale for reflection in [concrete.isZero].
 		return reflect.DeepEqual(c.val, d.val)
 	}
 }
