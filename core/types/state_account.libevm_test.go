@@ -142,18 +142,18 @@ func TestSlimAccountRLP(t *testing.T) {
 	// modifications, to lock in default behaviour.
 	tests := []struct {
 		name    string
-		acc     SlimAccount
+		acc     *SlimAccount
 		wantHex string
 	}{
 		{
-			acc: SlimAccount{
+			acc: &SlimAccount{
 				Nonce:   0x444444,
 				Balance: uint256.NewInt(0x777777),
 			},
 			wantHex: `0xca83444444837777778080`,
 		},
 		{
-			acc: SlimAccount{
+			acc: &SlimAccount{
 				Nonce:   0x444444,
 				Balance: uint256.NewInt(0x777777),
 				Root:    common.MaxHash[:],
@@ -161,7 +161,7 @@ func TestSlimAccountRLP(t *testing.T) {
 			wantHex: `0xea8344444483777777a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80`,
 		},
 		{
-			acc: SlimAccount{
+			acc: &SlimAccount{
 				Nonce:    0x444444,
 				Balance:  uint256.NewInt(0x777777),
 				CodeHash: common.MaxHash[:],
@@ -169,7 +169,7 @@ func TestSlimAccountRLP(t *testing.T) {
 			wantHex: `0xea834444448377777780a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`,
 		},
 		{
-			acc: SlimAccount{
+			acc: &SlimAccount{
 				Nonce:    0x444444,
 				Balance:  uint256.NewInt(0x777777),
 				Root:     common.MaxHash[:],
@@ -183,12 +183,24 @@ func TestSlimAccountRLP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := assertRLPEncodingAndReturn(t, tt.acc, tt.wantHex)
 
-			var got SlimAccount
-			require.NoError(t, rlp.DecodeBytes(buf, &got), "rlp.DecodeBytes()")
+			got := new(SlimAccount)
+			require.NoError(t, rlp.DecodeBytes(buf, got), "rlp.DecodeBytes()")
 
-			// The require package differentiates between empty and nil slices
-			// and doesn't have a configuration mechanism.
-			if diff := cmp.Diff(tt.acc, got, cmpopts.EquateEmpty()); diff != "" {
+			opts := []cmp.Option{
+				// The require package differentiates between empty and nil
+				// slices and doesn't have a configuration mechanism.
+				cmpopts.EquateEmpty(),
+				cmp.Comparer(func(a, b *StateAccountExtra) bool {
+					aNil := a == nil || a.t == nil
+					bNil := b == nil || b.t == nil
+					if aNil && bNil {
+						return true
+					}
+					return false // DO NOT MERGE
+				}),
+			}
+
+			if diff := cmp.Diff(tt.acc, got, opts...); diff != "" {
 				t.Errorf("rlp.DecodeBytes(rlp.EncodeToBytes(%T), ...) round trip; diff (-want +got):\n%s", tt.acc, diff)
 			}
 		})

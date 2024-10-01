@@ -30,18 +30,36 @@ func RegisterExtras[SA any](extras Extras[SA]) {
 		panic("re-registration of Extras")
 	}
 	registeredExtras = &extraConstructors{
-		newStateAccount: pseudo.NewConstructor[SA]().Zero,
+		newStateAccount:   pseudo.NewConstructor[SA]().Zero,
+		cloneStateAccount: extras.cloneStateAccount,
+	}
+}
+
+func (e Extras[SA]) cloneStateAccount(s *StateAccountExtra) *StateAccountExtra {
+	v := pseudo.MustNewValue[SA](s.t)
+	return &StateAccountExtra{
+		t: pseudo.From(v.Get()).Type,
 	}
 }
 
 var registeredExtras *extraConstructors
 
 type extraConstructors struct {
-	newStateAccount func() *pseudo.Type
+	newStateAccount   func() *pseudo.Type
+	cloneStateAccount func(*StateAccountExtra) *StateAccountExtra
 }
 
 type StateAccountExtra struct {
 	t *pseudo.Type
+}
+
+func (e *StateAccountExtra) clone() *StateAccountExtra {
+	switch r := registeredExtras; {
+	case r == nil, e == nil:
+		return nil
+	default:
+		return r.cloneStateAccount(e)
+	}
 }
 
 var _ interface {
@@ -49,20 +67,20 @@ var _ interface {
 	rlp.Decoder
 } = (*StateAccountExtra)(nil)
 
-func (p *StateAccountExtra) EncodeRLP(w io.Writer) error {
+func (e *StateAccountExtra) EncodeRLP(w io.Writer) error {
 	switch r := registeredExtras; {
 	case r == nil:
 		return nil
-	case p == nil:
-		p = &StateAccountExtra{}
+	case e == nil:
+		e = &StateAccountExtra{}
 		fallthrough
-	case p.t == nil:
-		p.t = r.newStateAccount()
+	case e.t == nil:
+		e.t = r.newStateAccount()
 	}
-	return p.t.EncodeRLP(w)
+	return e.t.EncodeRLP(w)
 }
 
-func (p *StateAccountExtra) DecodeRLP(s *rlp.Stream) error {
+func (e *StateAccountExtra) DecodeRLP(s *rlp.Stream) error {
 	// DO NOT MERGE without implementation
 	return nil
 }
