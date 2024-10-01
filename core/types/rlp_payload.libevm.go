@@ -23,23 +23,27 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-type Extras[SA any] struct{}
-
-func RegisterExtras[SA any](extras Extras[SA]) {
+// RegisterExtras registers the type `SA` to be carried as an extra payload in
+// [StateAccount] structs. It is expected to be called in an `init()` function
+// and MUST NOT be called more than once.
+//
+// The payload will be treated as an extra struct field for the purposes of RLP
+// encoding and decoding. RLP handling is plumbed through to the `SA` via the
+// [StateAccountExtra] that holds it such that it acts as if there were a field
+// of type `SA` in all StateAccount structs.
+//
+// The payload can be acced via the [ExtraPayloads.FromStateAccount] method of
+// the accessor returned by RegisterExtras.
+func RegisterExtras[SA any]() ExtraPayloads[SA] {
 	if registeredExtras != nil {
 		panic("re-registration of Extras")
 	}
+	var extra ExtraPayloads[SA]
 	registeredExtras = &extraConstructors{
 		newStateAccount:   pseudo.NewConstructor[SA]().Zero,
-		cloneStateAccount: extras.cloneStateAccount,
+		cloneStateAccount: extra.cloneStateAccount,
 	}
-}
-
-func (e Extras[SA]) cloneStateAccount(s *StateAccountExtra) *StateAccountExtra {
-	v := pseudo.MustNewValue[SA](s.t)
-	return &StateAccountExtra{
-		t: pseudo.From(v.Get()).Type,
-	}
+	return extra
 }
 
 var registeredExtras *extraConstructors
@@ -47,10 +51,6 @@ var registeredExtras *extraConstructors
 type extraConstructors struct {
 	newStateAccount   func() *pseudo.Type
 	cloneStateAccount func(*StateAccountExtra) *StateAccountExtra
-}
-
-type StateAccountExtra struct {
-	t *pseudo.Type
 }
 
 func (e *StateAccountExtra) clone() *StateAccountExtra {
@@ -62,11 +62,70 @@ func (e *StateAccountExtra) clone() *StateAccountExtra {
 	}
 }
 
+// ExtraPayloads provides strongly typed access to the extra payload carried by
+// [StateAccount] structs. The only valid way to construct an instance is by a
+// call to [RegisterExtras].
+type ExtraPayloads[SA any] struct {
+	_ struct{} // make godoc show unexported fields so nobody tries to make their own instance ;)
+}
+
+func (ExtraPayloads[SA]) cloneStateAccount(s *StateAccountExtra) *StateAccountExtra {
+	v := pseudo.MustNewValue[SA](s.t)
+	return &StateAccountExtra{
+		t: pseudo.From(v.Get()).Type,
+	}
+}
+
+// FromStateAccount returns the StateAccount's payload.
+func (ExtraPayloads[SA]) FromStateAccount(a *StateAccount) SA {
+	return pseudo.MustNewValue[SA](a.extra().payload()).Get()
+}
+
+// PointerFromStateAccount returns a pointer to the StateAccounts's extra
+// payload. This is guaranteed to be non-nil.
+//
+// Note that copying a StateAccount by dereferencing a pointer will result in a
+// shallow copy and that the *SA returned here will therefore be shared by all
+// copies. If this is not the desired behaviour, use
+// [StateAccount.Copy] or [ExtraPayloads.SetOnStateAccount].
+func (ExtraPayloads[SA]) PointerFromStateAccount(a *StateAccount) *SA {
+	return pseudo.MustPointerTo[SA](a.extra().payload()).Value.Get()
+}
+
+// SetOnStateAccount sets the StateAccount's payload.
+func (ExtraPayloads[SA]) SetOnStateAccount(a *StateAccount, val SA) {
+	a.extra().t = pseudo.From(val).Type
+}
+
+// A StateAccountExtra carries the extra payload, if any, registered with
+// [RegisterExtras]. It SHOULD NOT be used directly; instead use the
+// [ExtraPayloads] accessor returned by RegisterExtras.
+type StateAccountExtra struct {
+	t *pseudo.Type
+}
+
+func (a *StateAccount) extra() *StateAccountExtra {
+	if a.Extra == nil {
+		a.Extra = &StateAccountExtra{
+			t: registeredExtras.newStateAccount(),
+		}
+	}
+	return a.Extra
+}
+
+func (e *StateAccountExtra) payload() *pseudo.Type {
+	if e.t == nil {
+		e.t = registeredExtras.newStateAccount()
+	}
+	return e.t
+}
+
 var _ interface {
 	rlp.Encoder
 	rlp.Decoder
 } = (*StateAccountExtra)(nil)
 
+// EncodeRLP implements the [rlp.Encoder] interface.
 func (e *StateAccountExtra) EncodeRLP(w io.Writer) error {
 	switch r := registeredExtras; {
 	case r == nil:
@@ -80,6 +139,7 @@ func (e *StateAccountExtra) EncodeRLP(w io.Writer) error {
 	return e.t.EncodeRLP(w)
 }
 
+// DecodeRLP implements the [rlp.Decoder] interface.
 func (e *StateAccountExtra) DecodeRLP(s *rlp.Stream) error {
 	switch r := registeredExtras; {
 	case r == nil:
