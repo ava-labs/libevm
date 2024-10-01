@@ -231,8 +231,3 @@ func (c *concrete[T]) UnmarshalJSON(b []byte) error {
 }
 
 func (c *concrete[T]) EncodeRLP(w io.Writer) error { return rlp.Encode(w, c.val) }
-
-func (c *concrete[T]) DecodeRLP(s *rlp.Stream) error {
-	c.ensureNonNilPointer()
-	return s.Decode(c.val)
-}

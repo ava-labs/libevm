@@ -16,17 +16,25 @@
 
 package pseudo
 
-import "reflect"
+import (
+	"reflect"
+
+	"github.com/ethereum/go-ethereum/rlp"
+)
 
 // Reflection is used as a last resort in pseudo types so is limited to this
 // file to avoid being seen as the norm. If you are adding to this file, please
 // try to achieve the same results with type parameters.
 
-func (c *concrete[T]) ensureNonNilPointer() {
-	v := reflect.ValueOf(c.val)
-	if v.Kind() != reflect.Pointer || !v.IsNil() {
-		return
+func (c *concrete[T]) DecodeRLP(s *rlp.Stream) error {
+	switch v := reflect.ValueOf(c.val); v.Kind() {
+	case reflect.Pointer:
+		if v.IsNil() {
+			el := v.Type().Elem()
+			c.val = reflect.New(el).Interface().(T) //nolint:forcetypeassert // Invariant scoped to the last few lines of code so simple to verify
+		}
+		return s.Decode(c.val)
+	default:
+		return s.Decode(&c.val)
 	}
-	el := v.Type().Elem()
-	c.val = reflect.New(el).Interface().(T) //nolint:forcetypeassert // Invariant scoped to the last few lines of code so simple to verify
 }

@@ -32,10 +32,11 @@ func TestRLPEquivalence(t *testing.T) {
 	t.Parallel()
 
 	for seed := uint64(0); seed < 20; seed++ {
-		rng := ethtest.NewPseudoRand(seed)
+		seed := seed
 
-		t.Run("fuzz", func(t *testing.T) {
+		t.Run("fuzz pointer-type round trip", func(t *testing.T) {
 			t.Parallel()
+			rng := ethtest.NewPseudoRand(seed)
 
 			hdr := &types.Header{
 				ParentHash:  rng.Hash(),
@@ -66,9 +67,20 @@ func TestRLPEquivalence(t *testing.T) {
 
 			t.Run("decode", func(t *testing.T) {
 				pseudo := pseudo.Zero[*types.Header]()
-				require.NoError(t, rlp.DecodeBytes(gotRLP, pseudo.Type))
-				require.Equal(t, hdr, pseudo.Value.Get())
+				require.NoErrorf(t, rlp.DecodeBytes(gotRLP, pseudo.Type), "rlp.DecodeBytes(..., %T[%T])", pseudo.Type, hdr)
+				require.Equal(t, hdr, pseudo.Value.Get(), "RLP-decoded value")
 			})
+		})
+
+		t.Run("fuzz non-pointer decode", func(t *testing.T) {
+			rng := ethtest.NewPseudoRand(seed)
+			x := rng.Uint64()
+			buf, err := rlp.EncodeToBytes(x)
+			require.NoErrorf(t, err, "rlp.EncodeToBytes(%T)", x)
+
+			pseudo := pseudo.Zero[uint64]()
+			require.NoErrorf(t, rlp.DecodeBytes(buf, pseudo.Type), "rlp.DecodeBytes(..., %T[%T])", pseudo.Type, x)
+			require.Equal(t, x, pseudo.Value.Get(), "RLP-decoded value")
 		})
 	}
 }
