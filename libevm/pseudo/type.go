@@ -124,6 +124,21 @@ func MustNewValue[T any](t *Type) *Value[T] {
 	return v
 }
 
+// IsZero reports whether t carries the the zero value for its type.
+func (t *Type) IsZero() bool { return t.val.isZero() }
+
+// An EqualityChecker reports if it is equal to another value of the same type.
+type EqualityChecker[T any] interface {
+	Equal(T) bool
+}
+
+// Equal reports whether t carries a value equal to that carried by u. If t and
+// u carry different types then Equal returns false. If t and u carry the same
+// type and said type implements [EqualityChecker] then Equal propagates the
+// value returned by the checker. In all other cases, Equal returns
+// [reflect.DeepEqual] performed on the payloads carried by t and u.
+func (t *Type) Equal(u *Type) bool { return t.val.equal(u) }
+
 // Get returns the value.
 func (v *Value[T]) Get() T { return v.t.val.get().(T) } //nolint:forcetypeassert // invariant
 
@@ -168,6 +183,8 @@ var _ = []interface {
 // A value is a non-generic wrapper around a [concrete] struct.
 type value interface {
 	get() any
+	isZero() bool
+	equal(*Type) bool
 	canSetTo(any) bool
 	set(any) error
 	mustSet(any)

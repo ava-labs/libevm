@@ -26,6 +26,25 @@ import (
 // file to avoid being seen as the norm. If you are adding to this file, please
 // try to achieve the same results with type parameters.
 
+func (c *concrete[T]) isZero() bool {
+	// The alternative would require that T be comparable, which would bubble up
+	// and invade the rest of the code base.
+	return reflect.ValueOf(c.val).IsZero()
+}
+
+func (c *concrete[T]) equal(t *Type) bool {
+	d, ok := t.val.(*concrete[T])
+	if !ok {
+		return false
+	}
+	switch v := any(c.val).(type) {
+	case EqualityChecker[T]:
+		return v.Equal(d.val)
+	default:
+		return reflect.DeepEqual(c.val, d.val)
+	}
+}
+
 func (c *concrete[T]) DecodeRLP(s *rlp.Stream) error {
 	switch v := reflect.ValueOf(c.val); v.Kind() {
 	case reflect.Pointer:
