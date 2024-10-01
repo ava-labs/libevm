@@ -233,9 +233,6 @@ func (c *concrete[T]) UnmarshalJSON(b []byte) error {
 func (c *concrete[T]) EncodeRLP(w io.Writer) error { return rlp.Encode(w, c.val) }
 
 func (c *concrete[T]) DecodeRLP(s *rlp.Stream) error {
-	if _, _, err := s.Kind(); err != nil {
-		// DO NOT MERGE: is calling Kind() a necessary step?
-		return err
-	}
+	c.ensureNonNilPointer()
 	return s.Decode(c.val)
 }

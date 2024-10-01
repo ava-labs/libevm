@@ -59,10 +59,16 @@ func TestRLPEquivalence(t *testing.T) {
 			require.NoErrorf(t, err, "rlp.EncodeToBytes(%T)", hdr)
 
 			typ := pseudo.From(hdr).Type
-			got, err := rlp.EncodeToBytes(typ)
+			gotRLP, err := rlp.EncodeToBytes(typ)
 			require.NoErrorf(t, err, "rlp.EncodeToBytes(%T)", typ)
 
-			require.Equalf(t, want, got, "RLP encoding of %T (canonical) vs %T (under test)", hdr, typ)
+			require.Equalf(t, want, gotRLP, "RLP encoding of %T (canonical) vs %T (under test)", hdr, typ)
+
+			t.Run("decode", func(t *testing.T) {
+				pseudo := pseudo.Zero[*types.Header]()
+				require.NoError(t, rlp.DecodeBytes(gotRLP, pseudo.Type))
+				require.Equal(t, hdr, pseudo.Value.Get())
+			})
 		})
 	}
 }
