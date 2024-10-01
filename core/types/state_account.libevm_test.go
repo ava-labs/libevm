@@ -20,6 +20,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 
@@ -118,13 +120,84 @@ func TestStateAccountRLP(t *testing.T) {
 					registeredExtras = nil
 				})
 			}
-
-			got, err := rlp.EncodeToBytes(tt.acc)
-			require.NoError(t, err)
-			t.Logf("got: %#x", got)
-
-			tt.wantHex = strings.TrimPrefix(tt.wantHex, "0x")
-			require.Equal(t, common.Hex2Bytes(tt.wantHex), got)
+			assertRLPEncodingAndReturn(t, tt.acc, tt.wantHex)
 		})
 	}
+}
+
+func assertRLPEncodingAndReturn(t *testing.T, val any, wantHex string) []byte {
+	t.Helper()
+	got, err := rlp.EncodeToBytes(val)
+	require.NoError(t, err, "rlp.EncodeToBytes()")
+
+	t.Logf("got RLP: %#x", got)
+	wantHex = strings.TrimPrefix(wantHex, "0x")
+	require.Equalf(t, common.Hex2Bytes(wantHex), got, "RLP encoding of %T", val)
+
+	return got
+}
+
+func TestSlimAccountRLP(t *testing.T) {
+	// All RLP encodings were generated on geth SlimAccounts *before* libevm
+	// modifications, to lock in default behaviour.
+	tests := []struct {
+		name    string
+		acc     SlimAccount
+		wantHex string
+	}{
+		{
+			acc: SlimAccount{
+				Nonce:   0x444444,
+				Balance: uint256.NewInt(0x777777),
+			},
+			wantHex: `0xca83444444837777778080`,
+		},
+		{
+			acc: SlimAccount{
+				Nonce:   0x444444,
+				Balance: uint256.NewInt(0x777777),
+				Root:    common.MaxHash[:],
+			},
+			wantHex: `0xea8344444483777777a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80`,
+		},
+		{
+			acc: SlimAccount{
+				Nonce:    0x444444,
+				Balance:  uint256.NewInt(0x777777),
+				CodeHash: common.MaxHash[:],
+			},
+			wantHex: `0xea834444448377777780a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`,
+		},
+		{
+			acc: SlimAccount{
+				Nonce:    0x444444,
+				Balance:  uint256.NewInt(0x777777),
+				Root:     common.MaxHash[:],
+				CodeHash: repeatAsHash(0xee).Bytes(),
+			},
+			wantHex: `0xf84a8344444483777777a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffa0eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := assertRLPEncodingAndReturn(t, tt.acc, tt.wantHex)
+
+			var got SlimAccount
+			require.NoError(t, rlp.DecodeBytes(buf, &got), "rlp.DecodeBytes()")
+
+			// The require package differentiates between empty and nil slices
+			// and doesn't have a configuration mechanism.
+			if diff := cmp.Diff(tt.acc, got, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("rlp.DecodeBytes(rlp.EncodeToBytes(%T), ...) round trip; diff (-want +got):\n%s", tt.acc, diff)
+			}
+		})
+	}
+}
+
+func repeatAsHash(x byte) (h common.Hash) {
+	for i := range h {
+		h[i] = x
+	}
+	return h
 }
