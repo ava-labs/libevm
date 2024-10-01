@@ -142,8 +142,10 @@ func (v *Value[T]) MarshalJSON() ([]byte, error) { return v.t.MarshalJSON() }
 // UnmarshalJSON implements the [json.Unmarshaler] interface.
 func (v *Value[T]) UnmarshalJSON(b []byte) error { return v.t.UnmarshalJSON(b) }
 
+// EncodeRLP implements the [rlp.Encoder] interface.
 func (t *Type) EncodeRLP(w io.Writer) error { return t.val.EncodeRLP(w) }
 
+// DecodeRLP implements the [rlp.Decoder] interface.
 func (t *Type) DecodeRLP(s *rlp.Stream) error { return t.val.DecodeRLP(s) }
 
 var _ = []interface {
