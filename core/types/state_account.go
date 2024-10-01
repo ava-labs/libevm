@@ -79,7 +79,7 @@ func SlimAccountRLP(account StateAccount) []byte {
 	slim := SlimAccount{
 		Nonce:   account.Nonce,
 		Balance: account.Balance,
-		Extra:   account.Extra.clone(),
+		Extra:   account.Extra,
 	}
 	if account.Root != EmptyRootHash {
 		slim.Root = account.Root[:]
@@ -103,7 +103,7 @@ func FullAccount(data []byte) (*StateAccount, error) {
 	}
 	var account StateAccount
 	account.Nonce, account.Balance = slim.Nonce, slim.Balance
-	account.Extra = slim.Extra.clone()
+	account.Extra = slim.Extra
 
 	// Interpret the storage root and code hash in slim format.
 	if len(slim.Root) == 0 {
