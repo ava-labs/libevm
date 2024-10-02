@@ -21,6 +21,7 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/libevm/pseudo"
+	"github.com/ethereum/go-ethereum/libevm/testonly"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -49,6 +50,18 @@ func RegisterExtras[SA any]() ExtraPayloads[SA] {
 		cloneStateAccount: extra.cloneStateAccount,
 	}
 	return extra
+}
+
+// TestOnlyClearRegisteredExtras clears the [Extras] previously passed to
+// [RegisterExtras]. It panics if called from a non-testing call stack.
+//
+// In tests it SHOULD be called before every call to [RegisterExtras] and then
+// defer-called afterwards, either directly or via testing.TB.Cleanup(). This is
+// a workaround for the single-call limitation on [RegisterExtras].
+func TestOnlyClearRegisteredExtras() {
+	testonly.OrPanic(func() {
+		registeredExtras = nil
+	})
 }
 
 var registeredExtras *extraConstructors
