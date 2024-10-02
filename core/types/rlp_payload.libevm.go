@@ -17,6 +17,7 @@
 package types
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/ethereum/go-ethereum/libevm/pseudo"
@@ -40,6 +41,10 @@ func RegisterExtras[SA any]() ExtraPayloads[SA] {
 	}
 	var extra ExtraPayloads[SA]
 	registeredExtras = &extraConstructors{
+		stateAccountType: func() string {
+			var x SA
+			return fmt.Sprintf("%T", x)
+		}(),
 		newStateAccount:   pseudo.NewConstructor[SA]().Zero,
 		cloneStateAccount: extra.cloneStateAccount,
 	}
@@ -49,6 +54,7 @@ func RegisterExtras[SA any]() ExtraPayloads[SA] {
 var registeredExtras *extraConstructors
 
 type extraConstructors struct {
+	stateAccountType  string
 	newStateAccount   func() *pseudo.Type
 	cloneStateAccount func(*StateAccountExtra) *StateAccountExtra
 }
@@ -123,6 +129,7 @@ func (e *StateAccountExtra) payload() *pseudo.Type {
 var _ interface {
 	rlp.Encoder
 	rlp.Decoder
+	fmt.Formatter
 } = (*StateAccountExtra)(nil)
 
 // EncodeRLP implements the [rlp.Encoder] interface.
@@ -150,4 +157,19 @@ func (e *StateAccountExtra) DecodeRLP(s *rlp.Stream) error {
 	default:
 		return s.Decode(e.t)
 	}
+}
+
+// Format implements the [fmt.Formatter] interface.
+func (e *StateAccountExtra) Format(s fmt.State, verb rune) {
+	var out string
+	switch r := registeredExtras; {
+	case r == nil:
+		out = "<nil>"
+	case e == nil, e.t == nil:
+		out = fmt.Sprintf("<nil>[*StateAccountExtra[%s]]", r.stateAccountType)
+	default:
+		e.t.Format(s, verb)
+		return
+	}
+	_, _ = s.Write([]byte(out))
 }
