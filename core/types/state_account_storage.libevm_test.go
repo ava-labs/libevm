@@ -19,16 +19,17 @@ package types_test
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/libevm/ethtest"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/google/go-cmp/cmp"
-	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestStateAccountExtraViaTrieStorage(t *testing.T) {
@@ -62,6 +63,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 				return a
 			},
 			assertExtra: func(t *testing.T, a *types.StateAccount) {
+				t.Helper()
 				assert.Truef(t, a.Extra.Equal(nil), "%T.%T.IsEmpty()", a, a.Extra)
 			},
 			wantTrieHash: vanillaGeth,
@@ -73,6 +75,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 				return a
 			},
 			assertExtra: func(t *testing.T, sa *types.StateAccount) {
+				t.Helper()
 				assert.Truef(t, types.ExtraPayloads[bool]{}.FromStateAccount(sa), "")
 			},
 			wantTrieHash: trueBool,
@@ -85,6 +88,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 				return a
 			},
 			assertExtra: func(t *testing.T, sa *types.StateAccount) {
+				t.Helper()
 				assert.Falsef(t, types.ExtraPayloads[bool]{}.FromStateAccount(sa), "")
 			},
 			wantTrieHash: falseBool,
@@ -97,6 +101,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 				return a
 			},
 			assertExtra: func(t *testing.T, sa *types.StateAccount) {
+				t.Helper()
 				assert.Falsef(t, types.ExtraPayloads[bool]{}.FromStateAccount(sa), "")
 			},
 			wantTrieHash: falseBool,
@@ -109,6 +114,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 				return a
 			},
 			assertExtra: func(t *testing.T, sa *types.StateAccount) {
+				t.Helper()
 				got := types.ExtraPayloads[arbitraryPayload]{}.FromStateAccount(sa)
 				assert.Equalf(t, arbitraryPayload{arbitraryData}, got, "")
 			},
