@@ -24,7 +24,7 @@ import (
 
 // OrPanic runs `fn` i.f.f. called from within a testing environment.
 func OrPanic(fn func()) {
-	pc := make([]uintptr, 10)
+	pc := make([]uintptr, 64)
 	runtime.Callers(0, pc)
 	frames := runtime.CallersFrames(pc)
 	for {

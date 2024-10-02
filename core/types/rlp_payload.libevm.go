@@ -139,6 +139,27 @@ func (e *StateAccountExtra) payload() *pseudo.Type {
 	return e.t
 }
 
+// Equal reports whether `e` is semantically equivalent to `f` for the purpose
+// of tests.
+//
+// Equal MUST NOT be used in production. Instead, compare values returned by
+// [ExtraPayloads.FromStateAccount].
+func (e *StateAccountExtra) Equal(f *StateAccountExtra) bool {
+	if false {
+		// TODO(arr4n): calling this results in an error from cmp.Diff():
+		// "non-deterministic or non-symmetric function detected". Explore the
+		// issue and then enable the enforcement.
+		testonly.OrPanic(func() {})
+	}
+
+	eNil := e == nil || e.t == nil
+	fNil := f == nil || f.t == nil
+	if eNil && fNil || eNil && f.t.IsZero() || fNil && e.t.IsZero() {
+		return true
+	}
+	return e.t.Equal(f.t)
+}
+
 var _ interface {
 	rlp.Encoder
 	rlp.Decoder
