@@ -153,25 +153,9 @@ func (args *evmCallArgs) env() *environment {
 	}
 
 	return &environment{
-		evm:           args.evm,
-		self:          contract,
-		forceReadOnly: args.readOnly(),
-	}
-}
-
-func (args *evmCallArgs) readOnly() bool {
-	// A switch statement provides clearer code coverage for difficult-to-test
-	// cases.
-	switch {
-	case args.callType == staticCall:
-		// evm.interpreter.readOnly is only set to true via a call to
-		// EVMInterpreter.Run() so, if a precompile is called directly with
-		// StaticCall(), then readOnly might not be set yet.
-		return true
-	case args.evm.interpreter.readOnly:
-		return true
-	default:
-		return false
+		evm:      args.evm,
+		self:     contract,
+		callType: args.callType,
 	}
 }
 

@@ -31,17 +31,32 @@ import (
 var _ PrecompileEnvironment = (*environment)(nil)
 
 type environment struct {
-	evm           *EVM
-	self          *Contract
-	forceReadOnly bool
+	evm      *EVM
+	self     *Contract
+	callType callType
 }
 
 func (e *environment) ChainConfig() *params.ChainConfig  { return e.evm.chainConfig }
 func (e *environment) Rules() params.Rules               { return e.evm.chainRules }
-func (e *environment) ReadOnly() bool                    { return e.forceReadOnly || e.evm.interpreter.readOnly }
 func (e *environment) ReadOnlyState() libevm.StateReader { return e.evm.StateDB }
 func (e *environment) BlockNumber() *big.Int             { return new(big.Int).Set(e.evm.Context.BlockNumber) }
 func (e *environment) BlockTime() uint64                 { return e.evm.Context.Time }
+
+func (e *environment) ReadOnly() bool {
+	// A switch statement provides clearer code coverage for difficult-to-test
+	// cases.
+	switch {
+	case e.callType == staticCall:
+		// evm.interpreter.readOnly is only set to true via a call to
+		// EVMInterpreter.Run() so, if a precompile is called directly with
+		// StaticCall(), then readOnly might not be set yet.
+		return true
+	case e.evm.interpreter.readOnly:
+		return true
+	default:
+		return false
+	}
+}
 
 func (e *environment) Addresses() *libevm.AddressContext {
 	return &libevm.AddressContext{
@@ -83,7 +98,7 @@ func (e *environment) callContract(typ callType, addr common.Address, input []by
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
 
-	if e.forceReadOnly && !in.readOnly { // i.e. the precompile was StaticCall()ed
+	if e.ReadOnly() && !in.readOnly { // i.e. the precompile was StaticCall()ed
 		in.readOnly = true
 		defer func() { in.readOnly = false }()
 	}
@@ -95,6 +110,11 @@ func (e *environment) callContract(typ callType, addr common.Address, input []by
 			// Note that, in addition to being unsafe, this breaks an EVM
 			// assumption that the caller ContractRef is always a *Contract.
 			caller = AccountRef(e.self.CallerAddress)
+			if e.callType == delegateCall {
+				// self was created with AsDelegate(), which means that
+				// CallerAddress was inherited.
+				caller = AccountRef(e.self.Address())
+			}
 		case nil:
 		default:
 			return nil, gas, fmt.Errorf("unsupported option %T", o)
