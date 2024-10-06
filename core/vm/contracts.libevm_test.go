@@ -107,6 +107,7 @@ type statefulPrecompileOutput struct {
 	BlockNumber, Difficulty *big.Int
 	BlockTime               uint64
 	Input                   []byte
+	IncomingCallType        vm.CallType
 }
 
 func (o statefulPrecompileOutput) String() string {
@@ -122,6 +123,8 @@ func (o statefulPrecompileOutput) String() string {
 			verb = "%#x"
 		case *libevm.AddressContext:
 			verb = "%+v"
+		case vm.CallType:
+			verb = "%d (%[2]q)"
 		}
 		lines = append(lines, fmt.Sprintf("%s: "+verb, name, fld))
 	}
@@ -150,14 +153,15 @@ func TestNewStatefulPrecompile(t *testing.T) {
 		}
 
 		out := &statefulPrecompileOutput{
-			ChainID:     env.ChainConfig().ChainID,
-			Addresses:   env.Addresses(),
-			StateValue:  env.ReadOnlyState().GetState(precompile, slot),
-			ReadOnly:    env.ReadOnly(),
-			BlockNumber: env.BlockNumber(),
-			BlockTime:   env.BlockTime(),
-			Difficulty:  hdr.Difficulty,
-			Input:       input,
+			ChainID:          env.ChainConfig().ChainID,
+			Addresses:        env.Addresses(),
+			StateValue:       env.ReadOnlyState().GetState(precompile, slot),
+			ReadOnly:         env.ReadOnly(),
+			BlockNumber:      env.BlockNumber(),
+			BlockTime:        env.BlockTime(),
+			Difficulty:       hdr.Difficulty,
+			Input:            input,
+			IncomingCallType: env.IncomingCallType(),
 		}
 		return out.Bytes(), suppliedGas - gasCost, nil
 	}
@@ -200,6 +204,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 		// Note that this only covers evm.readOnly being true because of the
 		// precompile's call. See TestInheritReadOnly for alternate case.
 		wantReadOnly bool
+		wantCallType vm.CallType
 	}{
 		{
 			name: "EVM.Call()",
@@ -212,6 +217,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				Self:   precompile,
 			},
 			wantReadOnly: false,
+			wantCallType: vm.Call,
 		},
 		{
 			name: "EVM.CallCode()",
@@ -224,6 +230,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				Self:   caller,
 			},
 			wantReadOnly: false,
+			wantCallType: vm.CallCode,
 		},
 		{
 			name: "EVM.DelegateCall()",
@@ -236,6 +243,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				Self:   caller,
 			},
 			wantReadOnly: false,
+			wantCallType: vm.DelegateCall,
 		},
 		{
 			name: "EVM.StaticCall()",
@@ -248,20 +256,22 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				Self:   precompile,
 			},
 			wantReadOnly: true,
+			wantCallType: vm.StaticCall,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			wantOutput := statefulPrecompileOutput{
-				ChainID:     chainID,
-				Addresses:   tt.wantAddresses,
-				StateValue:  value,
-				ReadOnly:    tt.wantReadOnly,
-				BlockNumber: header.Number,
-				BlockTime:   header.Time,
-				Difficulty:  header.Difficulty,
-				Input:       input,
+				ChainID:          chainID,
+				Addresses:        tt.wantAddresses,
+				StateValue:       value,
+				ReadOnly:         tt.wantReadOnly,
+				BlockNumber:      header.Number,
+				BlockTime:        header.Time,
+				Difficulty:       header.Difficulty,
+				Input:            input,
+				IncomingCallType: tt.wantCallType,
 			}
 
 			wantGasLeft := gasLimit - gasCost
