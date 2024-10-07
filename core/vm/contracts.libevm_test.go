@@ -680,3 +680,25 @@ func TestPrecompileMakeCall(t *testing.T) {
 		})
 	}
 }
+
+func ExamplePrecompileEnvironment() {
+	// To determine the actual caller of a precompile, as against the effective
+	// caller (under EVM rules, as exposed by `Addresses().Caller`):
+	actualCaller := func(env vm.PrecompileEnvironment) common.Address {
+		if env.IncomingCallType() == vm.DelegateCall {
+			// DelegateCall acts as if it were its own caller.
+			return env.Addresses().Self
+		}
+		// CallCode could return either `Self` or `Caller` as it acts as its
+		// caller but doesn't inherit the caller's caller as DelegateCall does.
+		// Having it handled here is arbitrary from a behavioural perspective
+		// and is done only to simplify the code.
+		//
+		// Call and StaticCall don't affect self/caller semantics in any way.
+		return env.Addresses().Caller
+	}
+
+	// actualCaller would typically be a top-level function. It's only a
+	// variable to include it in this example function.
+	_ = actualCaller
+}
