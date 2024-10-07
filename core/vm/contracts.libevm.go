@@ -53,7 +53,7 @@ type evmCallArgs struct {
 	// args:end
 }
 
-// A CallType references a *CALL* [OpCode] / respective method on [EVM].
+// A CallType refers to a *CALL* [OpCode] / respective method on [EVM].
 type CallType uint8
 
 const (
