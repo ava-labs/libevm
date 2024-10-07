@@ -681,6 +681,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 	}
 }
 
+//nolint:testableexamples // Including output would only make the example more complicated and hide the true intent
 func ExamplePrecompileEnvironment() {
 	// To determine the actual caller of a precompile, as against the effective
 	// caller (under EVM rules, as exposed by `Addresses().Caller`):
