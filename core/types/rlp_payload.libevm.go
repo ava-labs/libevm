@@ -207,3 +207,7 @@ func (e *StateAccountExtra) Format(s fmt.State, verb rune) {
 	}
 	_, _ = s.Write([]byte(out))
 }
+
+func (e *StateAccountExtra) IsZero() bool {
+	return e == nil || e.t == nil || e.t.IsZero()
+}
