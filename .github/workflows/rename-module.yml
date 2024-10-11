@@ -6,8 +6,8 @@ on:
   # However, they MUST be disabled again before merging otherwise *all* PRs will
   # run this.
   #
-  pull_request:
-    branches: [ main ]
+  # pull_request:
+  #   branches: [ main ]
   workflow_dispatch:
     inputs:
       source_commit:
@@ -71,7 +71,7 @@ jobs:
       - name: Open PR to "renamed-go-module" iff workflow dispatched on "main"
         # If we are changing the way in which we manage module renaming then it
         # MUST go through PR review to main; only then can it open PRs.
-        # if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
         uses: devops-infra/action-pull-request@v0.5.5
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
