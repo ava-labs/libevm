@@ -1,15 +1,20 @@
 name: Rename Go module
 
 on:
-  pull_request: # DO NOT MERGE WITH ANYTHING OTHER THAN workflow_dispatch
-    branches: [ main ]
+  # During development, the next two lines MAY be enabled to have the PR
+  # automatically run this workflow for inspection of the resulting branch.
+  # However, they MUST be disabled again before merging otherwise *all* PRs will
+  # run this.
+  #
+  # pull_request:
+  #   branches: [ main ]
   workflow_dispatch:
     inputs:
       source_commit:
         description: 'Upstream commit on which to base module renaming'
         required: true
         type: string
-        default: ''
+        default: '2bd6bd01d2e8561dd7fc21b631f4a34ac16627a1'
 
 jobs:
   rename-module:
@@ -24,7 +29,7 @@ jobs:
           fetch-depth: 0 # everything
           fetch-tags: true
 
-      - name: Check out source commit `{{ $env.source_commit }}`
+      - name: Check out source commit
         run: git checkout ${{ env.source_commit }}
 
       - name: Globally update module name
@@ -45,17 +50,17 @@ jobs:
           go-version: 1.21.4
 
       - name: Smoke tests
-        # `go list` shows us the module name
+        # `go list` shows us the module name and grep will non-zero exit on mismatch
         # `go build` is a rudimentary but broad test of correctness
         # The explicitly tested packages are edge cases:
-        # - bind creates generates tests and a go.mod on the fly
+        # - bind generates tests and a go.mod on the fly
         # - rlpgen has testdata with imports that need updating
         run: |
           go list . | grep ava-labs/libevm;
           go build ./...;
           go test ./accounts/abi/bind ./rlp/rlpgen
 
-      - name: Commit to ${{ env.output_branch }} branch
+      - name: Commit to new branch
         uses: devops-infra/action-commit-push@8bc2ff9f9de7aa2a7581fc7e5b6401c04cab54c7
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -64,7 +69,9 @@ jobs:
           commit_prefix: "[AUTO] rename Go module + update internal import paths"
 
       - name: Open PR to "renamed-go-module" iff workflow dispatched on "main"
-        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        # If we are changing the way in which we manage module renaming then it
+        # MUST go through PR review to main; only then can it open PRs.
+        # if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
         uses: devops-infra/action-pull-request@v0.5.5
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
