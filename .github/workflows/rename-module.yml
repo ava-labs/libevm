@@ -6,8 +6,8 @@ on:
   # However, they MUST be disabled again before merging otherwise *all* PRs will
   # run this.
   #
-  # pull_request:
-  #   branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       source_commit:
