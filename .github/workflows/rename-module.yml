@@ -15,8 +15,9 @@ jobs:
   rename-module:
     runs-on: ubuntu-latest
     env:
-      source_commit: ${{ inputs.source_commit || '2bd6bd01d2e8561dd7fc21b631f4a34ac16627a1' }}
-      output_branch: "${{ github.ref_name }}_auto-rename-module-${{ env.source_commit }}"
+      source_commit: "${{ inputs.source_commit || '2bd6bd01d2e8561dd7fc21b631f4a34ac16627a1' }}"
+      # env variables cannot reference others so we have to duplicate the ||
+      output_branch: "${{ github.ref_name }}_auto-rename-module-${{ inputs.source_commit || '2bd6bd01d2e8561dd7fc21b631f4a34ac16627a1' }}"
     steps:
       - uses: actions/checkout@v4
         with:
