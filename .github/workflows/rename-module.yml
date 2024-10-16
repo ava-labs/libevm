@@ -24,6 +24,7 @@ jobs:
         env:
           WORKFLOW_HASH: ${{ hashFiles('.github/workflows/rename-module.yml') }}
         run: |
+          echo "WORKFLOW_HASH=${WORKFLOW_HASH}" >> "$GITHUB_OUTPUT";
           echo "DEST_BRANCH=auto-rename-module_source-${{ inputs.source_commit }}_workflow-${WORKFLOW_HASH}-${{ github.ref_name }}" \
             >> "$GITHUB_OUTPUT";
 
@@ -70,6 +71,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         with:
-          commit_message: "[AUTO] rename Go module + update internal import paths"
+          commit_message: "[AUTO] rename Go module + update internal import paths\n\nWorkflow: ${{ steps.vars.outputs.WORKFLOW_HASH }} on branch ${{ github.ref_name }}"
           repo: ${{ github.repository }}
           branch: ${{ steps.vars.outputs.DEST_BRANCH }}
