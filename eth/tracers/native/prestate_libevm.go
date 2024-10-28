@@ -24,13 +24,14 @@ import (
 )
 
 // CaptureEnter implements the [vm.EVMLogger] hook for entering a new scope (via
-// call, create or selfdestruct).
+// CALL*, CREATE or SELFDESTRUCT).
 func (t *prestateTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Although [prestateTracer.lookupStorage] expects
 	// [prestateTracer.lookupAccount] to have been called, the invariant is
-	// maintained by [prestateTracer.CaptureState] when encountering an opcode
+	// maintained by [prestateTracer.CaptureState] when it encounters an OpCode
 	// corresponding to scope entry. This, however, doesn't work when using a
-	// call method exposed by [vm.PrecompileEnvironment], so we expose it here
-	// as it is idempotent.
+	// call method exposed by [vm.PrecompileEnvironment], and is restored by a
+	// call to this CaptureEnter implementation. Note that lookupAccount(x) is
+	// idempotent.
 	t.lookupAccount(to)
 }
