@@ -27,14 +27,17 @@ import (
 	"github.com/ava-labs/libevm/trie/triestate"
 	"github.com/ava-labs/libevm/triedb/database"
 	"github.com/ava-labs/libevm/triedb/hashdb"
+	"github.com/ava-labs/libevm/triedb/pathdb"
 )
 
 // Config defines all necessary options for database.
 type Config struct {
-	Preimages bool          // Flag whether the preimage of node key is recorded
-	IsVerkle  bool          // Flag whether the db is holding a verkle tree
-	HashDB    hashBackender // Configs for hash-based scheme
-	PathDB    pathBackender // Configs for experimental path-based scheme
+	Preimages bool           // Flag whether the preimage of node key is recorded
+	IsVerkle  bool           // Flag whether the db is holding a verkle tree
+	HashDB    *hashdb.Config // Configs for hash-based scheme
+	PathDB    *pathdb.Config // Configs for experimental path-based scheme
+
+	DBOverride BackendConstructor // Injects an arbitrary backend implementation
 }
 
 // HashDefaults represents a config for using hash-based scheme with
@@ -42,15 +45,6 @@ type Config struct {
 var HashDefaults = &Config{
 	Preimages: false,
 	HashDB:    hashdb.Defaults,
-}
-
-type Backend backend
-
-type hashBackender interface {
-	New(diskdb ethdb.Database, resolver hashdb.ChildResolver) database.HashBackend
-}
-type pathBackender interface {
-	New(diskdb ethdb.Database) database.PathBackend
 }
 
 // backend defines the methods needed to access/update trie nodes in different
@@ -84,10 +78,6 @@ type backend interface {
 
 	// Close closes the trie database backend and releases all held resources.
 	Close() error
-
-	// Reader returns a node reader associated with the specific state.
-	// An error will be returned if the specified state is not available.
-	Reader(stateRoot common.Hash) (database.Reader, error)
 }
 
 // Database is the wrapper of the underlying backend which is shared by different
@@ -120,7 +110,7 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 		log.Crit("Both 'hash' and 'path' mode are configured")
 	}
 	if config.PathDB != nil {
-		db.backend = config.PathDB.New(diskdb)
+		db.backend = pathdb.New(diskdb, config.PathDB)
 	} else {
 		var resolver hashdb.ChildResolver
 		if config.IsVerkle {
@@ -129,19 +119,24 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 		} else {
 			resolver = trie.MerkleResolver{}
 		}
-		if config.HashDB == nil {
-			// some tests don't set this yet pass a non-nil config
-			config.HashDB = hashdb.Defaults
-		}
-		db.backend = config.HashDB.New(diskdb, resolver)
+		db.backend = hashdb.New(diskdb, config.HashDB, resolver)
 	}
+	db.overrideBackend(diskdb, config)
 	return db
 }
 
 // Reader returns a reader for accessing all trie nodes with provided state root.
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(blockRoot common.Hash) (database.Reader, error) {
-	return db.backend.Reader(blockRoot)
+	switch b := db.backend.(type) {
+	case ReaderProvider:
+		return b.Reader(blockRoot)
+	case *hashdb.Database:
+		return b.Reader(blockRoot)
+	case *pathdb.Database:
+		return b.Reader(blockRoot)
+	}
+	return nil, errors.New("unknown backend")
 }
 
 // Update performs a state transition by committing dirty nodes contained in the
@@ -231,7 +226,7 @@ func (db *Database) InsertPreimage(preimages map[common.Hash][]byte) {
 //
 // It's only supported by hash-based database and will return an error for others.
 func (db *Database) Cap(limit common.StorageSize) error {
-	hdb, ok := db.backend.(database.HashBackend)
+	hdb, ok := db.backend.(HashBackend)
 	if !ok {
 		return errors.New("not supported")
 	}
@@ -247,7 +242,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 //
 // It's only supported by hash-based database and will return an error for others.
 func (db *Database) Reference(root common.Hash, parent common.Hash) error {
-	hdb, ok := db.backend.(database.HashBackend)
+	hdb, ok := db.backend.(HashBackend)
 	if !ok {
 		return errors.New("not supported")
 	}
@@ -258,7 +253,7 @@ func (db *Database) Reference(root common.Hash, parent common.Hash) error {
 // Dereference removes an existing reference from a root node. It's only
 // supported by hash-based database and will return an error for others.
 func (db *Database) Dereference(root common.Hash) error {
-	hdb, ok := db.backend.(database.HashBackend)
+	hdb, ok := db.backend.(HashBackend)
 	if !ok {
 		return errors.New("not supported")
 	}
@@ -271,7 +266,7 @@ func (db *Database) Dereference(root common.Hash) error {
 // corresponding trie histories are existent. It's only supported by path-based
 // database and will return an error for others.
 func (db *Database) Recover(target common.Hash) error {
-	pdb, ok := db.backend.(database.PathBackend)
+	pdb, ok := db.backend.(PathBackend)
 	if !ok {
 		return errors.New("not supported")
 	}
@@ -289,7 +284,7 @@ func (db *Database) Recover(target common.Hash) error {
 // recovered. It's only supported by path-based database and will return an
 // error for others.
 func (db *Database) Recoverable(root common.Hash) (bool, error) {
-	pdb, ok := db.backend.(database.PathBackend)
+	pdb, ok := db.backend.(PathBackend)
 	if !ok {
 		return false, errors.New("not supported")
 	}
@@ -302,7 +297,7 @@ func (db *Database) Recoverable(root common.Hash) (bool, error) {
 //
 // It's only supported by path-based database and will return an error for others.
 func (db *Database) Disable() error {
-	pdb, ok := db.backend.(database.PathBackend)
+	pdb, ok := db.backend.(PathBackend)
 	if !ok {
 		return errors.New("not supported")
 	}
@@ -312,7 +307,7 @@ func (db *Database) Disable() error {
 // Enable activates database and resets the state tree with the provided persistent
 // state root once the state sync is finished.
 func (db *Database) Enable(root common.Hash) error {
-	pdb, ok := db.backend.(database.PathBackend)
+	pdb, ok := db.backend.(PathBackend)
 	if !ok {
 		return errors.New("not supported")
 	}
@@ -324,7 +319,7 @@ func (db *Database) Enable(root common.Hash) error {
 // flattening everything down (bad for reorgs). It's only supported by path-based
 // database and will return an error for others.
 func (db *Database) Journal(root common.Hash) error {
-	pdb, ok := db.backend.(database.PathBackend)
+	pdb, ok := db.backend.(PathBackend)
 	if !ok {
 		return errors.New("not supported")
 	}
@@ -335,7 +330,7 @@ func (db *Database) Journal(root common.Hash) error {
 // It's only supported by path-based database and will return an error for
 // others.
 func (db *Database) SetBufferSize(size int) error {
-	pdb, ok := db.backend.(database.PathBackend)
+	pdb, ok := db.backend.(PathBackend)
 	if !ok {
 		return errors.New("not supported")
 	}

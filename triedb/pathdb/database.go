@@ -31,7 +31,6 @@ import (
 	"github.com/ava-labs/libevm/params"
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/trie/triestate"
-	"github.com/ava-labs/libevm/triedb/database"
 )
 
 const (
@@ -91,10 +90,6 @@ type Config struct {
 	CleanCacheSize int    // Maximum memory allowance (in bytes) for caching clean nodes
 	DirtyCacheSize int    // Maximum memory allowance (in bytes) for caching dirty nodes
 	ReadOnly       bool   // Flag whether the database is opened in read only mode.
-}
-
-func (c *Config) New(diskdb ethdb.Database) database.PathBackend {
-	return New(diskdb, c)
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -213,7 +208,7 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 }
 
 // Reader retrieves a layer belonging to the given state root.
-func (db *Database) Reader(root common.Hash) (database.Reader, error) {
+func (db *Database) Reader(root common.Hash) (layer, error) {
 	l := db.tree.get(root)
 	if l == nil {
 		return nil, fmt.Errorf("state %#x is not available", root)

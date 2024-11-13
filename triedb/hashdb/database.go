@@ -33,7 +33,6 @@ import (
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/trie/triestate"
-	"github.com/ava-labs/libevm/triedb/database"
 )
 
 var (
@@ -78,10 +77,6 @@ var Defaults = &Config{
 	// otherwise database must be closed when it's no longer needed to
 	// prevent memory leak.
 	CleanCacheSize: 0,
-}
-
-func (c *Config) New(diskdb ethdb.Database, resolver ChildResolver) database.HashBackend {
-	return New(diskdb, c, resolver)
 }
 
 // Database is an intermediate write layer between the trie data structures and
@@ -636,7 +631,7 @@ func (db *Database) Scheme() string {
 
 // Reader retrieves a node reader belonging to the given state root.
 // An error will be returned if the requested state is not available.
-func (db *Database) Reader(root common.Hash) (database.Reader, error) {
+func (db *Database) Reader(root common.Hash) (*reader, error) {
 	if _, err := db.node(root); err != nil {
 		return nil, fmt.Errorf("state %#x is not available, %v", root, err)
 	}
