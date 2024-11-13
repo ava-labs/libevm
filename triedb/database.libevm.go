@@ -40,9 +40,12 @@ type ReaderProvider interface {
 	Reader(common.Hash) (database.Reader, error)
 }
 
-// A BackendConstructor constructs alternative backend implements. The returned
-// type MUST be either a [HashBackend] or a [PathBackend].
-type BackendConstructor func(ethdb.Database, *Config) interface {
+// A BackendConstructor constructs alternative backend implementations.
+type BackendConstructor func(ethdb.Database, *Config) BackendOverride
+
+// A BackendOverride is an arbitrary implementation of a [Database] backend. It
+// MUST be either a [HashBackend] or a [PathBackend].
+type BackendOverride interface {
 	Backend
 	ReaderProvider
 }
@@ -54,7 +57,7 @@ func (db *Database) overrideBackend(diskdb ethdb.Database, config *Config) {
 	if config.HashDB != nil || config.PathDB != nil {
 		log.Crit("Database override provided when 'hash' or 'path' mode are configured")
 	}
-	db.backend.Close() //nolint:gsec // geth defaults to hashdb instances, which always return nil from Close()
+	db.backend.Close() //nolint:gosec // geth defaults to hashdb instances, which always return nil from Close()
 
 	db.backend = config.DBOverride(diskdb, config)
 	switch db.backend.(type) {
