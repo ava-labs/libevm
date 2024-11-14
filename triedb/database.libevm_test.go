@@ -28,7 +28,7 @@ import (
 
 func TestDBOverride(t *testing.T) {
 	config := &Config{
-		DBOverride: func(d ethdb.Database, c *Config) BackendOverride {
+		DBOverride: func(d ethdb.Database, c *Config) DBOverride {
 			return override{}
 		},
 	}
@@ -42,7 +42,7 @@ func TestDBOverride(t *testing.T) {
 }
 
 type override struct {
-	PathBackend
+	PathDB
 }
 
 type reader struct {

@@ -37,7 +37,7 @@ type Config struct {
 	HashDB    *hashdb.Config // Configs for hash-based scheme
 	PathDB    *pathdb.Config // Configs for experimental path-based scheme
 
-	DBOverride BackendConstructor // Injects an arbitrary backend implementation
+	DBOverride DBConstructor // Injects an arbitrary backend-database implementation
 }
 
 // HashDefaults represents a config for using hash-based scheme with
@@ -228,7 +228,7 @@ func (db *Database) InsertPreimage(preimages map[common.Hash][]byte) {
 //
 // It's only supported by hash-based database and will return an error for others.
 func (db *Database) Cap(limit common.StorageSize) error {
-	hdb, ok := db.backend.(HashBackend)
+	hdb, ok := db.backend.(HashDB)
 	if !ok {
 		return errors.New("not supported")
 	}
@@ -244,7 +244,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 //
 // It's only supported by hash-based database and will return an error for others.
 func (db *Database) Reference(root common.Hash, parent common.Hash) error {
-	hdb, ok := db.backend.(HashBackend)
+	hdb, ok := db.backend.(HashDB)
 	if !ok {
 		return errors.New("not supported")
 	}
@@ -255,7 +255,7 @@ func (db *Database) Reference(root common.Hash, parent common.Hash) error {
 // Dereference removes an existing reference from a root node. It's only
 // supported by hash-based database and will return an error for others.
 func (db *Database) Dereference(root common.Hash) error {
-	hdb, ok := db.backend.(HashBackend)
+	hdb, ok := db.backend.(HashDB)
 	if !ok {
 		return errors.New("not supported")
 	}
@@ -268,7 +268,7 @@ func (db *Database) Dereference(root common.Hash) error {
 // corresponding trie histories are existent. It's only supported by path-based
 // database and will return an error for others.
 func (db *Database) Recover(target common.Hash) error {
-	pdb, ok := db.backend.(PathBackend)
+	pdb, ok := db.backend.(PathDB)
 	if !ok {
 		return errors.New("not supported")
 	}
@@ -286,7 +286,7 @@ func (db *Database) Recover(target common.Hash) error {
 // recovered. It's only supported by path-based database and will return an
 // error for others.
 func (db *Database) Recoverable(root common.Hash) (bool, error) {
-	pdb, ok := db.backend.(PathBackend)
+	pdb, ok := db.backend.(PathDB)
 	if !ok {
 		return false, errors.New("not supported")
 	}
@@ -299,7 +299,7 @@ func (db *Database) Recoverable(root common.Hash) (bool, error) {
 //
 // It's only supported by path-based database and will return an error for others.
 func (db *Database) Disable() error {
-	pdb, ok := db.backend.(PathBackend)
+	pdb, ok := db.backend.(PathDB)
 	if !ok {
 		return errors.New("not supported")
 	}
@@ -309,7 +309,7 @@ func (db *Database) Disable() error {
 // Enable activates database and resets the state tree with the provided persistent
 // state root once the state sync is finished.
 func (db *Database) Enable(root common.Hash) error {
-	pdb, ok := db.backend.(PathBackend)
+	pdb, ok := db.backend.(PathDB)
 	if !ok {
 		return errors.New("not supported")
 	}
@@ -321,7 +321,7 @@ func (db *Database) Enable(root common.Hash) error {
 // flattening everything down (bad for reorgs). It's only supported by path-based
 // database and will return an error for others.
 func (db *Database) Journal(root common.Hash) error {
-	pdb, ok := db.backend.(PathBackend)
+	pdb, ok := db.backend.(PathDB)
 	if !ok {
 		return errors.New("not supported")
 	}
@@ -332,7 +332,7 @@ func (db *Database) Journal(root common.Hash) error {
 // It's only supported by path-based database and will return an error for
 // others.
 func (db *Database) SetBufferSize(size int) error {
-	pdb, ok := db.backend.(PathBackend)
+	pdb, ok := db.backend.(PathDB)
 	if !ok {
 		return errors.New("not supported")
 	}

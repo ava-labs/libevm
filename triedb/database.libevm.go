@@ -26,27 +26,28 @@ import (
 	"github.com/ava-labs/libevm/triedb/pathdb"
 )
 
-// Backend defines the intersection of methods shared by [hashdb.Database] and
-// [pathdb.Database].
-type Backend backend
+// BackendDB defines the intersection of methods shared by [hashdb.Database] and
+// [pathdb.Database]. It is defined to export an otherwise internal type used by
+// the non-libevm geth implementation.
+type BackendDB backend
 
 // A ReaderProvider exposes its underlying Reader as an interface. Both
 // [hashdb.Database] and [pathdb.Database] return concrete types so Go's lack of
 // support for [covariant types] means that this method can't be defined on
-// [Backend].
+// [BackendDB].
 //
 // [covariant types]: https://go.dev/doc/faq#covariant_types
 type ReaderProvider interface {
 	Reader(common.Hash) (database.Reader, error)
 }
 
-// A BackendConstructor constructs alternative backend implementations.
-type BackendConstructor func(ethdb.Database, *Config) BackendOverride
+// A DBConstructor constructs alternative backend-database implementations.
+type DBConstructor func(ethdb.Database, *Config) DBOverride
 
-// A BackendOverride is an arbitrary implementation of a [Database] backend. It
-// MUST be either a [HashBackend] or a [PathBackend].
-type BackendOverride interface {
-	Backend
+// A DBOverride is an arbitrary implementation of a [Database] backend. It MUST
+// be either a [HashDB] or a [PathDB].
+type DBOverride interface {
+	BackendDB
 	ReaderProvider
 }
 
@@ -60,8 +61,8 @@ func (db *Database) overrideBackend(diskdb ethdb.Database, config *Config) bool 
 
 	db.backend = config.DBOverride(diskdb, config)
 	switch db.backend.(type) {
-	case HashBackend:
-	case PathBackend:
+	case HashDB:
+	case PathDB:
 	default:
 		log.Crit("Database override is neither hash- nor path-based")
 	}
@@ -70,22 +71,22 @@ func (db *Database) overrideBackend(diskdb ethdb.Database, config *Config) bool 
 
 var (
 	// If either of these break then the respective interface SHOULD be updated.
-	_ HashBackend = (*hashdb.Database)(nil)
-	_ PathBackend = (*pathdb.Database)(nil)
+	_ HashDB = (*hashdb.Database)(nil)
+	_ PathDB = (*pathdb.Database)(nil)
 )
 
-// A HashBackend mirrors the functionality of a [hashdb.Database].
-type HashBackend interface {
-	Backend
+// A HashDB mirrors the functionality of a [hashdb.Database].
+type HashDB interface {
+	BackendDB
 
 	Cap(limit common.StorageSize) error
 	Reference(root common.Hash, parent common.Hash)
 	Dereference(root common.Hash)
 }
 
-// A PathBackend mirrors the functionality of a [pathdb.Database].
-type PathBackend interface {
-	Backend
+// A PathDB mirrors the functionality of a [pathdb.Database].
+type PathDB interface {
+	BackendDB
 
 	Recover(root common.Hash, loader triestate.TrieLoader) error
 	Recoverable(root common.Hash) bool
