@@ -106,6 +106,9 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 		diskdb:    diskdb,
 		preimages: preimages,
 	}
+	if db.overrideBackend(diskdb, config) {
+		return db
+	}
 	if config.HashDB != nil && config.PathDB != nil {
 		log.Crit("Both 'hash' and 'path' mode are configured")
 	}
@@ -121,7 +124,6 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 		}
 		db.backend = hashdb.New(diskdb, config.HashDB, resolver)
 	}
-	db.overrideBackend(diskdb, config)
 	return db
 }
 

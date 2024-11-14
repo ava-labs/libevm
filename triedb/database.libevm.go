@@ -50,14 +50,13 @@ type BackendOverride interface {
 	ReaderProvider
 }
 
-func (db *Database) overrideBackend(diskdb ethdb.Database, config *Config) {
+func (db *Database) overrideBackend(diskdb ethdb.Database, config *Config) bool {
 	if config.DBOverride == nil {
-		return
+		return false
 	}
 	if config.HashDB != nil || config.PathDB != nil {
 		log.Crit("Database override provided when 'hash' or 'path' mode are configured")
 	}
-	db.backend.Close() //nolint:gosec // geth defaults to hashdb instances, which always return nil from Close()
 
 	db.backend = config.DBOverride(diskdb, config)
 	switch db.backend.(type) {
@@ -66,6 +65,7 @@ func (db *Database) overrideBackend(diskdb ethdb.Database, config *Config) {
 	default:
 		log.Crit("Database override is neither hash- nor path-based")
 	}
+	return true
 }
 
 var (
