@@ -233,8 +233,8 @@ type PrecompileEnvironment interface {
 	// used in conjunction with `Call()`.
 	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...CallOption) (ret []byte, _ error)
 
-	Create(code []byte, gas uint64, value *uint256.Int) ([]byte, common.Address, error)
-	Create2(code []byte, gas uint64, value, salt *uint256.Int) ([]byte, common.Address, error)
+	Create(code []byte, value *uint256.Int) ([]byte, common.Address, error)
+	Create2(code []byte, value, salt *uint256.Int) ([]byte, common.Address, error)
 }
 
 func (args *evmCallArgs) env() *environment {
