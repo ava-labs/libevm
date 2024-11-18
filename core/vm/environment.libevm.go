@@ -103,7 +103,7 @@ func (e *environment) Call(addr common.Address, input []byte, gas uint64, value 
 	return e.callContract(Call, addr, input, gas, value, opts...)
 }
 
-func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {
+func (e *environment) beforeNewCallFrame(typ CallType, gas uint64, value *uint256.Int, opts ...CallOption) (ContractRef, error) {
 	var caller ContractRef = e.self
 	if options.As[callConfig](opts...).unsafeCallerAddressProxying {
 		// Note that, in addition to being unsafe, this breaks an EVM
@@ -116,11 +116,21 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 		}
 	}
 
-	if e.ReadOnly() && value != nil && !value.IsZero() {
+	writes := (value != nil && !value.IsZero()) || typ == create || typ == create2
+	if e.ReadOnly() && writes {
 		return nil, ErrWriteProtection
 	}
 	if !e.UseGas(gas) {
 		return nil, ErrOutOfGas
+	}
+
+	return caller, nil
+}
+
+func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {
+	caller, err := e.beforeNewCallFrame(typ, gas, value, opts...)
+	if err != nil {
+		return nil, err
 	}
 
 	switch typ {
@@ -141,4 +151,31 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 	default:
 		return nil, fmt.Errorf("unimplemented precompile call type %v", typ)
 	}
+}
+
+func (e *environment) Create(code []byte, gas uint64, value *uint256.Int) ([]byte, common.Address, error) {
+	return e.create(create, gas, value, func(caller ContractRef) ([]byte, common.Address, uint64, error) {
+		return e.evm.Create(caller, code, gas, value)
+	})
+}
+
+func (e *environment) Create2(code []byte, gas uint64, value, salt *uint256.Int) ([]byte, common.Address, error) {
+	return e.create(create2, gas, value, func(caller ContractRef) ([]byte, common.Address, uint64, error) {
+		return e.evm.Create2(caller, code, gas, value, salt)
+	})
+}
+
+type creator func(ContractRef) ([]byte, common.Address, uint64, error)
+
+func (e *environment) create(typ CallType, gas uint64, value *uint256.Int, do creator) ([]byte, common.Address, error) {
+	caller, err := e.beforeNewCallFrame(typ, gas, value)
+	if err != nil {
+		return nil, common.Address{}, err
+	}
+
+	ret, contract, returnGas, err := do(caller)
+	if err := e.refundGas(returnGas); err != nil {
+		return nil, common.Address{}, err
+	}
+	return ret, contract, err
 }

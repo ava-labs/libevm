@@ -98,6 +98,12 @@ const (
 	CallCode     = CallType(CALLCODE)
 	DelegateCall = CallType(DELEGATECALL)
 	StaticCall   = CallType(STATICCALL)
+
+	// Although not technically calls, the CREATE OpCodes also enter a new call
+	// frame and therefore have similar setup to _outgoing_ *CALL* types. They
+	// are only used internally, by [environment].
+	create  = CallType(CREATE)
+	create2 = CallType(CREATE2)
 )
 
 func (t CallType) isValid() bool {
@@ -226,6 +232,9 @@ type PrecompileEnvironment interface {
 	// pattern, libevm's `reentrancy` package, or some other protection MUST be
 	// used in conjunction with `Call()`.
 	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...CallOption) (ret []byte, _ error)
+
+	Create(code []byte, gas uint64, value *uint256.Int) ([]byte, common.Address, error)
+	Create2(code []byte, gas uint64, value, salt *uint256.Int) ([]byte, common.Address, error)
 }
 
 func (args *evmCallArgs) env() *environment {
