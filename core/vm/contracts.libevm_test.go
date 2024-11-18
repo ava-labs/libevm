@@ -930,3 +930,90 @@ func TestPrecompileCallWithCallTracer(t *testing.T) {
 		t.Errorf("%q tracer diff (-want +got):\n%s", tracerName, diff)
 	}
 }
+
+func TestPrecompileCreate(t *testing.T) {
+	returnCallerAddress := convertBytes[vm.OpCode, byte](
+		vm.CALLER, vm.PUSH0, vm.MSTORE,
+		vm.PUSH1, 20, vm.PUSH1, 12, vm.RETURN,
+	)
+
+	rng := ethtest.NewPseudoRand(142857)
+	precompile := rng.Address()
+	salt := rng.Uint256()
+
+	tests := []struct {
+		name         string
+		deploy       func(vm.PrecompileEnvironment) ([]byte, common.Address, error)
+		wantDeployed common.Address
+	}{
+		{
+			name: "Create",
+			deploy: func(env vm.PrecompileEnvironment) ([]byte, common.Address, error) {
+				return env.Create(returnCallerAddress, env.Value())
+			},
+			wantDeployed: crypto.CreateAddress(precompile, 0),
+		},
+		{
+			name: "Create2",
+			deploy: func(env vm.PrecompileEnvironment) ([]byte, common.Address, error) {
+				return env.Create2(returnCallerAddress, env.Value(), salt)
+			},
+			wantDeployed: crypto.CreateAddress2(precompile, salt.Bytes32(), crypto.Keccak256(returnCallerAddress)),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hooks := &hookstest.Stub{
+				PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+					precompile: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
+						ret, contract, err := tt.deploy(env)
+						if contract != tt.wantDeployed {
+							return nil, fmt.Errorf("deployed contract address %v does not match predicted %v", contract, tt.wantDeployed)
+						}
+						return ret, err
+					}),
+				},
+			}
+			hookstest.Register(t, params.Extras[*hookstest.Stub, *hookstest.Stub]{
+				NewRules: func(_ *params.ChainConfig, r *params.Rules, _ *hookstest.Stub, blockNum *big.Int, isMerge bool, timestamp uint64) *hookstest.Stub {
+					r.IsCancun = true // enable PUSH0
+					return hooks
+				},
+			})
+
+			state, evm := ethtest.NewZeroEVM(t)
+
+			eoa := rng.Address()
+			max256 := new(uint256.Int).SetAllOne()
+			state.SetBalance(eoa, max256)
+			value := rng.Uint256()
+			got, _, err := evm.Call(vm.AccountRef(eoa), precompile, nil, 30e6, value)
+			require.NoErrorf(t, err, "%T.Call([EOA], [precompile], ...)", evm)
+
+			t.Run("deployed_code", func(t *testing.T) {
+				// Note that contract deployment stores the buffer returned by
+				// the init bytecode, so env.Addresses().EVMSemantic.Self of the
+				// precompile.
+				want := precompile.Bytes() // the "constructor" just deploy's its caller address as the code
+				assert.Equalf(t, want, got, "returned by PrecompileEnvironment.%s()", tt.name)
+				assert.Equalf(t, want, state.GetCode(tt.wantDeployed), "via %T.GetCode(...)", state)
+			})
+
+			t.Run("account_balances", func(t *testing.T) {
+				tests := []struct {
+					name string
+					addr common.Address
+					want *uint256.Int
+				}{
+					{"EOA", eoa, new(uint256.Int).Sub(max256, value)},
+					{"precompile", precompile, uint256.NewInt(0)}, // all propagated
+					{"depoloyed contract", tt.wantDeployed, value},
+				}
+				for _, tt := range tests {
+					assert.Equalf(t, tt.want, state.GetBalance(tt.addr), "balance of %s", tt.name)
+				}
+			})
+		})
+	}
+}
