@@ -252,7 +252,7 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 		copy:  make(chan chan Trie),
 		seen:  make(map[string]struct{}),
 	}
-	options.As[prefetcherConfig](opts...).apply(sf)
+	options.As[prefetcherConfig](opts...).applyTo(sf)
 	go sf.loop()
 	return sf
 }
@@ -303,7 +303,7 @@ func (sf *subfetcher) abort() {
 // loop waits for new tasks to be scheduled and keeps loading them until it runs
 // out of tasks or its underlying trie is retrieved for committing.
 func (sf *subfetcher) loop() {
-	defer sf.wait()
+	defer sf.pool.wait()
 	// No matter how the loop stops, signal anyone waiting that it's terminated
 	defer close(sf.term)
 
@@ -369,8 +369,26 @@ func (sf *subfetcher) loop() {
 			ch <- sf.db.CopyTrie(sf.trie)
 
 		case <-sf.stop:
-			// Termination is requested, abort and leave remaining tasks
-			return
+			//libevm:start
+			//
+			// This is copied, with alteration, from ethereum/go-ethereum#29519
+			// and can be deleted once we update to include that change.
+
+			// Termination is requested, abort if no more tasks are pending. If
+			// there are some, exhaust them first.
+			sf.lock.Lock()
+			done := len(sf.tasks) == 0
+			sf.lock.Unlock()
+
+			if done {
+				return
+			}
+
+			select {
+			case sf.wake <- struct{}{}:
+			default:
+			}
+			//libevm:end
 		}
 	}
 }

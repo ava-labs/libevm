@@ -51,9 +51,9 @@ type subfetcherPool struct {
 	tries   sync.Pool
 }
 
-// apply configures the [subfetcher] to use a [WorkerPool] if one was provided
+// applyTo configures the [subfetcher] to use a [WorkerPool] if one was provided
 // with a [PrefetcherOption].
-func (c *prefetcherConfig) apply(sf *subfetcher) {
+func (c *prefetcherConfig) applyTo(sf *subfetcher) {
 	sf.pool = &subfetcherPool{
 		tries: sync.Pool{
 			// Although the workers may be shared between all subfetchers, each
@@ -68,10 +68,11 @@ func (c *prefetcherConfig) apply(sf *subfetcher) {
 	}
 }
 
-func (sf *subfetcher) wait() {
-	if w := sf.pool.workers; w != nil {
-		w.Wait()
+func (p *subfetcherPool) wait() {
+	if p == nil || p.workers == nil {
+		return
 	}
+	p.workers.Wait()
 }
 
 // execute runs the provided function with a copy of the subfetcher's Trie.
