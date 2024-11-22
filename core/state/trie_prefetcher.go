@@ -79,6 +79,7 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string, opts ...
 // close iterates over all the subfetchers, aborts any that were left spinning
 // and reports the stats to the metrics subsystem.
 func (p *triePrefetcher) close() {
+	p.abortFetchersConcurrently()
 	for _, fetcher := range p.fetchers {
 		fetcher.abort() // safe to do multiple times
 
@@ -303,9 +304,11 @@ func (sf *subfetcher) abort() {
 // loop waits for new tasks to be scheduled and keeps loading them until it runs
 // out of tasks or its underlying trie is retrieved for committing.
 func (sf *subfetcher) loop() {
-	defer sf.pool.wait()
 	// No matter how the loop stops, signal anyone waiting that it's terminated
-	defer close(sf.term)
+	defer func() {
+		sf.pool.wait()
+		close(sf.term)
+	}()
 
 	// Start by opening the trie and stop processing if it fails
 	if sf.owner == (common.Hash{}) {

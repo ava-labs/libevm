@@ -68,6 +68,21 @@ func (c *prefetcherConfig) applyTo(sf *subfetcher) {
 	}
 }
 
+// abortFetchersConcurrently calls [subfetcher.abort] on every fetcher, blocking
+// until all return. Calling abort() sequentially may result in later fetchers
+// accepting new work in the interim.
+func (p *triePrefetcher) abortFetchersConcurrently() {
+	var wg sync.WaitGroup
+	for _, f := range p.fetchers {
+		wg.Add(1)
+		go func(f *subfetcher) {
+			f.abort()
+			wg.Done()
+		}(f)
+	}
+	wg.Wait()
+}
+
 func (p *subfetcherPool) wait() {
 	if p == nil || p.workers == nil {
 		return
