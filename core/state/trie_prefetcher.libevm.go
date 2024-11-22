@@ -31,14 +31,14 @@ type prefetcherConfig struct {
 	newWorkers func() WorkerPool
 }
 
-// A WorkerPool is responsible for executing functions, possibly asynchronously.
+// A WorkerPool executes functions asynchronously.
 type WorkerPool interface {
 	Execute(func())
 	Wait()
 }
 
 // WithWorkerPools configures trie prefetching to execute asynchronously. The
-// provided constructor is called once for each trie being fetched and it MAY
+// provided constructor is called once for each trie being fetched but it MAY
 // return the same pool.
 func WithWorkerPools(ctor func() WorkerPool) PrefetcherOption {
 	return options.Func[prefetcherConfig](func(c *prefetcherConfig) {
@@ -76,21 +76,24 @@ func (p *subfetcherPool) wait() {
 }
 
 // execute runs the provided function with a copy of the subfetcher's Trie.
-// Copies are stored in a [sync.Pool] to reduce creation overhead. If sf was
+// Copies are stored in a [sync.Pool] to reduce creation overhead. If p was
 // configured with a [WorkerPool] then it is used for function execution,
 // otherwise `fn` is just called directly.
 func (p *subfetcherPool) execute(fn func(Trie)) {
-	trie := p.tries.Get().(Trie)
-	if w := p.workers; w != nil {
-		w.Execute(func() { fn(trie) })
-	} else {
-		fn(trie)
+	do := func() {
+		t := p.tries.Get().(Trie)
+		fn(t)
+		p.tries.Put(t)
 	}
-	p.tries.Put(trie)
+	if w := p.workers; w != nil {
+		w.Execute(do)
+	} else {
+		do()
+	}
 }
 
 // GetAccount optimistically pre-fetches an account, dropping the returned value
-// and logging errors. See [subfetcher.execute] re worker pools.
+// and logging errors. See [subfetcherPool.execute] re worker pools.
 func (p *subfetcherPool) GetAccount(addr common.Address) {
 	p.execute(func(t Trie) {
 		if _, err := t.GetAccount(addr); err != nil {
@@ -99,7 +102,7 @@ func (p *subfetcherPool) GetAccount(addr common.Address) {
 	})
 }
 
-// GetStorage is the storage equivalent of [subfetcher.GetAccount].
+// GetStorage is the storage equivalent of [subfetcherPool.GetAccount].
 func (p *subfetcherPool) GetStorage(addr common.Address, key []byte) {
 	p.execute(func(t Trie) {
 		if _, err := t.GetStorage(addr, key); err != nil {
