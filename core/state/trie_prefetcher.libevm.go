@@ -31,10 +31,12 @@ type prefetcherConfig struct {
 	newWorkers func() WorkerPool
 }
 
-// A WorkerPool executes functions asynchronously.
+// A WorkerPool executes functions asynchronously. Done() is called to signal
+// that the pool is no longer needed and that Execute() is guaranteed to not be
+// called again.
 type WorkerPool interface {
 	Execute(func())
-	Wait()
+	Done()
 }
 
 // WithWorkerPools configures trie prefetching to execute asynchronously. The
@@ -49,6 +51,7 @@ func WithWorkerPools(ctor func() WorkerPool) PrefetcherOption {
 type subfetcherPool struct {
 	workers WorkerPool
 	tries   sync.Pool
+	wg      sync.WaitGroup
 }
 
 // applyTo configures the [subfetcher] to use a [WorkerPool] if one was provided
@@ -68,10 +71,9 @@ func (c *prefetcherConfig) applyTo(sf *subfetcher) {
 	}
 }
 
-// abortFetchersConcurrently calls [subfetcher.abort] on every fetcher, blocking
-// until all return. Calling abort() sequentially may result in later fetchers
-// accepting new work in the interim.
-func (p *triePrefetcher) abortFetchersConcurrently() {
+func (p *triePrefetcher) abortFetchersAndReleaseWorkerPools() {
+	// Calling abort() sequentially may result in later fetchers accepting new
+	// work in the interim.
 	var wg sync.WaitGroup
 	for _, f := range p.fetchers {
 		wg.Add(1)
@@ -80,14 +82,20 @@ func (p *triePrefetcher) abortFetchersConcurrently() {
 			wg.Done()
 		}(f)
 	}
+
+	// A WorkerPool is allowed to be shared between fetchers so we MUST wait for
+	// them to finish all tasks otherwise they could call Execute() after
+	// Done(), which we guarantee in the public API to be impossible.
 	wg.Wait()
+	for _, f := range p.fetchers {
+		if w := f.pool.workers; w != nil {
+			w.Done()
+		}
+	}
 }
 
 func (p *subfetcherPool) wait() {
-	if p == nil || p.workers == nil {
-		return
-	}
-	p.workers.Wait()
+	p.wg.Wait()
 }
 
 // execute runs the provided function with a copy of the subfetcher's Trie.
@@ -95,11 +103,14 @@ func (p *subfetcherPool) wait() {
 // configured with a [WorkerPool] then it is used for function execution,
 // otherwise `fn` is just called directly.
 func (p *subfetcherPool) execute(fn func(Trie)) {
+	p.wg.Add(1)
 	do := func() {
 		t := p.tries.Get().(Trie)
 		fn(t)
 		p.tries.Put(t)
+		p.wg.Done()
 	}
+
 	if w := p.workers; w != nil {
 		w.Execute(do)
 	} else {

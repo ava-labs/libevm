@@ -21,28 +21,39 @@ import (
 	"time"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/stretchr/testify/assert"
 )
 
 type synchronisingWorkerPool struct {
-	executed, unblock chan struct{}
+	t                             *testing.T
+	executed, unblock             chan struct{}
+	done                          bool
+	preconditionsToStopPrefetcher int
 }
 
 var _ WorkerPool = (*synchronisingWorkerPool)(nil)
 
-func (p *synchronisingWorkerPool) Execute(func()) {
+func (p *synchronisingWorkerPool) Execute(fn func()) {
+	fn()
 	select {
 	case <-p.executed:
 	default:
 		close(p.executed)
 	}
+
+	<-p.unblock
+	assert.False(p.t, p.done, "Done() called before Execute() returns")
+	p.preconditionsToStopPrefetcher++
 }
 
-func (p *synchronisingWorkerPool) Wait() {
-	<-p.unblock
+func (p *synchronisingWorkerPool) Done() {
+	p.done = true
+	p.preconditionsToStopPrefetcher++
 }
 
 func TestStopPrefetcherWaitsOnWorkers(t *testing.T) {
 	pool := &synchronisingWorkerPool{
+		t:        t,
 		executed: make(chan struct{}),
 		unblock:  make(chan struct{}),
 	}
@@ -55,20 +66,14 @@ func TestStopPrefetcherWaitsOnWorkers(t *testing.T) {
 	go func() {
 		<-pool.executed
 		// Sleep otherwise there is a small chance that we close pool.unblock
-		// between db.StopPrefetcher() returning and the select receiving on the
-		// channel.
+		// between db.StopPrefetcher() returning and the assertion.
 		time.Sleep(time.Second)
 		close(pool.unblock)
 	}()
 
 	<-pool.executed
 	db.StopPrefetcher()
-	select {
-	case <-pool.unblock:
-		// The channel was closed, therefore pool.Wait() unblocked. This is a
-		// necessary pre-condition for db.StopPrefetcher() unblocking, and the
-		// purpose of this test.
-	default:
-		t.Errorf("%T.StopPrefetcher() returned before %T.Wait() unblocked", db, pool)
-	}
+	// If this happens then either Execute() hadn't returned or Done() wasn't
+	// called.
+	assert.Equalf(t, 2, pool.preconditionsToStopPrefetcher, "%T.StopPrefetcher() returned early", db)
 }
