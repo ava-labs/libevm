@@ -79,20 +79,20 @@ func (p *subfetcherPool) wait() {
 // Copies are stored in a [sync.Pool] to reduce creation overhead. If sf was
 // configured with a [WorkerPool] then it is used for function execution,
 // otherwise `fn` is just called directly.
-func (sf *subfetcher) execute(fn func(Trie)) {
-	trie := sf.pool.tries.Get().(Trie)
-	if w := sf.pool.workers; w != nil {
+func (p *subfetcherPool) execute(fn func(Trie)) {
+	trie := p.tries.Get().(Trie)
+	if w := p.workers; w != nil {
 		w.Execute(func() { fn(trie) })
 	} else {
 		fn(trie)
 	}
-	sf.pool.tries.Put(trie)
+	p.tries.Put(trie)
 }
 
 // GetAccount optimistically pre-fetches an account, dropping the returned value
 // and logging errors. See [subfetcher.execute] re worker pools.
-func (sf *subfetcher) GetAccount(addr common.Address) {
-	sf.execute(func(t Trie) {
+func (p *subfetcherPool) GetAccount(addr common.Address) {
+	p.execute(func(t Trie) {
 		if _, err := t.GetAccount(addr); err != nil {
 			log.Error("account prefetching failed", "address", addr, "err", err)
 		}
@@ -100,8 +100,8 @@ func (sf *subfetcher) GetAccount(addr common.Address) {
 }
 
 // GetStorage is the storage equivalent of [subfetcher.GetAccount].
-func (sf *subfetcher) GetStorage(addr common.Address, key []byte) {
-	sf.execute(func(t Trie) {
+func (p *subfetcherPool) GetStorage(addr common.Address, key []byte) {
+	p.execute(func(t Trie) {
 		if _, err := t.GetStorage(addr, key); err != nil {
 			log.Error("storage prefetching failed", "address", addr, "key", key, "err", err)
 		}
