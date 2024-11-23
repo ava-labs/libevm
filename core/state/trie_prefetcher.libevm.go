@@ -17,10 +17,9 @@
 package state
 
 import (
-	"sync"
-
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/libevm/options"
+	"github.com/ava-labs/libevm/libevm/sync"
 	"github.com/ava-labs/libevm/log"
 )
 
@@ -50,7 +49,7 @@ func WithWorkerPools(ctor func() WorkerPool) PrefetcherOption {
 
 type subfetcherPool struct {
 	workers WorkerPool
-	tries   sync.Pool
+	tries   sync.Pool[Trie]
 	wg      sync.WaitGroup
 }
 
@@ -58,10 +57,10 @@ type subfetcherPool struct {
 // with a [PrefetcherOption].
 func (c *prefetcherConfig) applyTo(sf *subfetcher) {
 	sf.pool = &subfetcherPool{
-		tries: sync.Pool{
+		tries: sync.Pool[Trie]{
 			// Although the workers may be shared between all subfetchers, each
 			// MUST have its own Trie pool.
-			New: func() any {
+			New: func() Trie {
 				return sf.db.CopyTrie(sf.trie)
 			},
 		},
@@ -94,7 +93,7 @@ func (p *subfetcherPool) wait() {
 func (p *subfetcherPool) execute(fn func(Trie)) {
 	p.wg.Add(1)
 	do := func() {
-		t := p.tries.Get().(Trie)
+		t := p.tries.Get()
 		fn(t)
 		p.tries.Put(t)
 		p.wg.Done()

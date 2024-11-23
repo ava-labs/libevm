@@ -20,8 +20,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/ava-labs/libevm/common"
 )
 
 type synchronisingWorkerPool struct {
@@ -73,7 +74,7 @@ func TestStopPrefetcherWaitsOnWorkers(t *testing.T) {
 
 	<-pool.executed
 	db.StopPrefetcher()
-	// If this happens then either Execute() hadn't returned or Done() wasn't
+	// If this errors then either Execute() hadn't returned or Done() wasn't
 	// called.
 	assert.Equalf(t, 2, pool.preconditionsToStopPrefetcher, "%T.StopPrefetcher() returned early", db)
 }
