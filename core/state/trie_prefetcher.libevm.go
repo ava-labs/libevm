@@ -71,22 +71,11 @@ func (c *prefetcherConfig) applyTo(sf *subfetcher) {
 	}
 }
 
-func (p *triePrefetcher) abortFetchersAndReleaseWorkerPools() {
-	// Calling abort() sequentially may result in later fetchers accepting new
-	// work in the interim.
-	var wg sync.WaitGroup
-	for _, f := range p.fetchers {
-		wg.Add(1)
-		go func(f *subfetcher) {
-			f.abort()
-			wg.Done()
-		}(f)
-	}
-
-	// A WorkerPool is allowed to be shared between fetchers so we MUST wait for
-	// them to finish all tasks otherwise they could call Execute() after
-	// Done(), which we guarantee in the public API to be impossible.
-	wg.Wait()
+// releaseWorkerPools calls Done() on all [WorkerPool]s. This MUST only be
+// called after [subfetcher.abort] returns on ALL fetchers as a pool is allowed
+// to be shared between them. This is because we guarantee in the public API
+// that no further calls will be made to Execute() after a call to Done().
+func (p *triePrefetcher) releaseWorkerPools() {
 	for _, f := range p.fetchers {
 		if w := f.pool.workers; w != nil {
 			w.Done()
