@@ -174,6 +174,10 @@ type Tree struct {
 
 	// Test hooks
 	onFlatten func() // Hook invoked when the bottom most diff layers are flattened
+
+	// XXX
+	children        map[common.Hash][]common.Hash
+	initiallyLoaded map[common.Hash]struct{}
 }
 
 // New attempts to load an already existing snapshot from a persistent key-value
@@ -195,10 +199,12 @@ type Tree struct {
 func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, root common.Hash) (*Tree, error) {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
-		config: config,
-		diskdb: diskdb,
-		triedb: triedb,
-		layers: make(map[common.Hash]snapshot),
+		config:          config,
+		diskdb:          diskdb,
+		triedb:          triedb,
+		layers:          make(map[common.Hash]snapshot),
+		children:        make(map[common.Hash][]common.Hash),
+		initiallyLoaded: map[common.Hash]struct{}{root: {}},
 	}
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
 	head, disabled, err := loadSnapshot(diskdb, triedb, root, config.CacheSize, config.Recovery, config.NoBuild)
@@ -221,6 +227,7 @@ func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, roo
 	// Existing snapshot loaded, seed all the layers
 	for head != nil {
 		snap.layers[head.Root()] = head
+		snap.initiallyLoaded[head.Root()] = struct{}{}
 		head = head.Parent()
 	}
 	return snap, nil
@@ -310,7 +317,17 @@ func (t *Tree) Snapshot(blockRoot common.Hash) Snapshot {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
-	return t.layers[blockRoot]
+	return t.byRoot(blockRoot)
+}
+
+func (t *Tree) byRoot(blockRoot common.Hash) snapshot {
+	for _, snap := range t.layers {
+		if snap.Root() == blockRoot {
+			return snap
+		}
+	}
+
+	return nil
 }
 
 // Snapshots returns all visited layers from the topmost layer with specific
@@ -323,7 +340,7 @@ func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []Snapshot {
 	if limits == 0 {
 		return nil
 	}
-	layer := t.layers[root]
+	layer := t.byRoot(root)
 	if layer == nil {
 		return nil
 	}
@@ -348,28 +365,47 @@ func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []Snapshot {
 
 // Update adds a new snapshot into the tree, if that can be linked to an existing
 // old parent. It is disallowed to insert a disk layer (the origin of all).
-func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {
+func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte,
+	opts ...LibEVMOption) error {
 	// Reject noop updates to avoid self-loops in the snapshot tree. This is a
 	// special case that can only happen for Clique networks where empty blocks
 	// don't modify the state (0 block subsidy).
 	//
 	// Although we could silently ignore this internally, it should be the caller's
 	// responsibility to avoid even attempting to insert such a snapshot.
-	if blockRoot == parentRoot {
+	opt := asLibEVMConfig(opts)
+	layer := blockRoot
+	if opt.hash != (common.Hash{}) {
+		layer = opt.hash
+	} else {
+		panic("block hash is required")
+	}
+
+	parentLayer := opt.parentHash
+	_, parentHashKnown := t.layers[opt.parentHash]
+	_, isInitiallyLoaded := t.initiallyLoaded[parentRoot]
+	if !parentHashKnown && isInitiallyLoaded {
+		// Allow use of parentRoot as the key in the tree if:
+		// - opt.parentHash is not known,
+		// - parentRoot is known to be initially loaded.
+		parentLayer = parentRoot
+	}
+	if layer == parentLayer {
 		return errSnapshotCycle
 	}
 	// Generate a new snapshot on top of the parent
-	parent := t.Snapshot(parentRoot)
+	parent := t.layers[parentLayer]
 	if parent == nil {
 		return fmt.Errorf("parent [%#x] snapshot missing", parentRoot)
 	}
 	snap := parent.(snapshot).Update(blockRoot, destructs, accounts, storage)
+	t.children[parentLayer] = append(t.children[parentLayer], layer)
 
 	// Save the new snapshot for later
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	t.layers[snap.root] = snap
+	t.layers[layer] = snap
 	return nil
 }
 
