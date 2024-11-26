@@ -339,14 +339,14 @@ func (sf *subfetcher) loop() {
 			sf.lock.Unlock()
 
 			// Prefetch any tasks until the loop is interrupted
-			for i, task := range tasks {
+			for _, task := range tasks {
 				select {
-				case <-sf.stop:
-					// If termination is requested, add any leftover back and return
-					sf.lock.Lock()
-					sf.tasks = append(sf.tasks, tasks[i:]...)
-					sf.lock.Unlock()
-					return
+				//libevm:start
+				//
+				// The <-sf.stop case has been removed, in keeping with the equivalent change below. Future geth
+				// versions also remove it so our modification here can be undone when merging upstream.
+				//
+				//libevm:end
 
 				case ch := <-sf.copy:
 					// Somebody wants a copy of the current trie, grant them
