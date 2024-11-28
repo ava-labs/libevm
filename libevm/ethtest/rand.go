@@ -17,12 +17,15 @@
 package ethtest
 
 import (
+	"crypto/ecdsa"
 	"math/big"
+	"testing"
 
 	"github.com/holiman/uint256"
 	"golang.org/x/exp/rand"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/crypto"
 )
 
 // PseudoRand extends [rand.Rand] (*not* crypto/rand).
@@ -87,4 +90,14 @@ func (r *PseudoRand) Uint64Ptr() *uint64 {
 // Uint256 returns a random 256-bit unsigned int.
 func (r *PseudoRand) Uint256() *uint256.Int {
 	return new(uint256.Int).SetBytes(r.Bytes(32))
+}
+
+// UnsafePrivateKey returns a private key on the secp256k1 curve.
+func (r *PseudoRand) UnsafePrivateKey(tb testing.TB) *ecdsa.PrivateKey {
+	tb.Helper()
+	key, err := ecdsa.GenerateKey(crypto.S256(), r.Rand)
+	if err != nil {
+		tb.Fatalf("ecdsa.GenerateKey(crypto.S256(), %T) error %v", r.Rand, err)
+	}
+	return key
 }
