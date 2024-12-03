@@ -95,6 +95,7 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 		}
 	}
 	evm.Config.ExtraEips = extraEips
+	table = overrideJumpTable(evm.chainRules, table)
 	return &EVMInterpreter{evm: evm, table: table}
 }
 
