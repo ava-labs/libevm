@@ -121,7 +121,18 @@ func (e *Extras[C, R]) newForRules(c *ChainConfig, r *Rules, blockNum *big.Int, 
 	return pseudo.From(rExtra).Type
 }
 
-func (*Extras[C, R]) payloads() (g ExtraPayloads[C, R]) { return }
+func (*Extras[C, R]) payloads() ExtraPayloads[C, R] {
+	return ExtraPayloads[C, R]{
+		ChainConfig: pseudo.NewAccessor[*ChainConfig, C](
+			func(c *ChainConfig) *pseudo.Type { return c.extraPayload() },
+			func(c *ChainConfig, t *pseudo.Type) { c.extra = t },
+		),
+		Rules: pseudo.NewAccessor[*Rules, R](
+			func(r *Rules) *pseudo.Type { return r.extraPayload() },
+			func(r *Rules, t *pseudo.Type) { r.extra = t },
+		),
+	}
+}
 
 // mustBeStructOrPointerToOne panics if `T` isn't a struct or a *struct.
 func mustBeStructOrPointerToOne[T any]() {
@@ -149,12 +160,15 @@ func notStructMessage[T any]() string {
 // [ChainConfig] and [Rules] structs. The only valid way to construct an
 // instance is by a call to [RegisterExtras].
 type ExtraPayloads[C ChainConfigHooks, R RulesHooks] struct {
-	_ struct{} // make godoc show unexported fields so nobody tries to make their own instance ;)
+	ChainConfig pseudo.Accessor[*ChainConfig, C]
+	Rules       pseudo.Accessor[*Rules, R]
 }
 
 // FromChainConfig returns the ChainConfig's extra payload.
-func (ExtraPayloads[C, R]) FromChainConfig(c *ChainConfig) C {
-	return pseudo.MustNewValue[C](c.extraPayload()).Get()
+//
+// Deprecated: use the equivalent [ExtraPayloads.ChainConfig] method.
+func (e ExtraPayloads[C, R]) FromChainConfig(c *ChainConfig) C {
+	return e.ChainConfig.Get(c)
 }
 
 // PointerFromChainConfig returns a pointer to the ChainConfig's extra payload.
@@ -164,13 +178,17 @@ func (ExtraPayloads[C, R]) FromChainConfig(c *ChainConfig) C {
 // shallow copy and that the *C returned here will therefore be shared by all
 // copies. If this is not the desired behaviour, use
 // [ExtraPayloads.SetOnChainConfig].
-func (ExtraPayloads[C, R]) PointerFromChainConfig(c *ChainConfig) *C {
-	return pseudo.MustPointerTo[C](c.extraPayload()).Value.Get()
+//
+// Deprecated: use the equivalent [ExtraPayloads.ChainConfig] method.
+func (e ExtraPayloads[C, R]) PointerFromChainConfig(c *ChainConfig) *C {
+	return e.ChainConfig.GetPointer(c)
 }
 
 // SetOnChainConfig sets the ChainConfig's extra payload.
+//
+// Deprecated: use the equivalent [ExtraPayloads.ChainConfig] method.
 func (e ExtraPayloads[C, R]) SetOnChainConfig(cc *ChainConfig, val C) {
-	cc.extra = pseudo.From(val).Type
+	e.ChainConfig.Set(cc, val)
 }
 
 // hooksFromChainConfig is equivalent to FromChainConfig(), but returns an
@@ -181,8 +199,10 @@ func (e ExtraPayloads[C, R]) hooksFromChainConfig(c *ChainConfig) ChainConfigHoo
 }
 
 // FromRules returns the Rules' extra payload.
-func (ExtraPayloads[C, R]) FromRules(r *Rules) R {
-	return pseudo.MustNewValue[R](r.extraPayload()).Get()
+//
+// Deprecated: use the equivalent [ExtraPayloads.Rules] method.
+func (e ExtraPayloads[C, R]) FromRules(r *Rules) R {
+	return e.Rules.Get(r)
 }
 
 // PointerFromRules returns a pointer to the Rules's extra payload. This is
@@ -191,13 +211,17 @@ func (ExtraPayloads[C, R]) FromRules(r *Rules) R {
 // Note that copying a Rules by dereferencing a pointer will result in a shallow
 // copy and that the *R returned here will therefore be shared by all copies. If
 // this is not the desired behaviour, use [ExtraPayloads.SetOnRules].
-func (ExtraPayloads[C, R]) PointerFromRules(r *Rules) *R {
-	return pseudo.MustPointerTo[R](r.extraPayload()).Value.Get()
+//
+// Deprecated: use the equivalent [ExtraPayloads.Rules] method.
+func (e ExtraPayloads[C, R]) PointerFromRules(r *Rules) *R {
+	return e.Rules.GetPointer(r)
 }
 
 // SetOnRules sets the Rules' extra payload.
+//
+// Deprecated: use the equivalent [ExtraPayloads.Rules] method.
 func (e ExtraPayloads[C, R]) SetOnRules(r *Rules, val R) {
-	r.extra = pseudo.From(val).Type
+	e.Rules.Set(r, val)
 }
 
 // hooksFromRules is the [RulesHooks] equivalent of hooksFromChainConfig().
