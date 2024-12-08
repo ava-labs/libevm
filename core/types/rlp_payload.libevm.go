@@ -40,7 +40,13 @@ func RegisterExtras[SA any]() ExtraPayloads[SA] {
 	if registeredExtras != nil {
 		panic("re-registration of Extras")
 	}
-	var extra ExtraPayloads[SA]
+
+	extra := ExtraPayloads[SA]{
+		Account: pseudo.NewAccessor[ExtraPayloadCarrier, SA](
+			func(a ExtraPayloadCarrier) *pseudo.Type { return a.extra().payload() },
+			func(a ExtraPayloadCarrier, t *pseudo.Type) { a.extra().t = t },
+		),
+	}
 	registeredExtras = &extraConstructors{
 		stateAccountType: func() string {
 			var x SA
@@ -85,7 +91,7 @@ func (e *StateAccountExtra) clone() *StateAccountExtra {
 // [StateAccount] and [SlimAccount] structs. The only valid way to construct an
 // instance is by a call to [RegisterExtras].
 type ExtraPayloads[SA any] struct {
-	_ struct{} // make godoc show unexported fields so nobody tries to make their own instance ;)
+	Account pseudo.Accessor[ExtraPayloadCarrier, SA]
 }
 
 func (ExtraPayloads[SA]) cloneStateAccount(s *StateAccountExtra) *StateAccountExtra {
@@ -108,8 +114,10 @@ var _ = []ExtraPayloadCarrier{
 }
 
 // FromPayloadCarrier returns the carriers's payload.
-func (ExtraPayloads[SA]) FromPayloadCarrier(a ExtraPayloadCarrier) SA {
-	return pseudo.MustNewValue[SA](a.extra().payload()).Get()
+//
+// Deprecated: use the equivalent [ExtraPayloads.Account] method.
+func (e ExtraPayloads[SA]) FromPayloadCarrier(a ExtraPayloadCarrier) SA {
+	return e.Account.Get(a)
 }
 
 // PointerFromPayloadCarrier returns a pointer to the carriers's extra payload.
@@ -119,13 +127,17 @@ func (ExtraPayloads[SA]) FromPayloadCarrier(a ExtraPayloadCarrier) SA {
 // pointer will result in a shallow copy and that the *SA returned here will
 // therefore be shared by all copies. If this is not the desired behaviour, use
 // [StateAccount.Copy] or [ExtraPayloads.SetOnPayloadCarrier].
-func (ExtraPayloads[SA]) PointerFromPayloadCarrier(a ExtraPayloadCarrier) *SA {
-	return pseudo.MustPointerTo[SA](a.extra().payload()).Value.Get()
+//
+// Deprecated: use the equivalent [ExtraPayloads.Account] method.
+func (e ExtraPayloads[SA]) PointerFromPayloadCarrier(a ExtraPayloadCarrier) *SA {
+	return e.Account.GetPointer(a)
 }
 
 // SetOnPayloadCarrier sets the carriers's payload.
-func (ExtraPayloads[SA]) SetOnPayloadCarrier(a ExtraPayloadCarrier, val SA) {
-	a.extra().t = pseudo.From(val).Type
+//
+// Deprecated: use the equivalent [ExtraPayloads.Account] method.
+func (e ExtraPayloads[SA]) SetOnPayloadCarrier(a ExtraPayloadCarrier, val SA) {
+	e.Account.Set(a, val)
 }
 
 // A StateAccountExtra carries the extra payload, if any, registered with
