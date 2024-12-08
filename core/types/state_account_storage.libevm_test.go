@@ -63,6 +63,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 		{
 			name: "vanilla geth",
 			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
+				//nolint:thelper // It's more useful if this test failure shows this line instead of its call site
 				return a, func(t *testing.T, got *types.StateAccount) {
 					assert.Truef(t, a.Extra.Equal(nil), "%T.%T.IsEmpty()", a, a.Extra)
 				}
@@ -74,7 +75,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
 				e := types.RegisterExtras[bool]()
 				e.SetOnPayloadCarrier(a, true)
-				return a, func(t *testing.T, got *types.StateAccount) {
+				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
 					assert.Truef(t, e.FromPayloadCarrier(got), "")
 				}
 			},
@@ -85,7 +86,8 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
 				e := types.RegisterExtras[bool]()
 				e.SetOnPayloadCarrier(a, false) // the explicit part
-				return a, func(t *testing.T, got *types.StateAccount) {
+
+				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
 					assert.Falsef(t, e.FromPayloadCarrier(got), "")
 				}
 			},
@@ -96,7 +98,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
 				e := types.RegisterExtras[bool]()
 				// Note that `a` is reflected, unchanged (the implicit part).
-				return a, func(t *testing.T, got *types.StateAccount) {
+				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
 					assert.Falsef(t, e.FromPayloadCarrier(got), "")
 				}
 			},
@@ -108,7 +110,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 				e := types.RegisterExtras[arbitraryPayload]()
 				p := arbitraryPayload{arbitraryData}
 				e.SetOnPayloadCarrier(a, p)
-				return a, func(t *testing.T, got *types.StateAccount) {
+				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
 					assert.Equalf(t, arbitraryPayload{arbitraryData}, e.FromPayloadCarrier(got), "")
 				}
 			},

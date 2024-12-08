@@ -42,7 +42,7 @@ func RegisterExtras[SA any]() ExtraPayloads[SA] {
 	}
 
 	extra := ExtraPayloads[SA]{
-		Account: pseudo.NewAccessor[ExtraPayloadCarrier, SA](
+		StateAccount: pseudo.NewAccessor[ExtraPayloadCarrier, SA](
 			func(a ExtraPayloadCarrier) *pseudo.Type { return a.extra().payload() },
 			func(a ExtraPayloadCarrier, t *pseudo.Type) { a.extra().t = t },
 		),
@@ -91,7 +91,7 @@ func (e *StateAccountExtra) clone() *StateAccountExtra {
 // [StateAccount] and [SlimAccount] structs. The only valid way to construct an
 // instance is by a call to [RegisterExtras].
 type ExtraPayloads[SA any] struct {
-	Account pseudo.Accessor[ExtraPayloadCarrier, SA]
+	StateAccount pseudo.Accessor[ExtraPayloadCarrier, SA] // Also provides [SlimAccount] access.
 }
 
 func (ExtraPayloads[SA]) cloneStateAccount(s *StateAccountExtra) *StateAccountExtra {
@@ -115,9 +115,9 @@ var _ = []ExtraPayloadCarrier{
 
 // FromPayloadCarrier returns the carriers's payload.
 //
-// Deprecated: use the equivalent [ExtraPayloads.Account] method.
+// Deprecated: use the equivalent [ExtraPayloads.StateAccount] method.
 func (e ExtraPayloads[SA]) FromPayloadCarrier(a ExtraPayloadCarrier) SA {
-	return e.Account.Get(a)
+	return e.StateAccount.Get(a)
 }
 
 // PointerFromPayloadCarrier returns a pointer to the carriers's extra payload.
@@ -128,16 +128,16 @@ func (e ExtraPayloads[SA]) FromPayloadCarrier(a ExtraPayloadCarrier) SA {
 // therefore be shared by all copies. If this is not the desired behaviour, use
 // [StateAccount.Copy] or [ExtraPayloads.SetOnPayloadCarrier].
 //
-// Deprecated: use the equivalent [ExtraPayloads.Account] method.
+// Deprecated: use the equivalent [ExtraPayloads.StateAccount] method.
 func (e ExtraPayloads[SA]) PointerFromPayloadCarrier(a ExtraPayloadCarrier) *SA {
-	return e.Account.GetPointer(a)
+	return e.StateAccount.GetPointer(a)
 }
 
 // SetOnPayloadCarrier sets the carriers's payload.
 //
-// Deprecated: use the equivalent [ExtraPayloads.Account] method.
+// Deprecated: use the equivalent [ExtraPayloads.StateAccount] method.
 func (e ExtraPayloads[SA]) SetOnPayloadCarrier(a ExtraPayloadCarrier, val SA) {
-	e.Account.Set(a, val)
+	e.StateAccount.Set(a, val)
 }
 
 // A StateAccountExtra carries the extra payload, if any, registered with
