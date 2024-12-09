@@ -74,9 +74,9 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 			name: "true-boolean payload",
 			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
 				e := types.RegisterExtras[bool]()
-				e.SetOnPayloadCarrier(a, true)
+				e.StateAccount.Set(a, true)
 				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
-					assert.Truef(t, e.FromPayloadCarrier(got), "")
+					assert.Truef(t, e.StateAccount.Get(got), "")
 				}
 			},
 			wantTrieHash: trueBool,
@@ -85,10 +85,10 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 			name: "explicit false-boolean payload",
 			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
 				e := types.RegisterExtras[bool]()
-				e.SetOnPayloadCarrier(a, false) // the explicit part
+				e.StateAccount.Set(a, false) // the explicit part
 
 				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
-					assert.Falsef(t, e.FromPayloadCarrier(got), "")
+					assert.Falsef(t, e.StateAccount.Get(got), "")
 				}
 			},
 			wantTrieHash: falseBool,
@@ -99,7 +99,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 				e := types.RegisterExtras[bool]()
 				// Note that `a` is reflected, unchanged (the implicit part).
 				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
-					assert.Falsef(t, e.FromPayloadCarrier(got), "")
+					assert.Falsef(t, e.StateAccount.Get(got), "")
 				}
 			},
 			wantTrieHash: falseBool,
@@ -109,9 +109,9 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
 				e := types.RegisterExtras[arbitraryPayload]()
 				p := arbitraryPayload{arbitraryData}
-				e.SetOnPayloadCarrier(a, p)
+				e.StateAccount.Set(a, p)
 				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
-					assert.Equalf(t, arbitraryPayload{arbitraryData}, e.FromPayloadCarrier(got), "")
+					assert.Equalf(t, arbitraryPayload{arbitraryData}, e.StateAccount.Get(got), "")
 				}
 			},
 			wantTrieHash: arbitrary,

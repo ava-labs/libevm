@@ -112,7 +112,7 @@ func (e *Extras[C, R]) newForRules(c *ChainConfig, r *Rules, blockNum *big.Int, 
 	if e.NewRules == nil {
 		return registeredExtras.Get().newRules()
 	}
-	rExtra := e.NewRules(c, r, e.payloads().FromChainConfig(c), blockNum, isMerge, timestamp)
+	rExtra := e.NewRules(c, r, e.payloads().ChainConfig.Get(c), blockNum, isMerge, timestamp)
 	return pseudo.From(rExtra).Type
 }
 
@@ -190,7 +190,7 @@ func (e ExtraPayloads[C, R]) SetOnChainConfig(cc *ChainConfig, val C) {
 // interface instead of the concrete type implementing it; this allows it to be
 // used in non-generic code.
 func (e ExtraPayloads[C, R]) hooksFromChainConfig(c *ChainConfig) ChainConfigHooks {
-	return e.FromChainConfig(c)
+	return e.ChainConfig.Get(c)
 }
 
 // FromRules returns the Rules' extra payload.
@@ -221,7 +221,7 @@ func (e ExtraPayloads[C, R]) SetOnRules(r *Rules, val R) {
 
 // hooksFromRules is the [RulesHooks] equivalent of hooksFromChainConfig().
 func (e ExtraPayloads[C, R]) hooksFromRules(r *Rules) RulesHooks {
-	return e.FromRules(r)
+	return e.Rules.Get(r)
 }
 
 // addRulesExtra is called at the end of [ChainConfig.Rules]; it exists to
