@@ -58,11 +58,37 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 	return hexutil.UnmarshalFixedText("BlockNonce", input, n[:])
 }
 
+type HeaderSerializer interface {
+	EncodeRLP(h *Header, w io.Writer) error
+	DecodeRLP(h *Header, s *rlp.Stream) error
+}
+
+var RegisteredHeaderSerializer HeaderSerializer
+
+// XXX: JSON marshalling should be handled as well.
 //go:generate go run github.com/fjl/gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
-//go:generate go run ../../rlp/rlpgen -type Header -out gen_header_rlp.go
+//go:generate go run ../../rlp/rlpgen -type HeaderWithExtraPayload -out gen_header_rlp.go
 
 // Header represents a block header in the Ethereum blockchain.
-type Header struct {
+type Header HeaderWithExtraPayload
+
+func (obj *Header) EncodeRLP(w io.Writer) error {
+	if RegisteredHeaderSerializer != nil {
+		return RegisteredHeaderSerializer.EncodeRLP(obj, w)
+	}
+	return rlp.Encode(w, (*HeaderWithExtraPayload)(obj))
+}
+
+func (obj *Header) DecodeRLP(s *rlp.Stream) error {
+	if RegisteredHeaderSerializer != nil {
+		return RegisteredHeaderSerializer.DecodeRLP(obj, s)
+	}
+	return s.Decode((*HeaderWithExtraPayload)(obj))
+}
+
+type HeaderWithExtraPayload struct { // Note this name must be exported if we want to use rlpgen
+	ExtraPayload interface{} `json:"-" rlp:"-"`
+
 	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
 	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
 	Coinbase    common.Address `json:"miner"`
