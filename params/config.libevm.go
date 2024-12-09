@@ -124,11 +124,11 @@ func (e *Extras[C, R]) newForRules(c *ChainConfig, r *Rules, blockNum *big.Int, 
 func (*Extras[C, R]) payloads() ExtraPayloads[C, R] {
 	return ExtraPayloads[C, R]{
 		ChainConfig: pseudo.NewAccessor[*ChainConfig, C](
-			func(c *ChainConfig) *pseudo.Type { return c.extraPayload() },
+			(*ChainConfig).extraPayload,
 			func(c *ChainConfig, t *pseudo.Type) { c.extra = t },
 		),
 		Rules: pseudo.NewAccessor[*Rules, R](
-			func(r *Rules) *pseudo.Type { return r.extraPayload() },
+			(*Rules).extraPayload,
 			func(r *Rules, t *pseudo.Type) { r.extra = t },
 		),
 	}
