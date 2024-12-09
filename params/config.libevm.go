@@ -159,64 +159,11 @@ type ExtraPayloads[C ChainConfigHooks, R RulesHooks] struct {
 	Rules       pseudo.Accessor[*Rules, R]
 }
 
-// FromChainConfig returns the ChainConfig's extra payload.
-//
-// Deprecated: use the equivalent [ExtraPayloads.ChainConfig] method.
-func (e ExtraPayloads[C, R]) FromChainConfig(c *ChainConfig) C {
-	return e.ChainConfig.Get(c)
-}
-
-// PointerFromChainConfig returns a pointer to the ChainConfig's extra payload.
-// This is guaranteed to be non-nil.
-//
-// Note that copying a ChainConfig by dereferencing a pointer will result in a
-// shallow copy and that the *C returned here will therefore be shared by all
-// copies. If this is not the desired behaviour, use
-// [ExtraPayloads.SetOnChainConfig].
-//
-// Deprecated: use the equivalent [ExtraPayloads.ChainConfig] method.
-func (e ExtraPayloads[C, R]) PointerFromChainConfig(c *ChainConfig) *C {
-	return e.ChainConfig.GetPointer(c)
-}
-
-// SetOnChainConfig sets the ChainConfig's extra payload.
-//
-// Deprecated: use the equivalent [ExtraPayloads.ChainConfig] method.
-func (e ExtraPayloads[C, R]) SetOnChainConfig(cc *ChainConfig, val C) {
-	e.ChainConfig.Set(cc, val)
-}
-
 // hooksFromChainConfig is equivalent to FromChainConfig(), but returns an
 // interface instead of the concrete type implementing it; this allows it to be
 // used in non-generic code.
 func (e ExtraPayloads[C, R]) hooksFromChainConfig(c *ChainConfig) ChainConfigHooks {
 	return e.ChainConfig.Get(c)
-}
-
-// FromRules returns the Rules' extra payload.
-//
-// Deprecated: use the equivalent [ExtraPayloads.Rules] method.
-func (e ExtraPayloads[C, R]) FromRules(r *Rules) R {
-	return e.Rules.Get(r)
-}
-
-// PointerFromRules returns a pointer to the Rules's extra payload. This is
-// guaranteed to be non-nil.
-//
-// Note that copying a Rules by dereferencing a pointer will result in a shallow
-// copy and that the *R returned here will therefore be shared by all copies. If
-// this is not the desired behaviour, use [ExtraPayloads.SetOnRules].
-//
-// Deprecated: use the equivalent [ExtraPayloads.Rules] method.
-func (e ExtraPayloads[C, R]) PointerFromRules(r *Rules) *R {
-	return e.Rules.GetPointer(r)
-}
-
-// SetOnRules sets the Rules' extra payload.
-//
-// Deprecated: use the equivalent [ExtraPayloads.Rules] method.
-func (e ExtraPayloads[C, R]) SetOnRules(r *Rules, val R) {
-	e.Rules.Set(r, val)
 }
 
 // hooksFromRules is the [RulesHooks] equivalent of hooksFromChainConfig().

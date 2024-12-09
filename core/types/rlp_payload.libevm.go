@@ -108,33 +108,6 @@ var _ = []ExtraPayloadCarrier{
 	(*SlimAccount)(nil),
 }
 
-// FromPayloadCarrier returns the carriers's payload.
-//
-// Deprecated: use the equivalent [ExtraPayloads.StateAccount] method.
-func (e ExtraPayloads[SA]) FromPayloadCarrier(a ExtraPayloadCarrier) SA {
-	return e.StateAccount.Get(a)
-}
-
-// PointerFromPayloadCarrier returns a pointer to the carriers's extra payload.
-// This is guaranteed to be non-nil.
-//
-// Note that copying a [StateAccount] or [SlimAccount] by dereferencing a
-// pointer will result in a shallow copy and that the *SA returned here will
-// therefore be shared by all copies. If this is not the desired behaviour, use
-// [StateAccount.Copy] or [ExtraPayloads.SetOnPayloadCarrier].
-//
-// Deprecated: use the equivalent [ExtraPayloads.StateAccount] method.
-func (e ExtraPayloads[SA]) PointerFromPayloadCarrier(a ExtraPayloadCarrier) *SA {
-	return e.StateAccount.GetPointer(a)
-}
-
-// SetOnPayloadCarrier sets the carriers's payload.
-//
-// Deprecated: use the equivalent [ExtraPayloads.StateAccount] method.
-func (e ExtraPayloads[SA]) SetOnPayloadCarrier(a ExtraPayloadCarrier, val SA) {
-	e.StateAccount.Set(a, val)
-}
-
 // A StateAccountExtra carries the extra payload, if any, registered with
 // [RegisterExtras]. It SHOULD NOT be used directly; instead use the
 // [ExtraPayloads] accessor returned by RegisterExtras.
