@@ -34,6 +34,7 @@ var libevmHooks Hooks
 type Hooks interface {
 	OverrideNewEVMArgs(*NewEVMArgs) *NewEVMArgs
 	OverrideEVMResetArgs(params.Rules, *EVMResetArgs) *EVMResetArgs
+	OverrideJumpTable(params.Rules, *JumpTable) *JumpTable
 }
 
 // NewEVMArgs are the arguments received by [NewEVM], available for override
@@ -73,4 +74,11 @@ func (evm *EVM) overrideEVMResetArgs(txCtx TxContext, statedb StateDB) (TxContex
 	}
 	args := libevmHooks.OverrideEVMResetArgs(evm.chainRules, &EVMResetArgs{txCtx, statedb})
 	return args.TxContext, args.StateDB
+}
+
+func overrideJumpTable(r params.Rules, jt *JumpTable) *JumpTable {
+	if libevmHooks == nil {
+		return jt
+	}
+	return libevmHooks.OverrideJumpTable(r, jt)
 }
