@@ -8,6 +8,21 @@ on:
   workflow_dispatch:
 
 jobs:
+  go_generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.21.4
+
+      - name: Run `go generate`
+        run: go generate ./...
+
+      - name: git diff
+        run: git diff --exit-code
+
   go_test_short:
     env:
       FLAKY_REGEX: 'ava-labs/libevm/(triedb/pathdb|eth|eth/tracers/js|eth/tracers/logger|accounts/abi/bind|accounts/keystore|eth/downloader|miner|ethclient|ethclient/gethclient|eth/catalyst)$'
