@@ -93,7 +93,7 @@ func TestHeaderHooks(t *testing.T) {
 		require.NoErrorf(t, rlp.DecodeBytes(input, hdr), "rlp.DecodeBytes(%#x)", input)
 
 		assert.Equal(t, input, stub.gotRawRLPToDecode, "raw RLP received by hooks")
-		assert.Equalf(t, &stub.setHeaderToOnDecode, hdr, "%T after RLP decoding with hook")
+		assert.Equalf(t, &stub.setHeaderToOnDecode, hdr, "%T after RLP decoding with hook", hdr)
 	})
 
 	t.Run("error propagation", func(t *testing.T) {

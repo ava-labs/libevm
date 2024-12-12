@@ -55,6 +55,7 @@ func TestHeaderRLPBackwardsCompatibility(t *testing.T) {
 	}
 }
 
+//nolint:thelper
 func testHeaderRLPBackwardsCompatibility(t *testing.T) {
 	// This is a deliberate change-detector test that locks in backwards
 	// compatibility of RLP encoding.
