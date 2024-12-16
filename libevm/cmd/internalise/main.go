@@ -78,7 +78,7 @@ func run(fileName string, args ...string) error {
 	mode := parser.SkipObjectResolution | parser.ParseComments
 	parsed, err := parser.ParseFile(fset, fileName, nil, mode)
 	if err != nil {
-		return err
+		return fmt.Errorf("parser.ParseFile(%q): %v", fileName, err)
 	}
 
 	for _, d := range parsed.Decls {
@@ -92,7 +92,7 @@ func run(fileName string, args ...string) error {
 		case *ast.Ident:
 			typ = t.Name
 		case *ast.StarExpr:
-			typ = t.X.(*ast.Ident).Name
+			typ = t.X.(*ast.Ident).Name //nolint:forcetypeassert // Invariant of valid Go method
 		}
 
 		name := &fn.Name.Name
@@ -105,12 +105,13 @@ func run(fileName string, args ...string) error {
 		}
 	}
 
-	f, err := os.OpenFile(fileName, os.O_TRUNC|os.O_WRONLY, 0)
+	// Since we're not creating, the zero perm/mode is ignored.
+	f, err := os.OpenFile(fileName, os.O_TRUNC|os.O_WRONLY, 0) //nolint:gosec // Variable file is under our direct control in go:generate
 	if err != nil {
-		return err
+		return fmt.Errorf("os.OpenFile(%q, [write-only, truncate]): %v", fileName, err)
 	}
 	if err := format.Node(f, fset, parsed); err != nil {
-		return err
+		return fmt.Errorf("format.Node(%T): %v", parsed, err)
 	}
 	return f.Close()
 }
