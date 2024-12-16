@@ -97,7 +97,7 @@ func TestHeaderHooks(t *testing.T) {
 		assert.Equalf(t, &stub.setHeaderToOnDecode, hdr, "%T after RLP decoding with hook", hdr)
 	})
 
-	t.Run("error propagation", func(t *testing.T) {
+	t.Run("error_propagation", func(t *testing.T) {
 		errEncode := errors.New("uh oh")
 		errDecode := errors.New("something bad happened")
 
