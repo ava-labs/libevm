@@ -38,7 +38,7 @@ var _ interface {
 
 // EncodeRLP implements the [rlp.Encoder] interface.
 func (h *Header) EncodeRLP(w io.Writer) error {
-	if r := &registeredExtras; r.Registered() {
+	if r := registeredExtras; r.Registered() {
 		return r.Get().hooks.hooksFromHeader(h).EncodeRLP(h, w)
 	}
 	return h.encodeRLP(w)
@@ -53,7 +53,7 @@ func decodeHeaderRLPDirectly(h *Header, s *rlp.Stream) error {
 
 // DecodeRLP implements the [rlp.Decoder] interface.
 func (h *Header) DecodeRLP(s *rlp.Stream) error {
-	if r := &registeredExtras; r.Registered() {
+	if r := registeredExtras; r.Registered() {
 		return r.Get().hooks.hooksFromHeader(h).DecodeRLP(h, s)
 	}
 	return decodeHeaderRLPDirectly(h, s)
@@ -64,7 +64,7 @@ func (e ExtraPayloads[HPtr, SA]) hooksFromHeader(h *Header) HeaderHooks {
 }
 
 func (h *Header) extraPayload() *pseudo.Type {
-	r := &registeredExtras
+	r := registeredExtras
 	if !r.Registered() {
 		// See params.ChainConfig.extraPayload() for panic rationale.
 		panic(fmt.Sprintf("%T.extraPayload() called before RegisterExtras()", r))
