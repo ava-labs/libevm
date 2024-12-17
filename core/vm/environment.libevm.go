@@ -158,11 +158,11 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 
 	switch typ {
 	case Call:
-		ret, returnGas, err := e.evm.Call(caller, addr, input, gas, value)
+		ret, returnGas, callErr := e.evm.Call(caller, addr, input, gas, value)
 		if err := e.refundGas(returnGas); err != nil {
 			return nil, err
 		}
-		return ret, err
+		return ret, callErr
 	case CallCode, DelegateCall, StaticCall:
 		// TODO(arr4n): these cases should be very similar to CALL, hence the
 		// early abstraction, to signal to future maintainers. If implementing
