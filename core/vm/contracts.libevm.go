@@ -151,7 +151,7 @@ type PrecompileEnvironment interface {
 	ReadOnly() bool
 	// Equivalent to respective methods on [Contract].
 	Gas() uint64
-	UseGas(uint64) bool
+	UseGas(uint64) (hasEnoughGas bool)
 	Value() *uint256.Int
 
 	BlockHeader() (types.Header, error)
