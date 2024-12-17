@@ -148,7 +148,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 
 	run := func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) ([]byte, uint64, error) {
 		if got, want := env.StateDB() != nil, !env.ReadOnly(); got != want {
-			return nil, 0, fmt.Errorf("PrecompileEnvironment().StateDB() must be non-nil i.f.f. not read-only; got non-nil? %t; want %t", got, want)
+			return nil, 0, fmt.Errorf("Environment().StateDB() must be non-nil i.f.f. not read-only; got non-nil? %t; want %t", got, want)
 		}
 		hdr, err := env.BlockHeader()
 		if err != nil {

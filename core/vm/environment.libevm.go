@@ -29,6 +29,23 @@ import (
 	"github.com/ava-labs/libevm/params"
 )
 
+// An Environment provides information about the context in which an instruction
+// is being executed.
+type Environment interface {
+	ChainConfig() *params.ChainConfig
+	Rules() params.Rules
+	ReadOnly() bool
+	// StateDB will be non-nil i.f.f !ReadOnly().
+	StateDB() StateDB
+	// ReadOnlyState will always be non-nil.
+	ReadOnlyState() libevm.StateReader
+	Addresses() *libevm.AddressContext
+
+	BlockHeader() (types.Header, error)
+	BlockNumber() *big.Int
+	BlockTime() uint64
+}
+
 var _ PrecompileEnvironment = (*environment)(nil)
 
 type environment struct {

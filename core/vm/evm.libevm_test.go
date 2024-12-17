@@ -38,6 +38,8 @@ func (o *evmArgOverrider) OverrideNewEVMArgs(args *NewEVMArgs) *NewEVMArgs {
 	return args
 }
 
+func (evmArgOverrider) OverrideJumpTable(_ params.Rules, jt *JumpTable) *JumpTable { return jt }
+
 func (o *evmArgOverrider) OverrideEVMResetArgs(r params.Rules, _ *EVMResetArgs) *EVMResetArgs {
 	o.gotResetChainID = r.ChainID
 	return &EVMResetArgs{

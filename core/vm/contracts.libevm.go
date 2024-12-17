@@ -18,14 +18,10 @@ package vm
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/libevm"
-	"github.com/ava-labs/libevm/params"
 )
 
 // evmCallArgs mirrors the parameters of the [EVM] methods Call(), CallCode(),
@@ -133,20 +129,9 @@ func (p statefulPrecompile) Run([]byte) ([]byte, error) {
 // precompiled contract is being run; and (b) a means of calling other
 // contracts.
 type PrecompileEnvironment interface {
-	ChainConfig() *params.ChainConfig
-	Rules() params.Rules
-	ReadOnly() bool
-	// StateDB will be non-nil i.f.f !ReadOnly().
-	StateDB() StateDB
-	// ReadOnlyState will always be non-nil.
-	ReadOnlyState() libevm.StateReader
-	Addresses() *libevm.AddressContext
+	Environment
+
 	IncomingCallType() CallType
-
-	BlockHeader() (types.Header, error)
-	BlockNumber() *big.Int
-	BlockTime() uint64
-
 	// Call is equivalent to [EVM.Call] except that the `caller` argument is
 	// removed and automatically determined according to the type of call that
 	// invoked the precompile.
