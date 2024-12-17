@@ -89,7 +89,7 @@ func (t CallType) OpCode() OpCode {
 }
 
 // run runs the [PrecompiledContract], differentiating between stateful and
-// regular types, updating `gasRemaining` in the stateful case.
+// regular types, updating `args.gasRemaining` in the stateful case.
 func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, err error) {
 	switch p := p.(type) {
 	default:
