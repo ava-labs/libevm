@@ -28,6 +28,7 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/rlp"
 )
 
@@ -59,7 +60,7 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 }
 
 //go:generate go run github.com/fjl/gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
-//go:generate go run ../../rlp/rlpgen -type Header -out gen_header_rlp.go
+//go:generate go run ../../rlp/rlpgen -type Header -internal_methods -out gen_header_rlp.go
 
 // Header represents a block header in the Ethereum blockchain.
 type Header struct {
@@ -93,6 +94,8 @@ type Header struct {
 
 	// ParentBeaconRoot was added by EIP-4788 and is ignored in legacy headers.
 	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
+
+	extra *pseudo.Type // See RegisterExtras()
 }
 
 // field type overrides for gencodec

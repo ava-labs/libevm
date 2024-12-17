@@ -26,6 +26,7 @@ import (
 	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/libevm"
+	"github.com/ava-labs/libevm/libevm/options"
 	"github.com/ava-labs/libevm/params"
 )
 
@@ -119,20 +120,14 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 	}
 
 	var caller ContractRef = e.self
-	for _, o := range opts {
-		switch o := o.(type) {
-		case callOptUNSAFECallerAddressProxy:
-			// Note that, in addition to being unsafe, this breaks an EVM
-			// assumption that the caller ContractRef is always a *Contract.
-			caller = AccountRef(e.self.CallerAddress)
-			if e.callType == DelegateCall {
-				// self was created with AsDelegate(), which means that
-				// CallerAddress was inherited.
-				caller = AccountRef(e.self.Address())
-			}
-		case nil:
-		default:
-			return nil, fmt.Errorf("unsupported option %T", o)
+	if options.As[callConfig](opts...).unsafeCallerAddressProxying {
+		// Note that, in addition to being unsafe, this breaks an EVM
+		// assumption that the caller ContractRef is always a *Contract.
+		caller = AccountRef(e.self.CallerAddress)
+		if e.callType == DelegateCall {
+			// self was created with AsDelegate(), which means that
+			// CallerAddress was inherited.
+			caller = AccountRef(e.self.Address())
 		}
 	}
 

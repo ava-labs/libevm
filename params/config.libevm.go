@@ -22,7 +22,7 @@ import (
 	"reflect"
 
 	"github.com/ava-labs/libevm/libevm/pseudo"
-	"github.com/ava-labs/libevm/libevm/testonly"
+	"github.com/ava-labs/libevm/libevm/register"
 )
 
 // Extras are arbitrary payloads to be added as extra fields in [ChainConfig]
@@ -68,20 +68,17 @@ type Extras[C ChainConfigHooks, R RulesHooks] struct {
 // alter Ethereum behaviour; if this isn't desired then they can embed
 // [NOOPHooks] to satisfy either interface.
 func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPayloads[C, R] {
-	if registeredExtras != nil {
-		panic("re-registration of Extras")
-	}
 	mustBeStructOrPointerToOne[C]()
 	mustBeStructOrPointerToOne[R]()
 
 	payloads := e.payloads()
-	registeredExtras = &extraConstructors{
+	registeredExtras.MustRegister(&extraConstructors{
 		newChainConfig: pseudo.NewConstructor[C]().Zero,
 		newRules:       pseudo.NewConstructor[R]().Zero,
 		reuseJSONRoot:  e.ReuseJSONRoot,
 		newForRules:    e.newForRules,
 		payloads:       payloads,
-	}
+	})
 	return payloads
 }
 
@@ -92,14 +89,12 @@ func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPaylo
 // defer-called afterwards, either directly or via testing.TB.Cleanup(). This is
 // a workaround for the single-call limitation on [RegisterExtras].
 func TestOnlyClearRegisteredExtras() {
-	testonly.OrPanic(func() {
-		registeredExtras = nil
-	})
+	registeredExtras.TestOnlyClear()
 }
 
 // registeredExtras holds non-generic constructors for the [Extras] types
 // registered via [RegisterExtras].
-var registeredExtras *extraConstructors
+var registeredExtras register.AtMostOnce[*extraConstructors]
 
 type extraConstructors struct {
 	newChainConfig, newRules func() *pseudo.Type
@@ -115,13 +110,24 @@ type extraConstructors struct {
 
 func (e *Extras[C, R]) newForRules(c *ChainConfig, r *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) *pseudo.Type {
 	if e.NewRules == nil {
-		return registeredExtras.newRules()
+		return registeredExtras.Get().newRules()
 	}
-	rExtra := e.NewRules(c, r, e.payloads().FromChainConfig(c), blockNum, isMerge, timestamp)
+	rExtra := e.NewRules(c, r, e.payloads().ChainConfig.Get(c), blockNum, isMerge, timestamp)
 	return pseudo.From(rExtra).Type
 }
 
-func (*Extras[C, R]) payloads() (g ExtraPayloads[C, R]) { return }
+func (*Extras[C, R]) payloads() ExtraPayloads[C, R] {
+	return ExtraPayloads[C, R]{
+		ChainConfig: pseudo.NewAccessor[*ChainConfig, C](
+			(*ChainConfig).extraPayload,
+			func(c *ChainConfig, t *pseudo.Type) { c.extra = t },
+		),
+		Rules: pseudo.NewAccessor[*Rules, R](
+			(*Rules).extraPayload,
+			func(r *Rules, t *pseudo.Type) { r.extra = t },
+		),
+	}
+}
 
 // mustBeStructOrPointerToOne panics if `T` isn't a struct or a *struct.
 func mustBeStructOrPointerToOne[T any]() {
@@ -149,68 +155,28 @@ func notStructMessage[T any]() string {
 // [ChainConfig] and [Rules] structs. The only valid way to construct an
 // instance is by a call to [RegisterExtras].
 type ExtraPayloads[C ChainConfigHooks, R RulesHooks] struct {
-	_ struct{} // make godoc show unexported fields so nobody tries to make their own instance ;)
-}
-
-// FromChainConfig returns the ChainConfig's extra payload.
-func (ExtraPayloads[C, R]) FromChainConfig(c *ChainConfig) C {
-	return pseudo.MustNewValue[C](c.extraPayload()).Get()
-}
-
-// PointerFromChainConfig returns a pointer to the ChainConfig's extra payload.
-// This is guaranteed to be non-nil.
-//
-// Note that copying a ChainConfig by dereferencing a pointer will result in a
-// shallow copy and that the *C returned here will therefore be shared by all
-// copies. If this is not the desired behaviour, use
-// [ExtraPayloads.SetOnChainConfig].
-func (ExtraPayloads[C, R]) PointerFromChainConfig(c *ChainConfig) *C {
-	return pseudo.MustPointerTo[C](c.extraPayload()).Value.Get()
-}
-
-// SetOnChainConfig sets the ChainConfig's extra payload.
-func (e ExtraPayloads[C, R]) SetOnChainConfig(cc *ChainConfig, val C) {
-	cc.extra = pseudo.From(val).Type
+	ChainConfig pseudo.Accessor[*ChainConfig, C]
+	Rules       pseudo.Accessor[*Rules, R]
 }
 
 // hooksFromChainConfig is equivalent to FromChainConfig(), but returns an
 // interface instead of the concrete type implementing it; this allows it to be
 // used in non-generic code.
 func (e ExtraPayloads[C, R]) hooksFromChainConfig(c *ChainConfig) ChainConfigHooks {
-	return e.FromChainConfig(c)
-}
-
-// FromRules returns the Rules' extra payload.
-func (ExtraPayloads[C, R]) FromRules(r *Rules) R {
-	return pseudo.MustNewValue[R](r.extraPayload()).Get()
-}
-
-// PointerFromRules returns a pointer to the Rules's extra payload. This is
-// guaranteed to be non-nil.
-//
-// Note that copying a Rules by dereferencing a pointer will result in a shallow
-// copy and that the *R returned here will therefore be shared by all copies. If
-// this is not the desired behaviour, use [ExtraPayloads.SetOnRules].
-func (ExtraPayloads[C, R]) PointerFromRules(r *Rules) *R {
-	return pseudo.MustPointerTo[R](r.extraPayload()).Value.Get()
-}
-
-// SetOnRules sets the Rules' extra payload.
-func (e ExtraPayloads[C, R]) SetOnRules(r *Rules, val R) {
-	r.extra = pseudo.From(val).Type
+	return e.ChainConfig.Get(c)
 }
 
 // hooksFromRules is the [RulesHooks] equivalent of hooksFromChainConfig().
 func (e ExtraPayloads[C, R]) hooksFromRules(r *Rules) RulesHooks {
-	return e.FromRules(r)
+	return e.Rules.Get(r)
 }
 
 // addRulesExtra is called at the end of [ChainConfig.Rules]; it exists to
 // abstract the libevm-specific behaviour outside of original geth code.
 func (c *ChainConfig) addRulesExtra(r *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) {
 	r.extra = nil
-	if registeredExtras != nil {
-		r.extra = registeredExtras.newForRules(c, r, blockNum, isMerge, timestamp)
+	if registeredExtras.Registered() {
+		r.extra = registeredExtras.Get().newForRules(c, r, blockNum, isMerge, timestamp)
 	}
 }
 
@@ -218,27 +184,28 @@ func (c *ChainConfig) addRulesExtra(r *Rules, blockNum *big.Int, isMerge bool, t
 // already been called. If the payload hasn't been populated (typically via
 // unmarshalling of JSON), a nil value is constructed and returned.
 func (c *ChainConfig) extraPayload() *pseudo.Type {
-	if registeredExtras == nil {
+	if !registeredExtras.Registered() {
 		// This will only happen if someone constructs an [ExtraPayloads]
-		// directly, without a call to [RegisterExtras].
+		// directly, without a call to [RegisterExtras]. It would also panic on
+		// the next call anyway so this is at least a useful message.
 		//
 		// See https://google.github.io/styleguide/go/best-practices#when-to-panic
 		panic(fmt.Sprintf("%T.ExtraPayload() called before RegisterExtras()", c))
 	}
 	if c.extra == nil {
-		c.extra = registeredExtras.newChainConfig()
+		c.extra = registeredExtras.Get().newChainConfig()
 	}
 	return c.extra
 }
 
 // extraPayload is equivalent to [ChainConfig.extraPayload].
 func (r *Rules) extraPayload() *pseudo.Type {
-	if registeredExtras == nil {
+	if !registeredExtras.Registered() {
 		// See ChainConfig.extraPayload() equivalent.
 		panic(fmt.Sprintf("%T.ExtraPayload() called before RegisterExtras()", r))
 	}
 	if r.extra == nil {
-		r.extra = registeredExtras.newRules()
+		r.extra = registeredExtras.Get().newRules()
 	}
 	return r.extra
 }
