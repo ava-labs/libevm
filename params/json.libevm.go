@@ -124,3 +124,27 @@ func toJSONRawMessages(v any) (map[string]json.RawMessage, error) {
 	}
 	return msgs, nil
 }
+
+// UnmarshalChainConfig JSON decodes the given data into the config and the extra
+// pointer arguments. The root JSON keys except the "extra" key are decoded into
+// the config argument, and the object at the "extra" key, if present, is decoded
+// into the extra argument. Note the extra argument must be a non-nil pointer or
+// an error would be returned.
+func UnmarshalChainConfig(data []byte, config *ChainConfig, extra any) (err error) {
+	err = json.Unmarshal(data, config)
+	if err != nil {
+		return fmt.Errorf("json decoding root chain config: %w", err)
+	}
+
+	jsonExtra := struct {
+		Extra any `json:"extra"`
+	}{
+		Extra: extra,
+	}
+	err = json.Unmarshal(data, &jsonExtra)
+	if err != nil {
+		return fmt.Errorf("json decoding extra chain config: %w", err)
+	}
+
+	return nil
+}
