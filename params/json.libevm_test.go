@@ -146,7 +146,7 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 	}
 }
 
-func Test_UnmarshalChainConfig(t *testing.T) {
+func Test_UnmarshalChainConfigJSON(t *testing.T) {
 	t.Parallel()
 
 	type testExtra struct {
@@ -191,7 +191,7 @@ func Test_UnmarshalChainConfig(t *testing.T) {
 			data := []byte(testCase.jsonData)
 			config := ChainConfig{}
 			var extra testExtra
-			err := UnmarshalChainConfig(data, &config, &extra)
+			err := UnmarshalChainConfigJSON(data, &config, &extra)
 			if testCase.errMessage == "" {
 				require.NoError(t, err)
 			} else {
