@@ -24,7 +24,6 @@
   description: "Unit tests, integration tests, etc."
   color: "ffc7ea"
 - name: "Category: Code quality ✏️"
-  description: "Unit tests, integration tests, etc."
   color: "ffc7ea"
 - name: "Category: Performance 🚀"
   color: "ffc7ea"
