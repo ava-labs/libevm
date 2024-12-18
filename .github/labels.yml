@@ -66,5 +66,3 @@
 - name: "Closed: ⚰️ Inactive"
   color: "959a9c"
   description: "No answer was received for weeks"
-- name: "Closed: 🗑️ Bad issue"
-  color: "959a9c"
