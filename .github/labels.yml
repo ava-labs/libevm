@@ -12,6 +12,7 @@
 - name: "Category: Documentation ✒️"
   description: "A problem with the readme or a code comment."
   color: "ffc7ea"
+  from_name: "documentation"
 - name: "Category: Bug 🐛"
   color: "ffc7ea"
   from_name: "bug"
@@ -30,6 +31,8 @@
 - name: "Category: Label missing ❗"
   description: "Use this if it feels a label should be added to label this issue"
   color: "ffc7ea"
+- name: "Category: Question / Help wanted ❓"
+  from_name: "question"
 
 # Status
 - name: "Status: 🗯️ Waiting for feedback"
@@ -58,11 +61,17 @@
   color: "ff9efc"
 - name: "Complexity: 🟦 Easy to do"
   color: "ff9efc"
+  from_name: "good first issue"
 
 # Closing reason
 - name: "Closed: 👥 Duplicate"
   color: "959a9c"
   description: "Issue duplicates an existing issue"
+  from_name: "duplicate"
 - name: "Closed: ⚰️ Inactive"
   color: "959a9c"
   description: "No answer was received for weeks"
+- name: "Closed: 🙅 Won't fix"
+  from_name: "wontfix"
+- name: "Closed: 🧺 Invalid"
+  from_name: "invalid"
