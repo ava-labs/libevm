@@ -56,7 +56,7 @@
 # Complexity
 - name: "Complexity: 🟥 Hard to do"
   color: "ff9efc"
-- name: "Complexity: 🟩 Easy to do"
+- name: "Complexity: 🟦 Easy to do"
   color: "ff9efc"
 
 # Closing reason
