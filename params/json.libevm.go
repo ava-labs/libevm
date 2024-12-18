@@ -143,7 +143,8 @@ func UnmarshalChainConfigJSON(data []byte, config *ChainConfig, extra any) (err 
 	}
 	err = json.Unmarshal(data, &jsonExtra)
 	if err != nil {
-		return fmt.Errorf("json decoding extra chain config: %w", err)
+		return fmt.Errorf("json decoding extra chain config to %T: %w",
+			jsonExtra.Extra, err)
 	}
 
 	return nil
