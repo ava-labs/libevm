@@ -153,7 +153,7 @@ func TestHeaderHooks(t *testing.T) {
 
 		setStub()
 		_, err := json.Marshal(hdr)
-		assert.ErrorIs(t, err, errMarshal, "via json.Marshal()")
+		assert.ErrorIs(t, err, errMarshal, "via json.Marshal()") //nolint:testifylint // require is inappropriate here as we wish to keep going
 		assert.Equal(t, errUnmarshal, json.Unmarshal([]byte("{}"), hdr), "via json.Unmarshal()")
 
 		setStub() // [stubHeaderHooks] completely overrides the Header
