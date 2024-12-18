@@ -42,6 +42,14 @@ func fakeHeaderRLP(h *Header, suffix []byte) []byte {
 	return append(crypto.Keccak256(h.ParentHash[:]), suffix...)
 }
 
+func (hh *stubHeaderHooks) MarshalJSON(h *Header) ([]byte, error) { //nolint:govet
+	return nil, errors.New("TODO")
+}
+
+func (hh *stubHeaderHooks) UnmarshalJSON(h *Header, b []byte) error { //nolint:govet
+	return errors.New("TODO")
+}
+
 func (hh *stubHeaderHooks) EncodeRLP(h *Header, w io.Writer) error {
 	if _, err := w.Write(fakeHeaderRLP(h, hh.rlpSuffix)); err != nil {
 		return err
