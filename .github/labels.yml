@@ -2,6 +2,9 @@
 - name: "Status: 🔴 Blocked by Geth sync"
   color: "959a9c"
   description: "This needs to wait for the next fork sync with the geth repository 🍴"
+- name: "Status: 🔴 DO NOT MERGE"
+  color: "959a9c"
+  from_name: "DO NOT MERGE"
 
 # General categories
 - name: "Category: New feature 🆕"
