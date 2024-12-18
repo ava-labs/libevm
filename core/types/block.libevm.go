@@ -17,6 +17,7 @@
 package types
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -34,7 +35,19 @@ type HeaderHooks interface {
 var _ interface {
 	rlp.Encoder
 	rlp.Decoder
+	json.Marshaler
+	json.Unmarshaler
 } = (*Header)(nil)
+
+// MarshalJSON implements the [json.Marshaler] interface.
+func (h *Header) MarshalJSON() ([]byte, error) {
+	return h.marshalJSON()
+}
+
+// UnmarshalJSON implements the [json.Unmarshaler] interface.
+func (h *Header) UnmarshalJSON(b []byte) error {
+	return h.unmarshalJSON(b)
+}
 
 // EncodeRLP implements the [rlp.Encoder] interface.
 func (h *Header) EncodeRLP(w io.Writer) error {
