@@ -1,0 +1,15 @@
+name: labels
+on:
+  pull_request:
+    paths-ignore:
+      - .github/labels.yml
+      - .github/workflows/labels.yml
+
+jobs:
+  labeler:
+    permissions:
+      actions: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: No trigger path triggered for required workflow.
+        run: exit 0
