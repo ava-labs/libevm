@@ -54,33 +54,40 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) error {
 //   - if the extra is registered, whether the root JSON is re-used for the extra or not,
 //     the chain config is decoded only in the `config` argument.
 func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T, reuseJSONRoot bool) (err error) {
-	chainConfigWithoutMethods := (*chainConfigWithoutMethods)(config)
-
 	if !registeredExtras.Registered() {
-		err = json.Unmarshal(data, chainConfigWithoutMethods)
-		switch {
-		case err != nil:
-			return fmt.Errorf("decoding root chain config: %s", err)
-		case extra == nil: // ignore the "extra" JSON key
-		case reuseJSONRoot:
-			err = json.Unmarshal(data, extra)
-			if err != nil {
-				return fmt.Errorf("decoding extra config to %T: %s", config.extra, err)
-			}
-		default:
-			jsonExtra := struct {
-				Extra *T `json:"extra"`
-			}{
-				Extra: extra,
-			}
-			err = json.Unmarshal(data, &jsonExtra)
-			if err != nil {
-				return fmt.Errorf("decoding extra config to %T: %s",
-					extra, err)
-			}
-		}
-		return nil
+		return unmarshalChainConfigJSONExtraNotRegistered(data, config, extra, reuseJSONRoot)
 	}
+	return unmarshalChainConfigJSONExtraRegistered(data, config)
+}
+
+func unmarshalChainConfigJSONExtraNotRegistered[T any](data []byte, config *ChainConfig,
+	extra *T, reuseJSONRoot bool) (err error) {
+	err = json.Unmarshal(data, (*chainConfigWithoutMethods)(config))
+	switch {
+	case err != nil:
+		return fmt.Errorf("decoding root chain config: %s", err)
+	case extra == nil: // ignore the "extra" JSON key
+	case reuseJSONRoot:
+		err = json.Unmarshal(data, extra)
+		if err != nil {
+			return fmt.Errorf("decoding extra config to %T: %s", config.extra, err)
+		}
+	default:
+		jsonExtra := struct {
+			Extra *T `json:"extra"`
+		}{
+			Extra: extra,
+		}
+		err = json.Unmarshal(data, &jsonExtra)
+		if err != nil {
+			return fmt.Errorf("decoding extra config to %T: %s", extra, err)
+		}
+	}
+	return nil
+}
+
+func unmarshalChainConfigJSONExtraRegistered(data []byte, config *ChainConfig) (err error) {
+	chainConfigWithoutMethods := (*chainConfigWithoutMethods)(config)
 
 	// registered extra and extra config is in the "extra" JSON field.
 	registeredExtraConstructors := registeredExtras.Get()
