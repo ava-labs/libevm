@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/libevm/pseudo"
@@ -141,6 +142,64 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 				require.NoError(t, err, "json.Marshal()")
 				require.Equal(t, want.String(), string(got))
 			})
+		})
+	}
+}
+
+func Test_UnmarshalChainConfigJSON(t *testing.T) {
+	t.Parallel()
+	t.Skip()
+
+	type testExtra struct {
+		Field string `json:"field"`
+	}
+
+	testCases := map[string]struct {
+		jsonData       string // string for convenience
+		expectedConfig ChainConfig
+		expectedExtra  any
+		errMessage     string
+	}{
+		"invalid_json": {
+			expectedExtra: testExtra{},
+			errMessage:    "json decoding root chain config: unexpected end of JSON input",
+		},
+		"no_extra": {
+			jsonData:       `{"chainId": 1}`,
+			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
+			expectedExtra:  testExtra{},
+		},
+		"wrong_extra_type": {
+			jsonData:       `{"chainId": 1, "extra": 1}`,
+			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
+			expectedExtra:  testExtra{},
+			errMessage: "json decoding extra chain config: " +
+				"json: cannot unmarshal number into Go struct field " +
+				".extra of type params.testExtra",
+		},
+		"extra_success": {
+			jsonData:       `{"chainId": 1, "extra": {"field":"value"}}`,
+			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
+			expectedExtra:  testExtra{Field: "value"},
+		},
+	}
+
+	for name, testCase := range testCases {
+		testCase := testCase
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			data := []byte(testCase.jsonData)
+			config := ChainConfig{}
+			var extra testExtra
+			err := UnmarshalChainConfigJSON(data, &config, &extra)
+			if testCase.errMessage == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, testCase.errMessage)
+			}
+			assert.Equal(t, testCase.expectedConfig, config)
+			assert.Equal(t, testCase.expectedExtra, extra)
 		})
 	}
 }
