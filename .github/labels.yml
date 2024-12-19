@@ -12,7 +12,6 @@
 - name: "Category: Documentation ✒️"
   description: "A problem with the readme or a code comment."
   color: "ffc7ea"
-  from_name: "documentation"
 - name: "Category: Bug 🐛"
   color: "ffc7ea"
   from_name: "bug"
