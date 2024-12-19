@@ -152,12 +152,26 @@ func TestHeaderHooks(t *testing.T) {
 		}
 
 		setStub()
-		_, err := json.Marshal(hdr)
-		assert.ErrorIs(t, err, errMarshal, "via json.Marshal()") //nolint:testifylint // require is inappropriate here as we wish to keep going
-		assert.Equal(t, errUnmarshal, json.Unmarshal([]byte("{}"), hdr), "via json.Unmarshal()")
+		// The { } blocks are defensive, avoiding accidentally having the wrong
+		// error checked in a future refactor. The verbosity is acceptable for
+		// clarity in tests.
+		{
+			_, err := json.Marshal(hdr)
+			assert.ErrorIs(t, err, errMarshal, "via json.Marshal()") //nolint:testifylint // require is inappropriate here as we wish to keep going
+		}
+		{
+			err := json.Unmarshal([]byte("{}"), hdr)
+			assert.Equal(t, errUnmarshal, err, "via json.Unmarshal()")
+		}
 
 		setStub() // [stubHeaderHooks] completely overrides the Header
-		assert.Equal(t, errEncode, rlp.Encode(io.Discard, hdr), "via rlp.Encode()")
-		assert.Equal(t, errDecode, rlp.DecodeBytes([]byte{0}, hdr), "via rlp.DecodeBytes()")
+		{
+			err := rlp.Encode(io.Discard, hdr)
+			assert.Equal(t, errEncode, err, "via rlp.Encode()")
+		}
+		{
+			err := rlp.DecodeBytes([]byte{0}, hdr)
+			assert.Equal(t, errDecode, err, "via rlp.DecodeBytes()")
+		}
 	})
 }
