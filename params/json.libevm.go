@@ -46,13 +46,8 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) error {
 	return UnmarshalChainConfigJSON(data, c, extra, reuseJSONRoot)
 }
 
-// UnmarshalChainConfigJSON JSON decodes the given data:
-//   - if the extra is NOT registered AND the `extra` argument is nil, the chain config
-//     is decoded in `config` and the "extra" JSON field is ignored.
-//   - if the extra is NOT registered AND the `extra` argument is NOT nil, the chain config
-//     is decoded in `config` and the "extra" JSON field is decoded in `extra`.
-//   - if the extra is registered, whether the root JSON is re-used for the extra or not,
-//     the chain config is decoded only in the `config` argument.
+// UnmarshalChainConfigJSON JSON decodes the given `data` into `config`, and into `extra` if
+// and only if the extra is not registered.
 func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T, reuseJSONRoot bool) (err error) {
 	if !registeredExtras.Registered() {
 		return unmarshalChainConfigJSONExtraNotRegistered(data, config, extra, reuseJSONRoot)
