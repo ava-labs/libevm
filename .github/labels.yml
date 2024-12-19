@@ -66,3 +66,7 @@
 - name: "Closed: ⚰️ Inactive"
   color: "959a9c"
   description: "No answer was received for weeks"
+- name: "Closed: 🙅 Won't fix"
+  color: "959a9c"
+- name: "Closed: 🧺 Invalid"
+  color: "959a9c"
