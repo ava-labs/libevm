@@ -109,15 +109,11 @@ func toJSONRawMessages(v any) (map[string]json.RawMessage, error) {
 func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T, reuseJSONRoot bool) (err error) {
 	if !registeredExtras.Registered() {
 		err = json.Unmarshal(data, (*chainConfigWithoutMethods)(config))
-		if err != nil {
+		switch {
+		case err != nil:
 			return fmt.Errorf("decoding root chain config: %s", err)
-		}
-
-		if extra == nil { // ignore the "extra" JSON key
-			return nil
-		}
-
-		if reuseJSONRoot {
+		case extra == nil: // ignore the "extra" JSON key
+		case reuseJSONRoot:
 			err = json.Unmarshal(data, (*chainConfigWithoutMethods)(config))
 			if err != nil {
 				return fmt.Errorf("decoding chain config: %s", err)
@@ -127,8 +123,7 @@ func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T,
 			if err != nil {
 				return fmt.Errorf("decoding extra config to %T: %s", config.extra, err)
 			}
-			return nil
-		} else {
+		default:
 			jsonExtra := struct {
 				Extra *T `json:"extra"`
 			}{
@@ -139,8 +134,8 @@ func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T,
 				return fmt.Errorf("decoding extra config to %T: %s",
 					extra, err)
 			}
-			return nil
 		}
+		return nil
 	}
 
 	chainConfigWithoutMethods := (*chainConfigWithoutMethods)(config)
