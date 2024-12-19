@@ -42,7 +42,8 @@ type chainConfigWithExportedExtra struct {
 // UnmarshalJSON implements the [json.Unmarshaler] interface.
 func (c *ChainConfig) UnmarshalJSON(data []byte) error {
 	extra := (*struct{})(nil)
-	return UnmarshalChainConfigJSON(data, c, extra)
+	const reuseJSONRoot = false
+	return UnmarshalChainConfigJSON(data, c, extra, reuseJSONRoot)
 }
 
 // unmarshalJSONWithRegisteredExtra unmarshals JSON under the assumption that the
@@ -120,7 +121,7 @@ func toJSONRawMessages(v any) (map[string]json.RawMessage, error) {
 //     is decoded in `config` and the "extra" JSON field is decoded in `extra`.
 //   - if the extra is registered, whether the root JSON is re-used for the extra or not,
 //     the chain config is decoded only in the `config` argument.
-func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T) (err error) {
+func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T, reuseJSONRoot bool) (err error) {
 	if !registeredExtras.Registered() {
 		err = json.Unmarshal(data, (*chainConfigWithoutMethods)(config))
 		if err != nil {
@@ -130,17 +131,31 @@ func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T)
 		if extra == nil { // ignore the "extra" JSON key
 			return nil
 		}
-		jsonExtra := struct {
-			Extra *T `json:"extra"`
-		}{
-			Extra: extra,
+
+		if reuseJSONRoot {
+			err = json.Unmarshal(data, (*chainConfigWithoutMethods)(config))
+			if err != nil {
+				return fmt.Errorf("decoding chain config: %s", err)
+			}
+
+			err = json.Unmarshal(data, extra)
+			if err != nil {
+				return fmt.Errorf("decoding extra config to %T: %s", config.extra, err)
+			}
+			return nil
+		} else {
+			jsonExtra := struct {
+				Extra *T `json:"extra"`
+			}{
+				Extra: extra,
+			}
+			err = json.Unmarshal(data, &jsonExtra)
+			if err != nil {
+				return fmt.Errorf("decoding extra config to %T: %s",
+					extra, err)
+			}
+			return nil
 		}
-		err = json.Unmarshal(data, &jsonExtra)
-		if err != nil {
-			return fmt.Errorf("decoding extra config to %T: %s",
-				extra, err)
-		}
-		return nil
 	}
 
 	// registered extra and extra config is in the "extra" JSON field.
@@ -159,7 +174,7 @@ func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T)
 	err = json.Unmarshal(data, config.extra)
 	if err != nil {
 		config.extra = nil
-		return fmt.Errorf("decoding chain config to %T: %s", config.extra, err)
+		return fmt.Errorf("decoding extra config to %T: %s", config.extra, err)
 	}
 	return nil
 }
