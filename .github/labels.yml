@@ -61,7 +61,6 @@
   color: "ff9efc"
 - name: "Complexity: 🟦 Easy to do"
   color: "ff9efc"
-  from_name: "good first issue"
 
 # Closing reason
 - name: "Closed: 👥 Duplicate"
