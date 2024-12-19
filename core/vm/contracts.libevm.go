@@ -96,7 +96,7 @@ func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, e
 		return p.Run(input)
 	case statefulPrecompile:
 		env := args.env()
-		ret, err := p(env, input)
+		ret, err := p(env, common.CopyBytes(input))
 		args.gasRemaining = env.Gas()
 		return ret, err
 	}
@@ -143,12 +143,22 @@ type PrecompileEnvironment interface {
 	Rules() params.Rules
 	// StateDB will be non-nil i.f.f !ReadOnly().
 	StateDB() StateDB
-	// ReadOnlyState will always be non-nil.
+	// ReadOnlyState will be non-nil i.f.f. SetPure() has not been called.
 	ReadOnlyState() libevm.StateReader
+
+	// SetReadOnly ensures that all future calls to ReadOnly() will return true.
+	// Is can be used as a guard against accidental writes when a read-only
+	// function is invoked with EVM call() instead of staticcall().
+	SetReadOnly()
+	// SetPure ensures that all future calls to ReadOnly() will return true and
+	// that calls to ReadOnlyState() will return nil.
+	// TODO(arr4n) DO NOT MERGE: change this and SetReadOnly to return new
+	// environments.
+	SetPure()
+	ReadOnly() bool
 
 	IncomingCallType() CallType
 	Addresses() *libevm.AddressContext
-	ReadOnly() bool
 	// Equivalent to respective methods on [Contract].
 	Gas() uint64
 	UseGas(uint64) (hasEnoughGas bool)
@@ -210,3 +220,21 @@ var (
 		(*EVM)(nil).StaticCall,
 	}
 )
+
+// A RevertError is an error that couples [ErrExecutionReverted] with the EVM
+// return buffer. Although not used in vanilla geth, it can be returned by a
+// libevm `precompilegen` method implementation to circumvent regular argument
+// packing.
+type RevertError []byte
+
+// Error is equivalent to the respective method on [ErrExecutionReverted].
+func (e RevertError) Error() string { return ErrExecutionReverted.Error() }
+
+// Bytes returns the return buffer with which an EVM context reverted.
+func (e RevertError) Bytes() []byte { return []byte(e) }
+
+// Is returns true if `err` is directly == to `e` or if `err` is
+// [ErrExecutionReverted].
+func (e RevertError) Is(err error) bool {
+	return error(e) == err || err == ErrExecutionReverted
+}

@@ -33,21 +33,21 @@ import (
 var _ PrecompileEnvironment = (*environment)(nil)
 
 type environment struct {
-	evm      *EVM
-	self     *Contract
-	callType CallType
+	evm        *EVM
+	self       *Contract
+	callType   CallType
+	view, pure bool
 }
 
 func (e *environment) Gas() uint64            { return e.self.Gas }
 func (e *environment) UseGas(gas uint64) bool { return e.self.UseGas(gas) }
 func (e *environment) Value() *uint256.Int    { return new(uint256.Int).Set(e.self.Value()) }
 
-func (e *environment) ChainConfig() *params.ChainConfig  { return e.evm.chainConfig }
-func (e *environment) Rules() params.Rules               { return e.evm.chainRules }
-func (e *environment) ReadOnlyState() libevm.StateReader { return e.evm.StateDB }
-func (e *environment) IncomingCallType() CallType        { return e.callType }
-func (e *environment) BlockNumber() *big.Int             { return new(big.Int).Set(e.evm.Context.BlockNumber) }
-func (e *environment) BlockTime() uint64                 { return e.evm.Context.Time }
+func (e *environment) ChainConfig() *params.ChainConfig { return e.evm.chainConfig }
+func (e *environment) Rules() params.Rules              { return e.evm.chainRules }
+func (e *environment) IncomingCallType() CallType       { return e.callType }
+func (e *environment) BlockNumber() *big.Int            { return new(big.Int).Set(e.evm.Context.BlockNumber) }
+func (e *environment) BlockTime() uint64                { return e.evm.Context.Time }
 
 func (e *environment) refundGas(add uint64) error {
 	gas, overflow := math.SafeAdd(e.self.Gas, add)
@@ -57,6 +57,9 @@ func (e *environment) refundGas(add uint64) error {
 	e.self.Gas = gas
 	return nil
 }
+
+func (e *environment) SetReadOnly() { e.view = true }
+func (e *environment) SetPure()     { e.pure = true }
 
 func (e *environment) ReadOnly() bool {
 	// A switch statement provides clearer code coverage for difficult-to-test
@@ -69,9 +72,25 @@ func (e *environment) ReadOnly() bool {
 		return true
 	case e.evm.interpreter.readOnly:
 		return true
+	case e.view || e.pure:
+		return true
 	default:
 		return false
 	}
+}
+
+func (e *environment) ReadOnlyState() libevm.StateReader {
+	if e.pure {
+		return nil
+	}
+	return e.evm.StateDB
+}
+
+func (e *environment) StateDB() StateDB {
+	if e.ReadOnly() {
+		return nil
+	}
+	return e.evm.StateDB
 }
 
 func (e *environment) Addresses() *libevm.AddressContext {
@@ -80,13 +99,6 @@ func (e *environment) Addresses() *libevm.AddressContext {
 		Caller: e.self.CallerAddress,
 		Self:   e.self.Address(),
 	}
-}
-
-func (e *environment) StateDB() StateDB {
-	if e.ReadOnly() {
-		return nil
-	}
-	return e.evm.StateDB
 }
 
 func (e *environment) BlockHeader() (types.Header, error) {
