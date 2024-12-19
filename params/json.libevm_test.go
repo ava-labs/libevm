@@ -156,6 +156,7 @@ func Test_UnmarshalChainConfigJSON(t *testing.T) {
 
 	testCases := map[string]struct {
 		jsonData       string // string for convenience
+		reuseJSONRoot  bool
 		expectedConfig ChainConfig
 		expectedExtra  any
 		errMessage     string
@@ -192,7 +193,7 @@ func Test_UnmarshalChainConfigJSON(t *testing.T) {
 			data := []byte(testCase.jsonData)
 			config := ChainConfig{}
 			var extra testExtra
-			err := UnmarshalChainConfigJSON(data, &config, &extra)
+			err := UnmarshalChainConfigJSON(data, &config, &extra, testCase.reuseJSONRoot)
 			if testCase.errMessage == "" {
 				require.NoError(t, err)
 			} else {
