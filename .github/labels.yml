@@ -72,6 +72,6 @@
   color: "959a9c"
   description: "No answer was received for weeks"
 - name: "Closed: 🙅 Won't fix"
-  from_name: "wontfix"
+  color: "959a9c"
 - name: "Closed: 🧺 Invalid"
-  from_name: "invalid"
+  color: "959a9c"
