@@ -67,7 +67,6 @@
 - name: "Closed: 👥 Duplicate"
   color: "959a9c"
   description: "Issue duplicates an existing issue"
-  from_name: "duplicate"
 - name: "Closed: ⚰️ Inactive"
   color: "959a9c"
   description: "No answer was received for weeks"
