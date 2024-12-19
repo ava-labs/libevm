@@ -30,8 +30,6 @@
 - name: "Category: Label missing ❗"
   description: "Use this if it feels a label should be added to label this issue"
   color: "ffc7ea"
-- name: "Category: Question / Help wanted ❓"
-  from_name: "question"
 
 # Status
 - name: "Status: 🗯️ Waiting for feedback"
