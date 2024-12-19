@@ -96,7 +96,7 @@ func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, e
 		return p.Run(input)
 	case statefulPrecompile:
 		env := args.env()
-		ret, err := p(env, input)
+		ret, err := p(env, common.CopyBytes(input))
 		args.gasRemaining = env.Gas()
 		return ret, err
 	}
@@ -210,3 +210,21 @@ var (
 		(*EVM)(nil).StaticCall,
 	}
 )
+
+// A RevertError is an error that couples [ErrExecutionReverted] with the EVM
+// return buffer. Although not used in vanilla geth, it can be returned by a
+// libevm `precompilegen` method implementation to circumvent regular argument
+// packing.
+type RevertError []byte
+
+// Error is equivalent to the respective method on [ErrExecutionReverted].
+func (e RevertError) Error() string { return ErrExecutionReverted.Error() }
+
+// Bytes returns the return buffer with which an EVM context reverted.
+func (e RevertError) Bytes() []byte { return []byte(e) }
+
+// Is returns true if `err` is directly == to `e` or if `err` is
+// [ErrExecutionReverted].
+func (e RevertError) Is(err error) bool {
+	return error(e) == err || err == ErrExecutionReverted
+}
