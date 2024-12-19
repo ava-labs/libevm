@@ -46,21 +46,6 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) error {
 	return UnmarshalChainConfigJSON(data, c, extra, reuseJSONRoot)
 }
 
-// unmarshalJSONWithRegisteredExtra unmarshals JSON under the assumption that the
-// registered [Extras] payload is in the JSON "extra" key. All other
-// unmarshalling is performed as if no [Extras] were registered.
-func (c *ChainConfig) unmarshalJSONWithRegisteredExtra(data []byte) error {
-	cc := &chainConfigWithExportedExtra{
-		chainConfigWithoutMethods: (*chainConfigWithoutMethods)(c),
-		Extra:                     registeredExtras.Get().newChainConfig(),
-	}
-	if err := json.Unmarshal(data, cc); err != nil {
-		return err
-	}
-	c.extra = cc.Extra
-	return nil
-}
-
 // MarshalJSON implements the [json.Marshaler] interface.
 func (c *ChainConfig) MarshalJSON() ([]byte, error) {
 	switch reg := registeredExtras; {
@@ -158,14 +143,25 @@ func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T,
 		}
 	}
 
+	chainConfigWithoutMethods := (*chainConfigWithoutMethods)(config)
+
 	// registered extra and extra config is in the "extra" JSON field.
 	if !registeredExtras.Get().reuseJSONRoot {
-		return config.unmarshalJSONWithRegisteredExtra(data)
+		configWrapper := &chainConfigWithExportedExtra{
+			chainConfigWithoutMethods: chainConfigWithoutMethods,
+			Extra:                     registeredExtras.Get().newChainConfig(),
+		}
+		err = json.Unmarshal(data, configWrapper)
+		if err != nil {
+			return fmt.Errorf("decoding chain config and extra: %s", err)
+		}
+		config.extra = configWrapper.extra
+		return nil
 	}
 
 	// registered extra and re-use JSON root, the extra config is contained
 	// in the root config object.
-	err = json.Unmarshal(data, (*chainConfigWithoutMethods)(config))
+	err = json.Unmarshal(data, chainConfigWithoutMethods)
 	if err != nil {
 		return fmt.Errorf("decoding chain config: %s", err)
 	}
