@@ -46,59 +46,6 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) error {
 	return UnmarshalChainConfigJSON(data, c, extra, reuseJSONRoot)
 }
 
-// MarshalJSON implements the [json.Marshaler] interface.
-func (c *ChainConfig) MarshalJSON() ([]byte, error) {
-	switch reg := registeredExtras; {
-	case !reg.Registered():
-		return json.Marshal((*chainConfigWithoutMethods)(c))
-
-	case !reg.Get().reuseJSONRoot:
-		return c.marshalJSONWithExtra()
-
-	default: // reg.reuseJSONRoot == true
-		// The inverse of reusing the JSON root is merging two JSON buffers,
-		// which isn't supported by the native package. So we use
-		// map[string]json.RawMessage intermediates.
-		geth, err := toJSONRawMessages((*chainConfigWithoutMethods)(c))
-		if err != nil {
-			return nil, err
-		}
-		extra, err := toJSONRawMessages(c.extra)
-		if err != nil {
-			return nil, err
-		}
-
-		for k, v := range extra {
-			if _, ok := geth[k]; ok {
-				return nil, fmt.Errorf("duplicate JSON key %q in both %T and registered extra", k, c)
-			}
-			geth[k] = v
-		}
-		return json.Marshal(geth)
-	}
-}
-
-// marshalJSONWithExtra is the inverse of unmarshalJSONWithExtra().
-func (c *ChainConfig) marshalJSONWithExtra() ([]byte, error) {
-	cc := &chainConfigWithExportedExtra{
-		chainConfigWithoutMethods: (*chainConfigWithoutMethods)(c),
-		Extra:                     c.extra,
-	}
-	return json.Marshal(cc)
-}
-
-func toJSONRawMessages(v any) (map[string]json.RawMessage, error) {
-	buf, err := json.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-	msgs := make(map[string]json.RawMessage)
-	if err := json.Unmarshal(buf, &msgs); err != nil {
-		return nil, err
-	}
-	return msgs, nil
-}
-
 // UnmarshalChainConfigJSON JSON decodes the given data:
 //   - if the extra is NOT registered AND the `extra` argument is nil, the chain config
 //     is decoded in `config` and the "extra" JSON field is ignored.
@@ -164,4 +111,57 @@ func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T,
 		return fmt.Errorf("decoding extra config to %T: %s", config.extra, err)
 	}
 	return nil
+}
+
+// MarshalJSON implements the [json.Marshaler] interface.
+func (c *ChainConfig) MarshalJSON() ([]byte, error) {
+	switch reg := registeredExtras; {
+	case !reg.Registered():
+		return json.Marshal((*chainConfigWithoutMethods)(c))
+
+	case !reg.Get().reuseJSONRoot:
+		return c.marshalJSONWithExtra()
+
+	default: // reg.reuseJSONRoot == true
+		// The inverse of reusing the JSON root is merging two JSON buffers,
+		// which isn't supported by the native package. So we use
+		// map[string]json.RawMessage intermediates.
+		geth, err := toJSONRawMessages((*chainConfigWithoutMethods)(c))
+		if err != nil {
+			return nil, err
+		}
+		extra, err := toJSONRawMessages(c.extra)
+		if err != nil {
+			return nil, err
+		}
+
+		for k, v := range extra {
+			if _, ok := geth[k]; ok {
+				return nil, fmt.Errorf("duplicate JSON key %q in both %T and registered extra", k, c)
+			}
+			geth[k] = v
+		}
+		return json.Marshal(geth)
+	}
+}
+
+// marshalJSONWithExtra is the inverse of unmarshalJSONWithExtra().
+func (c *ChainConfig) marshalJSONWithExtra() ([]byte, error) {
+	cc := &chainConfigWithExportedExtra{
+		chainConfigWithoutMethods: (*chainConfigWithoutMethods)(c),
+		Extra:                     c.extra,
+	}
+	return json.Marshal(cc)
+}
+
+func toJSONRawMessages(v any) (map[string]json.RawMessage, error) {
+	buf, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	msgs := make(map[string]json.RawMessage)
+	if err := json.Unmarshal(buf, &msgs); err != nil {
+		return nil, err
+	}
+	return msgs, nil
 }
