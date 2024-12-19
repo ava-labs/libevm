@@ -107,18 +107,15 @@ func toJSONRawMessages(v any) (map[string]json.RawMessage, error) {
 //   - if the extra is registered, whether the root JSON is re-used for the extra or not,
 //     the chain config is decoded only in the `config` argument.
 func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T, reuseJSONRoot bool) (err error) {
+	chainConfigWithoutMethods := (*chainConfigWithoutMethods)(config)
+
 	if !registeredExtras.Registered() {
-		err = json.Unmarshal(data, (*chainConfigWithoutMethods)(config))
+		err = json.Unmarshal(data, chainConfigWithoutMethods)
 		switch {
 		case err != nil:
 			return fmt.Errorf("decoding root chain config: %s", err)
 		case extra == nil: // ignore the "extra" JSON key
 		case reuseJSONRoot:
-			err = json.Unmarshal(data, (*chainConfigWithoutMethods)(config))
-			if err != nil {
-				return fmt.Errorf("decoding chain config: %s", err)
-			}
-
 			err = json.Unmarshal(data, extra)
 			if err != nil {
 				return fmt.Errorf("decoding extra config to %T: %s", config.extra, err)
@@ -138,13 +135,12 @@ func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T,
 		return nil
 	}
 
-	chainConfigWithoutMethods := (*chainConfigWithoutMethods)(config)
-
 	// registered extra and extra config is in the "extra" JSON field.
-	if !registeredExtras.Get().reuseJSONRoot {
+	registeredExtraConstructors := registeredExtras.Get()
+	if !registeredExtraConstructors.reuseJSONRoot {
 		configWrapper := &chainConfigWithExportedExtra{
 			chainConfigWithoutMethods: chainConfigWithoutMethods,
-			Extra:                     registeredExtras.Get().newChainConfig(),
+			Extra:                     registeredExtraConstructors.newChainConfig(),
 		}
 		err = json.Unmarshal(data, configWrapper)
 		if err != nil {
@@ -161,7 +157,7 @@ func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T,
 		return fmt.Errorf("decoding chain config: %s", err)
 	}
 
-	config.extra = registeredExtras.Get().newChainConfig()
+	config.extra = registeredExtraConstructors.newChainConfig()
 	err = json.Unmarshal(data, config.extra)
 	if err != nil {
 		config.extra = nil
