@@ -153,7 +153,7 @@ func TestUnmarshalChainConfigJSON(t *testing.T) {
 
 	testCases := map[string]struct {
 		jsonData       string // string for convenience
-		extra          any
+		extra          *testExtra
 		reuseJSONRoot  bool
 		expectedConfig ChainConfig
 		expectedExtra  any
@@ -166,9 +166,9 @@ func TestUnmarshalChainConfigJSON(t *testing.T) {
 		},
 		"nil_extra": {
 			jsonData:       `{"chainId": 1}`,
-			extra:          &testExtra{},
+			extra:          nil,
 			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
-			expectedExtra:  &testExtra{},
+			expectedExtra:  (*testExtra)(nil),
 		},
 		"no_extra_at_extra_key": {
 			jsonData:       `{"chainId": 1}`,
