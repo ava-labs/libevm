@@ -128,20 +128,18 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 			t.Cleanup(TestOnlyClearRegisteredExtras)
 			tt.register()
 
-			t.Run("json.Unmarshal()", func(t *testing.T) {
-				got := new(ChainConfig)
-				require.NoError(t, json.Unmarshal([]byte(tt.jsonInput), got))
-				require.Equal(t, tt.want, got)
-			})
+			expectedEncoded := bytes.NewBuffer(nil)
+			err := json.Compact(expectedEncoded, []byte(tt.jsonInput))
+			require.NoError(t, err)
 
-			t.Run("json.Marshal()", func(t *testing.T) {
-				var want bytes.Buffer
-				require.NoError(t, json.Compact(&want, []byte(tt.jsonInput)), "json.Compact()")
+			encoded, err := json.Marshal(tt.want)
+			require.NoError(t, err, "encoding error")
+			require.Equal(t, expectedEncoded.String(), string(encoded))
 
-				got, err := json.Marshal(tt.want)
-				require.NoError(t, err, "json.Marshal()")
-				require.Equal(t, want.String(), string(got))
-			})
+			decoded := new(ChainConfig)
+			err = json.Unmarshal(encoded, decoded)
+			require.NoError(t, err, "decoding error")
+			require.Equal(t, tt.want, decoded)
 		})
 	}
 }
