@@ -144,9 +144,8 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 	}
 }
 
-func Test_UnmarshalChainConfigJSON(t *testing.T) {
+func TestUnmarshalChainConfigJSON(t *testing.T) {
 	t.Parallel()
-	t.Skip()
 
 	type testExtra struct {
 		Field string `json:"field"`
@@ -161,7 +160,7 @@ func Test_UnmarshalChainConfigJSON(t *testing.T) {
 	}{
 		"invalid_json": {
 			expectedExtra: testExtra{},
-			errMessage:    "json decoding root chain config: unexpected end of JSON input",
+			errMessage:    "decoding root chain config: unexpected end of JSON input",
 		},
 		"no_extra": {
 			jsonData:       `{"chainId": 1}`,
@@ -172,7 +171,7 @@ func Test_UnmarshalChainConfigJSON(t *testing.T) {
 			jsonData:       `{"chainId": 1, "extra": 1}`,
 			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
 			expectedExtra:  testExtra{},
-			errMessage: "json decoding extra chain config: " +
+			errMessage: "decoding extra config to *params.testExtra: " +
 				"json: cannot unmarshal number into Go struct field " +
 				".extra of type params.testExtra",
 		},
