@@ -39,34 +39,33 @@ type chainConfigWithExportedExtra struct {
 	Extra                      *pseudo.Type `json:"extra"` // `c.extra` is otherwise unexported
 }
 
-// UnmarshalJSON implements the [json.Unmarshaler] interface.
-func (c *ChainConfig) UnmarshalJSON(data []byte) error {
-	extra := (*struct{})(nil)
-	const reuseJSONRoot = false
-	return UnmarshalChainConfigJSON(data, c, extra, reuseJSONRoot)
+// UnmarshalJSON implements the [json.Unmarshaler] interface and JSON decodes
+// `data` according to the following:
+//   - extra is not registered:
+//     `data` is decoded into `c` and the extra is ignored.
+//   - extra is registered and the registered reuseJSONRoot field is false:
+//     `data` is decoded into `c` and the "extra" JSON field in `data` is decoded into `c.extra`.
+//   - extra is registered and the registered reuseJSONRoot field is true:
+//     `data` is decoded into `c` and `data` is decoded into `c.extra`.
+func (c *ChainConfig) UnmarshalJSON(data []byte) (err error) {
+	if !registeredExtras.Registered() {
+		// assume there is no extra
+		return json.Unmarshal(data, (*chainConfigWithoutMethods)(c))
+	}
+	extraConstructors := registeredExtras.Get()
+	c.extra = extraConstructors.newChainConfig()
+	reuseJSONRoot := extraConstructors.reuseJSONRoot
+	return UnmarshalChainConfigJSON(data, c, c.extra, reuseJSONRoot)
 }
 
 // UnmarshalChainConfigJSON JSON decodes `data` according to the following.
-//   - extra is not registered, `extra` is not nil and `reuseJSONRoot` is false:
+//   - `extra` is not nil and `reuseJSONRoot` is false:
 //     `data` is decoded into `config` and the "extra" JSON field in `data` is decoded into `extra`.
-//   - extra is not registered, `extra` is not nil and `reuseJSONRoot` is true:
+//   - `extra` is not nil and `reuseJSONRoot` is true:
 //     `data` is decoded into `config` and `data` is decoded into `extra`.
-//   - extra is not registered, `extra` is nil:
-//     `data` is decoded into `config` and the extra, whether at the root JSON depth
-//     of `data` or at the "extra" JSON field, is ignored.
-//   - extra is registered and the registered reuseJSONRoot field is false:
-//     `data` is decoded into `config` and the "extra" JSON field in `data` is decoded into `config.extra`.
-//   - extra is registered and the registered reuseJSONRoot field is true:
-//     `data` is decoded into `config` and `data` is decoded into `config.extra`.
+//   - `extra` is nil:
+//     `data` is decoded into `config` and the extra is ignored.
 func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T, reuseJSONRoot bool) (err error) {
-	if !registeredExtras.Registered() {
-		return unmarshalChainConfigJSONExtraNotRegistered(data, config, extra, reuseJSONRoot)
-	}
-	return unmarshalChainConfigJSONExtraRegistered(data, config)
-}
-
-func unmarshalChainConfigJSONExtraNotRegistered[T any](data []byte, config *ChainConfig,
-	extra *T, reuseJSONRoot bool) (err error) {
 	err = json.Unmarshal(data, (*chainConfigWithoutMethods)(config))
 	switch {
 	case err != nil:
@@ -75,7 +74,7 @@ func unmarshalChainConfigJSONExtraNotRegistered[T any](data []byte, config *Chai
 	case reuseJSONRoot:
 		err = json.Unmarshal(data, extra)
 		if err != nil {
-			return fmt.Errorf("decoding extra config to %T: %s", config.extra, err)
+			return fmt.Errorf("decoding extra config to %T: %s", extra, err)
 		}
 	default:
 		jsonExtra := struct {
@@ -87,40 +86,6 @@ func unmarshalChainConfigJSONExtraNotRegistered[T any](data []byte, config *Chai
 		if err != nil {
 			return fmt.Errorf("decoding extra config to %T: %s", extra, err)
 		}
-	}
-	return nil
-}
-
-func unmarshalChainConfigJSONExtraRegistered(data []byte, config *ChainConfig) (err error) {
-	chainConfigWithoutMethods := (*chainConfigWithoutMethods)(config)
-
-	// registered extra and extra config is in the "extra" JSON field.
-	registeredExtraConstructors := registeredExtras.Get()
-	if !registeredExtraConstructors.reuseJSONRoot {
-		configWrapper := &chainConfigWithExportedExtra{
-			chainConfigWithoutMethods: chainConfigWithoutMethods,
-			Extra:                     registeredExtraConstructors.newChainConfig(),
-		}
-		err = json.Unmarshal(data, configWrapper)
-		if err != nil {
-			return fmt.Errorf("decoding chain config and extra: %s", err)
-		}
-		config.extra = configWrapper.Extra // Note: "Extra" field, not "extra"
-		return nil
-	}
-
-	// registered extra and re-use JSON root, the extra config is contained
-	// in the root config object.
-	err = json.Unmarshal(data, chainConfigWithoutMethods)
-	if err != nil {
-		return fmt.Errorf("decoding chain config: %s", err)
-	}
-
-	config.extra = registeredExtraConstructors.newChainConfig()
-	err = json.Unmarshal(data, config.extra)
-	if err != nil {
-		config.extra = nil
-		return fmt.Errorf("decoding extra config to %T: %s", config.extra, err)
 	}
 	return nil
 }
