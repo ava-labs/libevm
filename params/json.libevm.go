@@ -95,7 +95,7 @@ func unmarshalChainConfigJSONExtraRegistered(data []byte, config *ChainConfig) (
 		if err != nil {
 			return fmt.Errorf("decoding chain config and extra: %s", err)
 		}
-		config.extra = configWrapper.extra
+		config.extra = configWrapper.Extra // Note: "Extra" field, not "extra"
 		return nil
 	}
 
