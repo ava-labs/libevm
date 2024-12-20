@@ -65,7 +65,7 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) (err error) {
 //     `data` is decoded into `config` and `data` is decoded into `extra`.
 //   - `extra` is nil:
 //     `data` is decoded into `config` and the extra is ignored.
-func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T, reuseJSONRoot bool) (err error) {
+func UnmarshalChainConfigJSON(data []byte, config *ChainConfig, extra any, reuseJSONRoot bool) (err error) {
 	err = json.Unmarshal(data, (*chainConfigWithoutMethods)(config))
 	switch {
 	case err != nil:
@@ -78,7 +78,7 @@ func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T,
 		}
 	default:
 		jsonExtra := struct {
-			Extra *T `json:"extra"`
+			Extra any `json:"extra"`
 		}{
 			Extra: extra,
 		}
