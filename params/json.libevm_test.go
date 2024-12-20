@@ -153,53 +153,67 @@ func TestUnmarshalChainConfigJSON(t *testing.T) {
 
 	testCases := map[string]struct {
 		jsonData       string // string for convenience
+		extra          any
 		reuseJSONRoot  bool
 		expectedConfig ChainConfig
 		expectedExtra  any
 		errMessage     string
 	}{
 		"invalid_json": {
-			expectedExtra: testExtra{},
+			extra:         &testExtra{},
+			expectedExtra: &testExtra{},
 			errMessage:    "decoding root chain config: unexpected end of JSON input",
+		},
+		"nil_extra": {
+			jsonData:       `{"chainId": 1}`,
+			extra:          &testExtra{},
+			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
+			expectedExtra:  &testExtra{},
 		},
 		"no_extra_at_extra_key": {
 			jsonData:       `{"chainId": 1}`,
+			extra:          &testExtra{},
 			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
-			expectedExtra:  testExtra{},
+			expectedExtra:  &testExtra{},
 		},
 		"no_extra_at_root_depth": {
 			jsonData:       `{"chainId": 1}`,
+			extra:          &testExtra{},
 			reuseJSONRoot:  true,
 			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
-			expectedExtra:  testExtra{},
+			expectedExtra:  &testExtra{},
 		},
 		"wrong_extra_type_at_extra_key": {
 			jsonData:       `{"chainId": 1, "extra": 1}`,
+			extra:          &testExtra{},
 			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
-			expectedExtra:  testExtra{},
+			expectedExtra:  &testExtra{},
 			errMessage: "decoding extra config to *params.testExtra: " +
 				"json: cannot unmarshal number into Go struct field " +
 				".extra of type params.testExtra",
 		},
 		"wrong_extra_type_at_root_depth": {
 			jsonData:       `{"chainId": 1, "field": 1}`,
+			extra:          &testExtra{},
 			reuseJSONRoot:  true,
 			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
-			expectedExtra:  testExtra{},
+			expectedExtra:  &testExtra{},
 			errMessage: "decoding extra config to *params.testExtra: " +
 				"json: cannot unmarshal number into Go struct field " +
 				"testExtra.field of type string",
 		},
 		"extra_success_at_extra_key": {
 			jsonData:       `{"chainId": 1, "extra": {"field":"value"}}`,
+			extra:          &testExtra{},
 			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
-			expectedExtra:  testExtra{Field: "value"},
+			expectedExtra:  &testExtra{Field: "value"},
 		},
 		"extra_success_at_root_depth": {
 			jsonData:       `{"chainId": 1, "field":"value"}`,
+			extra:          &testExtra{},
 			reuseJSONRoot:  true,
 			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
-			expectedExtra:  testExtra{Field: "value"},
+			expectedExtra:  &testExtra{Field: "value"},
 		},
 	}
 
@@ -210,15 +224,14 @@ func TestUnmarshalChainConfigJSON(t *testing.T) {
 
 			data := []byte(testCase.jsonData)
 			config := ChainConfig{}
-			var extra testExtra
-			err := UnmarshalChainConfigJSON(data, &config, &extra, testCase.reuseJSONRoot)
+			err := UnmarshalChainConfigJSON(data, &config, testCase.extra, testCase.reuseJSONRoot)
 			if testCase.errMessage == "" {
 				require.NoError(t, err)
 			} else {
 				require.EqualError(t, err, testCase.errMessage)
 			}
 			assert.Equal(t, testCase.expectedConfig, config)
-			assert.Equal(t, testCase.expectedExtra, extra)
+			assert.Equal(t, testCase.expectedExtra, testCase.extra)
 		})
 	}
 }
