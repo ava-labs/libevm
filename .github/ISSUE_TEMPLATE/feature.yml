@@ -12,4 +12,4 @@ body:
   - type: textarea
     id: description
     attributes:
-      label: "Would you have any idea on how to implement it?"
+      label: "How would you recommend implementing it?"
