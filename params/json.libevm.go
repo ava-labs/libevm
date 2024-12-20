@@ -46,8 +46,18 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) error {
 	return UnmarshalChainConfigJSON(data, c, extra, reuseJSONRoot)
 }
 
-// UnmarshalChainConfigJSON JSON decodes the given `data` into `config`, and into `extra` if
-// and only if the extra is not registered.
+// UnmarshalChainConfigJSON JSON decodes `data` according to the following.
+//   - extra is not registered, `extra` is not nil and `reuseJSONRoot` is false:
+//     `data` is decoded into `config` and the "extra" JSON field in `data` is decoded into `extra`.
+//   - extra is not registered, `extra` is not nil and `reuseJSONRoot` is true:
+//     `data` is decoded into `config` and `data` is decoded into `extra`.
+//   - extra is not registered, `extra` is nil:
+//     `data` is decoded into `config` and the extra, whether at the root JSON depth
+//     of `data` or at the "extra" JSON field, is ignored.
+//   - extra is registered and the registered reuseJSONRoot field is false:
+//     `data` is decoded into `config` and the "extra" JSON field in `data` is decoded into `config.extra`.
+//   - extra is registered and the registered reuseJSONRoot field is true:
+//     `data` is decoded into `config` and `data` is decoded into `config.extra`.
 func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T, reuseJSONRoot bool) (err error) {
 	if !registeredExtras.Registered() {
 		return unmarshalChainConfigJSONExtraNotRegistered(data, config, extra, reuseJSONRoot)
@@ -61,7 +71,7 @@ func unmarshalChainConfigJSONExtraNotRegistered[T any](data []byte, config *Chai
 	switch {
 	case err != nil:
 		return fmt.Errorf("decoding root chain config: %s", err)
-	case extra == nil: // ignore the "extra" JSON key
+	case extra == nil: // ignore the extra, whether at the root JSON depth, or at the "extra" JSON field.
 	case reuseJSONRoot:
 		err = json.Unmarshal(data, extra)
 		if err != nil {
