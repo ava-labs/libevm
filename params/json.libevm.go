@@ -19,8 +19,6 @@ package params
 import (
 	"encoding/json"
 	"fmt"
-
-	"github.com/ava-labs/libevm/libevm/pseudo"
 )
 
 var _ interface {
@@ -31,13 +29,6 @@ var _ interface {
 // chainConfigWithoutMethods avoids infinite recurion into
 // [ChainConfig.UnmarshalJSON].
 type chainConfigWithoutMethods ChainConfig
-
-// chainConfigWithExportedExtra supports JSON (un)marshalling of a [ChainConfig]
-// while exposing the `extra` field as the "extra" JSON key.
-type chainConfigWithExportedExtra struct {
-	*chainConfigWithoutMethods              // embedded to achieve regular JSON unmarshalling
-	Extra                      *pseudo.Type `json:"extra"` // `c.extra` is otherwise unexported
-}
 
 // UnmarshalJSON implements the [json.Unmarshaler] interface and JSON decodes
 // `data` according to the following:
@@ -92,43 +83,58 @@ func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T,
 
 // MarshalJSON implements the [json.Marshaler] interface.
 func (c *ChainConfig) MarshalJSON() ([]byte, error) {
-	switch reg := registeredExtras; {
-	case !reg.Registered():
+	if !registeredExtras.Registered() {
+		// assume there is no extra
 		return json.Marshal((*chainConfigWithoutMethods)(c))
-
-	case !reg.Get().reuseJSONRoot:
-		return c.marshalJSONWithExtra()
-
-	default: // reg.reuseJSONRoot == true
-		// The inverse of reusing the JSON root is merging two JSON buffers,
-		// which isn't supported by the native package. So we use
-		// map[string]json.RawMessage intermediates.
-		geth, err := toJSONRawMessages((*chainConfigWithoutMethods)(c))
-		if err != nil {
-			return nil, err
-		}
-		extra, err := toJSONRawMessages(c.extra)
-		if err != nil {
-			return nil, err
-		}
-
-		for k, v := range extra {
-			if _, ok := geth[k]; ok {
-				return nil, fmt.Errorf("duplicate JSON key %q in both %T and registered extra", k, c)
-			}
-			geth[k] = v
-		}
-		return json.Marshal(geth)
 	}
+	extraConstructors := registeredExtras.Get()
+	reuseJSONRoot := extraConstructors.reuseJSONRoot
+	return MarshalChainConfigJSON(*c, c.extra, reuseJSONRoot)
 }
 
-// marshalJSONWithExtra is the inverse of unmarshalJSONWithExtra().
-func (c *ChainConfig) marshalJSONWithExtra() ([]byte, error) {
-	cc := &chainConfigWithExportedExtra{
-		chainConfigWithoutMethods: (*chainConfigWithoutMethods)(c),
-		Extra:                     c.extra,
+// MarshalChainConfigJSON JSON encodes `config` and `extra` according to the following.
+//   - `reuseJSONRoot` is false:
+//     `config` is encoded with `extra` encoded at the "extra" JSON field.
+//   - `reuseJSONRoot` is true:
+//     `config` is encoded with `extra` encoded at the root depth of the JSON object.
+func MarshalChainConfigJSON[T any](config ChainConfig, extra T, reuseJSONRoot bool) (data []byte, err error) {
+	if !reuseJSONRoot {
+		jsonExtra := struct {
+			ChainConfig
+			Extra T `json:"extra,omitempty"`
+		}{
+			ChainConfig: config,
+			Extra:       extra,
+		}
+		data, err = json.Marshal(jsonExtra)
+		if err != nil {
+			return nil, fmt.Errorf("encoding config with extra: %s", err)
+		}
+		return data, nil
 	}
-	return json.Marshal(cc)
+
+	// The inverse of reusing the JSON root is merging two JSON buffers,
+	// which isn't supported by the native package. So we use
+	// map[string]json.RawMessage intermediates.
+	// Note we cannot encode a combined struct directly because of the extra
+	// type generic nature which cannot be embedded in such a combined struct.
+	configJSONRaw, err := toJSONRawMessages((chainConfigWithoutMethods)(config))
+	if err != nil {
+		return nil, fmt.Errorf("converting config to JSON raw messages: %s", err)
+	}
+	extraJSONRaw, err := toJSONRawMessages(extra)
+	if err != nil {
+		return nil, fmt.Errorf("converting extra config to JSON raw messages: %s", err)
+	}
+
+	for k, v := range extraJSONRaw {
+		_, ok := configJSONRaw[k]
+		if ok {
+			return nil, fmt.Errorf("duplicate JSON key %q in ChainConfig and extra %T", k, extra)
+		}
+		configJSONRaw[k] = v
+	}
+	return json.Marshal(configJSONRaw)
 }
 
 func toJSONRawMessages(v any) (map[string]json.RawMessage, error) {

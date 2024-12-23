@@ -244,3 +244,76 @@ func TestUnmarshalChainConfigJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestMarshalChainConfigJSON(t *testing.T) {
+	t.Parallel()
+
+	testCases := map[string]struct {
+		config        ChainConfig
+		extra         any
+		reuseJSONRoot bool
+		jsonData      string // string for convenience
+		errMessage    string
+	}{
+		"invalid_extra_at_extra_key": {
+			extra: struct {
+				Field chan struct{} `json:"field"`
+			}{},
+			errMessage: "encoding config with extra: " +
+				"json: unsupported type: chan struct {}",
+		},
+		"nil_extra_at_extra_key": {
+			jsonData: `{"chainId":null}`,
+		},
+		"extra_at_extra_key": {
+			extra: struct {
+				Field string `json:"field"`
+			}{Field: "value"},
+			jsonData: `{"chainId":null,"extra":{"field":"value"}}`,
+		},
+		"invalid_extra_at_root_depth": {
+			extra: struct {
+				Field chan struct{} `json:"field"`
+			}{},
+			reuseJSONRoot: true,
+			errMessage: "converting extra config to JSON raw messages: " +
+				"json: unsupported type: chan struct {}",
+		},
+		"duplicate_key": {
+			extra: struct {
+				Field string `json:"chainId"`
+			}{},
+			reuseJSONRoot: true,
+			errMessage: `duplicate JSON key "chainId" in ChainConfig` +
+				` and extra struct { Field string "json:\"chainId\"" }`,
+		},
+		"nil_extra_at_root_depth": {
+			extra:         nil,
+			reuseJSONRoot: true,
+			jsonData:      `{"chainId":null}`,
+		},
+		"extra_at_root_depth": {
+			extra: struct {
+				Field string `json:"field"`
+			}{},
+			reuseJSONRoot: true,
+			jsonData:      `{"chainId":null,"field":""}`,
+		},
+	}
+
+	for name, testCase := range testCases {
+		testCase := testCase
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			config := ChainConfig{}
+			data, err := MarshalChainConfigJSON(config, testCase.extra, testCase.reuseJSONRoot)
+			if testCase.errMessage == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, testCase.errMessage)
+			}
+			assert.Equal(t, testCase.jsonData, string(data))
+		})
+	}
+}
