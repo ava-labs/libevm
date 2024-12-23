@@ -59,18 +59,18 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) (err error) {
 }
 
 // UnmarshalChainConfigJSON JSON decodes `data` according to the following.
-//   - `extra` is not nil and `reuseJSONRoot` is false:
+//   - `reuseJSONRoot` is false:
 //     `data` is decoded into `config` and the "extra" JSON field in `data` is decoded into `extra`.
-//   - `extra` is not nil and `reuseJSONRoot` is true:
+//   - `reuseJSONRoot` is true:
 //     `data` is decoded into `config` and `data` is decoded into `extra`.
-//   - `extra` is nil:
-//     `data` is decoded into `config` and the extra is ignored.
 func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T, reuseJSONRoot bool) (err error) {
+	if extra == nil {
+		return fmt.Errorf("extra pointer argument is nil")
+	}
 	err = json.Unmarshal(data, (*chainConfigWithoutMethods)(config))
 	switch {
 	case err != nil:
 		return fmt.Errorf("decoding root chain config: %s", err)
-	case extra == nil: // ignore the extra, whether at the root JSON depth, or at the "extra" JSON field.
 	case reuseJSONRoot:
 		err = json.Unmarshal(data, extra)
 		if err != nil {
