@@ -40,7 +40,6 @@ type chainConfigWithoutMethods ChainConfig
 //     `data` is decoded into `c` and `data` is decoded into `c.extra`.
 func (c *ChainConfig) UnmarshalJSON(data []byte) (err error) {
 	if !registeredExtras.Registered() {
-		// assume there is no extra
 		return json.Unmarshal(data, (*chainConfigWithoutMethods)(c))
 	}
 	extraConstructors := registeredExtras.Get()
@@ -91,7 +90,6 @@ func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T,
 //     `c` is encoded with `c.extra` encoded at the root depth of the JSON object.
 func (c *ChainConfig) MarshalJSON() ([]byte, error) {
 	if !registeredExtras.Registered() {
-		// assume there is no extra
 		return json.Marshal((*chainConfigWithoutMethods)(c))
 	}
 	extraConstructors := registeredExtras.Get()
