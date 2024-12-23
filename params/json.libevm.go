@@ -44,8 +44,7 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) (err error) {
 	}
 	extraConstructors := registeredExtras.Get()
 	c.extra = extraConstructors.newChainConfig()
-	reuseJSONRoot := extraConstructors.reuseJSONRoot
-	return UnmarshalChainConfigJSON(data, c, c.extra, reuseJSONRoot)
+	return UnmarshalChainConfigJSON(data, c, c.extra, extraConstructors.reuseJSONRoot)
 }
 
 // UnmarshalChainConfigJSON JSON decodes `data` according to the following.
@@ -93,8 +92,7 @@ func (c *ChainConfig) MarshalJSON() ([]byte, error) {
 		return json.Marshal((*chainConfigWithoutMethods)(c))
 	}
 	extraConstructors := registeredExtras.Get()
-	reuseJSONRoot := extraConstructors.reuseJSONRoot
-	return MarshalChainConfigJSON(*c, c.extra, reuseJSONRoot)
+	return MarshalChainConfigJSON(*c, c.extra, extraConstructors.reuseJSONRoot)
 }
 
 // MarshalChainConfigJSON JSON encodes `config` and `extra` according to the following.
