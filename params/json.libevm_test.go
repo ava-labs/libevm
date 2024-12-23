@@ -155,73 +155,73 @@ func TestUnmarshalChainConfigJSON(t *testing.T) {
 		jsonData       string // string for convenience
 		extra          *testExtra
 		reuseJSONRoot  bool
-		expectedConfig ChainConfig
-		expectedExtra  any
-		errMessage     string
+		wantConfig     ChainConfig
+		wantExtra      any
+		wantErrMessage string
 	}{
 		"invalid_json": {
-			extra:         &testExtra{},
-			expectedExtra: &testExtra{},
-			errMessage: "decoding config to combined of chain config and *params.testExtra: " +
+			extra:     &testExtra{},
+			wantExtra: &testExtra{},
+			wantErrMessage: "decoding config to combined of chain config and *params.testExtra: " +
 				"unexpected end of JSON input",
 		},
 		"nil_extra_at_root_depth": {
-			jsonData:      `{"chainId": 1}`,
-			extra:         nil,
-			reuseJSONRoot: true,
-			expectedExtra: (*testExtra)(nil),
-			errMessage:    "extra pointer argument is nil",
+			jsonData:       `{"chainId": 1}`,
+			extra:          nil,
+			reuseJSONRoot:  true,
+			wantExtra:      (*testExtra)(nil),
+			wantErrMessage: "extra pointer argument is nil",
 		},
 		"nil_extra_at_extra_key": {
-			jsonData:      `{"chainId": 1}`,
-			extra:         nil,
-			expectedExtra: (*testExtra)(nil),
-			errMessage:    "extra pointer argument is nil",
+			jsonData:       `{"chainId": 1}`,
+			extra:          nil,
+			wantExtra:      (*testExtra)(nil),
+			wantErrMessage: "extra pointer argument is nil",
 		},
 		"no_extra_at_extra_key": {
-			jsonData:       `{"chainId": 1}`,
-			extra:          &testExtra{},
-			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
-			expectedExtra:  &testExtra{},
+			jsonData:   `{"chainId": 1}`,
+			extra:      &testExtra{},
+			wantConfig: ChainConfig{ChainID: big.NewInt(1)},
+			wantExtra:  &testExtra{},
 		},
 		"no_extra_at_root_depth": {
-			jsonData:       `{"chainId": 1}`,
-			extra:          &testExtra{},
-			reuseJSONRoot:  true,
-			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
-			expectedExtra:  &testExtra{},
+			jsonData:      `{"chainId": 1}`,
+			extra:         &testExtra{},
+			reuseJSONRoot: true,
+			wantConfig:    ChainConfig{ChainID: big.NewInt(1)},
+			wantExtra:     &testExtra{},
 		},
 		"wrong_extra_type_at_extra_key": {
-			jsonData:       `{"chainId": 1, "extra": 1}`,
-			extra:          &testExtra{},
-			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
-			expectedExtra:  &testExtra{},
-			errMessage: "decoding config to combined of chain config and *params.testExtra: " +
+			jsonData:   `{"chainId": 1, "extra": 1}`,
+			extra:      &testExtra{},
+			wantConfig: ChainConfig{ChainID: big.NewInt(1)},
+			wantExtra:  &testExtra{},
+			wantErrMessage: "decoding config to combined of chain config and *params.testExtra: " +
 				"json: cannot unmarshal number into Go struct field " +
 				".extra of type params.testExtra",
 		},
 		"wrong_extra_type_at_root_depth": {
-			jsonData:       `{"chainId": 1, "field": 1}`,
-			extra:          &testExtra{},
-			reuseJSONRoot:  true,
-			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
-			expectedExtra:  &testExtra{},
-			errMessage: "decoding extra config to *params.testExtra: " +
+			jsonData:      `{"chainId": 1, "field": 1}`,
+			extra:         &testExtra{},
+			reuseJSONRoot: true,
+			wantConfig:    ChainConfig{ChainID: big.NewInt(1)},
+			wantExtra:     &testExtra{},
+			wantErrMessage: "decoding extra config to *params.testExtra: " +
 				"json: cannot unmarshal number into Go struct field " +
 				"testExtra.field of type string",
 		},
 		"extra_success_at_extra_key": {
-			jsonData:       `{"chainId": 1, "extra": {"field":"value"}}`,
-			extra:          &testExtra{},
-			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
-			expectedExtra:  &testExtra{Field: "value"},
+			jsonData:   `{"chainId": 1, "extra": {"field":"value"}}`,
+			extra:      &testExtra{},
+			wantConfig: ChainConfig{ChainID: big.NewInt(1)},
+			wantExtra:  &testExtra{Field: "value"},
 		},
 		"extra_success_at_root_depth": {
-			jsonData:       `{"chainId": 1, "field":"value"}`,
-			extra:          &testExtra{},
-			reuseJSONRoot:  true,
-			expectedConfig: ChainConfig{ChainID: big.NewInt(1)},
-			expectedExtra:  &testExtra{Field: "value"},
+			jsonData:      `{"chainId": 1, "field":"value"}`,
+			extra:         &testExtra{},
+			reuseJSONRoot: true,
+			wantConfig:    ChainConfig{ChainID: big.NewInt(1)},
+			wantExtra:     &testExtra{Field: "value"},
 		},
 	}
 
@@ -233,13 +233,13 @@ func TestUnmarshalChainConfigJSON(t *testing.T) {
 			data := []byte(testCase.jsonData)
 			config := ChainConfig{}
 			err := UnmarshalChainConfigJSON(data, &config, testCase.extra, testCase.reuseJSONRoot)
-			if testCase.errMessage == "" {
+			if testCase.wantErrMessage == "" {
 				require.NoError(t, err)
 			} else {
-				require.EqualError(t, err, testCase.errMessage)
+				require.EqualError(t, err, testCase.wantErrMessage)
 			}
-			assert.Equal(t, testCase.expectedConfig, config)
-			assert.Equal(t, testCase.expectedExtra, testCase.extra)
+			assert.Equal(t, testCase.wantConfig, config)
+			assert.Equal(t, testCase.wantExtra, testCase.extra)
 		})
 	}
 }
@@ -248,34 +248,34 @@ func TestMarshalChainConfigJSON(t *testing.T) {
 	t.Parallel()
 
 	testCases := map[string]struct {
-		config        ChainConfig
-		extra         any
-		reuseJSONRoot bool
-		jsonData      string // string for convenience
-		errMessage    string
+		config         ChainConfig
+		extra          any
+		reuseJSONRoot  bool
+		wantJSONData   string // string for convenience
+		wantErrMessage string
 	}{
 		"invalid_extra_at_extra_key": {
 			extra: struct {
 				Field chan struct{} `json:"field"`
 			}{},
-			errMessage: "encoding config with extra: " +
+			wantErrMessage: "encoding config with extra: " +
 				"json: unsupported type: chan struct {}",
 		},
 		"nil_extra_at_extra_key": {
-			jsonData: `{"chainId":null}`,
+			wantJSONData: `{"chainId":null}`,
 		},
 		"extra_at_extra_key": {
 			extra: struct {
 				Field string `json:"field"`
 			}{Field: "value"},
-			jsonData: `{"chainId":null,"extra":{"field":"value"}}`,
+			wantJSONData: `{"chainId":null,"extra":{"field":"value"}}`,
 		},
 		"invalid_extra_at_root_depth": {
 			extra: struct {
 				Field chan struct{} `json:"field"`
 			}{},
 			reuseJSONRoot: true,
-			errMessage: "converting extra config to JSON raw messages: " +
+			wantErrMessage: "converting extra config to JSON raw messages: " +
 				"json: unsupported type: chan struct {}",
 		},
 		"duplicate_key": {
@@ -283,20 +283,20 @@ func TestMarshalChainConfigJSON(t *testing.T) {
 				Field string `json:"chainId"`
 			}{},
 			reuseJSONRoot: true,
-			errMessage: `duplicate JSON key "chainId" in ChainConfig` +
+			wantErrMessage: `duplicate JSON key "chainId" in ChainConfig` +
 				` and extra struct { Field string "json:\"chainId\"" }`,
 		},
 		"nil_extra_at_root_depth": {
 			extra:         nil,
 			reuseJSONRoot: true,
-			jsonData:      `{"chainId":null}`,
+			wantJSONData:  `{"chainId":null}`,
 		},
 		"extra_at_root_depth": {
 			extra: struct {
 				Field string `json:"field"`
 			}{},
 			reuseJSONRoot: true,
-			jsonData:      `{"chainId":null,"field":""}`,
+			wantJSONData:  `{"chainId":null,"field":""}`,
 		},
 	}
 
@@ -307,12 +307,12 @@ func TestMarshalChainConfigJSON(t *testing.T) {
 
 			config := ChainConfig{}
 			data, err := MarshalChainConfigJSON(config, testCase.extra, testCase.reuseJSONRoot)
-			if testCase.errMessage == "" {
+			if testCase.wantErrMessage == "" {
 				require.NoError(t, err)
 			} else {
-				require.EqualError(t, err, testCase.errMessage)
+				require.EqualError(t, err, testCase.wantErrMessage)
 			}
-			assert.Equal(t, testCase.jsonData, string(data))
+			assert.Equal(t, testCase.wantJSONData, string(data))
 		})
 	}
 }
