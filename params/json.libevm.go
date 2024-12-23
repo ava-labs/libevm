@@ -26,7 +26,7 @@ var _ interface {
 	json.Unmarshaler
 } = (*ChainConfig)(nil)
 
-// chainConfigWithoutMethods avoids infinite recurion into
+// chainConfigWithoutMethods avoids infinite recursion into
 // [ChainConfig.UnmarshalJSON].
 type chainConfigWithoutMethods ChainConfig
 
