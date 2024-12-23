@@ -19,8 +19,6 @@ package params
 import (
 	"encoding/json"
 	"fmt"
-
-	"github.com/ava-labs/libevm/libevm/pseudo"
 )
 
 var _ interface {
@@ -28,89 +26,122 @@ var _ interface {
 	json.Unmarshaler
 } = (*ChainConfig)(nil)
 
-// chainConfigWithoutMethods avoids infinite recurion into
+// chainConfigWithoutMethods avoids infinite recursion into
 // [ChainConfig.UnmarshalJSON].
 type chainConfigWithoutMethods ChainConfig
 
-// chainConfigWithExportedExtra supports JSON (un)marshalling of a [ChainConfig]
-// while exposing the `extra` field as the "extra" JSON key.
-type chainConfigWithExportedExtra struct {
-	*chainConfigWithoutMethods              // embedded to achieve regular JSON unmarshalling
-	Extra                      *pseudo.Type `json:"extra"` // `c.extra` is otherwise unexported
-}
-
-// UnmarshalJSON implements the [json.Unmarshaler] interface.
-func (c *ChainConfig) UnmarshalJSON(data []byte) error {
-	switch reg := registeredExtras; {
-	case reg.Registered() && !reg.Get().reuseJSONRoot:
-		return c.unmarshalJSONWithExtra(data)
-
-	case reg.Registered() && reg.Get().reuseJSONRoot: // although the latter is redundant, it's clearer
-		c.extra = reg.Get().newChainConfig()
-		if err := json.Unmarshal(data, c.extra); err != nil {
-			c.extra = nil
-			return err
-		}
-		fallthrough // Important! We've only unmarshalled the extra field.
-	default: // reg == nil
+// UnmarshalJSON implements the [json.Unmarshaler] interface and JSON decodes
+// `data` according to the following:
+//   - extra is not registered:
+//     `data` is decoded into `c` and the extra is ignored.
+//   - extra is registered and the registered reuseJSONRoot field is false:
+//     `data` is decoded into `c` and the "extra" JSON field in `data` is decoded into `c.extra`.
+//   - extra is registered and the registered reuseJSONRoot field is true:
+//     `data` is decoded into `c` and `data` is decoded into `c.extra`.
+func (c *ChainConfig) UnmarshalJSON(data []byte) (err error) {
+	if !registeredExtras.Registered() {
 		return json.Unmarshal(data, (*chainConfigWithoutMethods)(c))
 	}
+	ec := registeredExtras.Get()
+	c.extra = ec.newChainConfig()
+	return UnmarshalChainConfigJSON(data, c, c.extra, ec.reuseJSONRoot)
 }
 
-// unmarshalJSONWithExtra unmarshals JSON under the assumption that the
-// registered [Extras] payload is in the JSON "extra" key. All other
-// unmarshalling is performed as if no [Extras] were registered.
-func (c *ChainConfig) unmarshalJSONWithExtra(data []byte) error {
-	cc := &chainConfigWithExportedExtra{
-		chainConfigWithoutMethods: (*chainConfigWithoutMethods)(c),
-		Extra:                     registeredExtras.Get().newChainConfig(),
+// UnmarshalChainConfigJSON JSON decodes `data` according to the following.
+//   - `reuseJSONRoot` is false:
+//     `data` is decoded into `config` and the "extra" JSON field in `data` is decoded into `extra`.
+//   - `reuseJSONRoot` is true:
+//     `data` is decoded into `config` and `data` is decoded into `extra`.
+func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T, reuseJSONRoot bool) (err error) {
+	if extra == nil {
+		return fmt.Errorf("extra pointer argument is nil")
 	}
-	if err := json.Unmarshal(data, cc); err != nil {
-		return err
+
+	if reuseJSONRoot {
+		err = json.Unmarshal(data, (*chainConfigWithoutMethods)(config))
+		if err != nil {
+			return fmt.Errorf("decoding root chain config: %s", err)
+		}
+		err = json.Unmarshal(data, extra)
+		if err != nil {
+			return fmt.Errorf("decoding extra config to %T: %s", extra, err)
+		}
+		return nil
 	}
-	c.extra = cc.Extra
+
+	combined := struct {
+		*chainConfigWithoutMethods
+		Extra *T `json:"extra"`
+	}{
+		chainConfigWithoutMethods: (*chainConfigWithoutMethods)(config),
+		Extra:                     extra,
+	}
+	err = json.Unmarshal(data, &combined)
+	if err != nil {
+		return fmt.Errorf("decoding config to combined of chain config and %T: %s", extra, err)
+	}
 	return nil
 }
 
-// MarshalJSON implements the [json.Marshaler] interface.
+// MarshalJSON implements the [json.Marshaler] interface and JSON encodes
+// the chain config `c` according to the following:
+//   - extra is not registered:
+//     `c` is encoded into `data` and the extra is ignored.
+//   - extra is registered and the registered reuseJSONRoot field is false:
+//     `c` is encoded with `c.extra` encoded at the "extra" JSON field.
+//   - extra is registered and the registered reuseJSONRoot field is true:
+//     `c` is encoded with `c.extra` encoded at the root depth of the JSON object.
 func (c *ChainConfig) MarshalJSON() ([]byte, error) {
-	switch reg := registeredExtras; {
-	case !reg.Registered():
+	if !registeredExtras.Registered() {
 		return json.Marshal((*chainConfigWithoutMethods)(c))
-
-	case !reg.Get().reuseJSONRoot:
-		return c.marshalJSONWithExtra()
-
-	default: // reg.reuseJSONRoot == true
-		// The inverse of reusing the JSON root is merging two JSON buffers,
-		// which isn't supported by the native package. So we use
-		// map[string]json.RawMessage intermediates.
-		geth, err := toJSONRawMessages((*chainConfigWithoutMethods)(c))
-		if err != nil {
-			return nil, err
-		}
-		extra, err := toJSONRawMessages(c.extra)
-		if err != nil {
-			return nil, err
-		}
-
-		for k, v := range extra {
-			if _, ok := geth[k]; ok {
-				return nil, fmt.Errorf("duplicate JSON key %q in both %T and registered extra", k, c)
-			}
-			geth[k] = v
-		}
-		return json.Marshal(geth)
 	}
+	ec := registeredExtras.Get()
+	return MarshalChainConfigJSON(*c, c.extra, ec.reuseJSONRoot)
 }
 
-// marshalJSONWithExtra is the inverse of unmarshalJSONWithExtra().
-func (c *ChainConfig) marshalJSONWithExtra() ([]byte, error) {
-	cc := &chainConfigWithExportedExtra{
-		chainConfigWithoutMethods: (*chainConfigWithoutMethods)(c),
-		Extra:                     c.extra,
+// MarshalChainConfigJSON JSON encodes `config` and `extra` according to the following.
+//   - `reuseJSONRoot` is false:
+//     `config` is encoded with `extra` encoded at the "extra" JSON field.
+//   - `reuseJSONRoot` is true:
+//     `config` is encoded with `extra` encoded at the root depth of the JSON object.
+func MarshalChainConfigJSON[T any](config ChainConfig, extra T, reuseJSONRoot bool) (data []byte, err error) {
+	if !reuseJSONRoot {
+		jsonExtra := struct {
+			ChainConfig
+			Extra T `json:"extra,omitempty"`
+		}{
+			ChainConfig: config,
+			Extra:       extra,
+		}
+		data, err = json.Marshal(jsonExtra)
+		if err != nil {
+			return nil, fmt.Errorf("encoding config with extra: %s", err)
+		}
+		return data, nil
 	}
-	return json.Marshal(cc)
+
+	// The inverse of reusing the JSON root is merging two JSON buffers,
+	// which isn't supported by the native package. So we use
+	// map[string]json.RawMessage intermediates.
+	// Note we cannot encode a combined struct directly because of the extra
+	// type generic nature which cannot be embedded in such a combined struct.
+	configJSONRaw, err := toJSONRawMessages((chainConfigWithoutMethods)(config))
+	if err != nil {
+		return nil, fmt.Errorf("converting config to JSON raw messages: %s", err)
+	}
+	extraJSONRaw, err := toJSONRawMessages(extra)
+	if err != nil {
+		return nil, fmt.Errorf("converting extra config to JSON raw messages: %s", err)
+	}
+
+	for k, v := range extraJSONRaw {
+		_, ok := configJSONRaw[k]
+		if ok {
+			return nil, fmt.Errorf("duplicate JSON key %q in ChainConfig and extra %T", k, extra)
+		}
+		configJSONRaw[k] = v
+	}
+	return json.Marshal(configJSONRaw)
 }
 
 func toJSONRawMessages(v any) (map[string]json.RawMessage, error) {
