@@ -53,27 +53,29 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) (err error) {
 //   - `reuseJSONRoot` is true:
 //     `data` is decoded into `config` and `data` is decoded into `extra`.
 func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T, reuseJSONRoot bool) (err error) {
-	if extra == nil {
-		return fmt.Errorf("extra pointer argument is nil")
-	}
-	err = json.Unmarshal(data, (*chainConfigWithoutMethods)(config))
 	switch {
-	case err != nil:
-		return fmt.Errorf("decoding root chain config: %s", err)
+	case extra == nil:
+		return fmt.Errorf("extra pointer argument is nil")
 	case reuseJSONRoot:
+		err = json.Unmarshal(data, (*chainConfigWithoutMethods)(config))
+		if err != nil {
+			return fmt.Errorf("decoding root chain config: %s", err)
+		}
 		err = json.Unmarshal(data, extra)
 		if err != nil {
 			return fmt.Errorf("decoding extra config to %T: %s", extra, err)
 		}
-	default:
-		jsonExtra := struct {
+	case !reuseJSONRoot:
+		combined := struct {
+			*chainConfigWithoutMethods
 			Extra *T `json:"extra"`
 		}{
-			Extra: extra,
+			chainConfigWithoutMethods: (*chainConfigWithoutMethods)(config),
+			Extra:                     extra,
 		}
-		err = json.Unmarshal(data, &jsonExtra)
+		err = json.Unmarshal(data, &combined)
 		if err != nil {
-			return fmt.Errorf("decoding extra config to %T: %s", extra, err)
+			return fmt.Errorf("decoding config to combined of chain config and %T: %s", extra, err)
 		}
 	}
 	return nil
