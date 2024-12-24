@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -33,21 +34,27 @@ import (
 var _ PrecompileEnvironment = (*environment)(nil)
 
 type environment struct {
-	evm      *EVM
-	self     *Contract
-	callType CallType
+	evm        *EVM
+	self       *Contract
+	callType   CallType
+	view, pure bool
+}
+
+func (e *environment) copy() *environment {
+	// This deliberately does not use field names so that a change in the fields
+	// will break this code and force it to be reviewed.
+	return &environment{e.evm, e.self, e.callType, e.view, e.pure}
 }
 
 func (e *environment) Gas() uint64            { return e.self.Gas }
 func (e *environment) UseGas(gas uint64) bool { return e.self.UseGas(gas) }
 func (e *environment) Value() *uint256.Int    { return new(uint256.Int).Set(e.self.Value()) }
 
-func (e *environment) ChainConfig() *params.ChainConfig  { return e.evm.chainConfig }
-func (e *environment) Rules() params.Rules               { return e.evm.chainRules }
-func (e *environment) ReadOnlyState() libevm.StateReader { return e.evm.StateDB }
-func (e *environment) IncomingCallType() CallType        { return e.callType }
-func (e *environment) BlockNumber() *big.Int             { return new(big.Int).Set(e.evm.Context.BlockNumber) }
-func (e *environment) BlockTime() uint64                 { return e.evm.Context.Time }
+func (e *environment) ChainConfig() *params.ChainConfig { return e.evm.chainConfig }
+func (e *environment) Rules() params.Rules              { return e.evm.chainRules }
+func (e *environment) IncomingCallType() CallType       { return e.callType }
+func (e *environment) BlockNumber() *big.Int            { return new(big.Int).Set(e.evm.Context.BlockNumber) }
+func (e *environment) BlockTime() uint64                { return e.evm.Context.Time }
 
 func (e *environment) refundGas(add uint64) error {
 	gas, overflow := math.SafeAdd(e.self.Gas, add)
@@ -58,20 +65,51 @@ func (e *environment) refundGas(add uint64) error {
 	return nil
 }
 
-func (e *environment) ReadOnly() bool {
+func (e *environment) AsReadOnly() PrecompileEnvironment {
+	cp := e.copy()
+	cp.view = true
+	return cp
+}
+
+func (e *environment) AsPure() PrecompileEnvironment {
+	cp := e.copy()
+	cp.pure = true
+	return cp
+}
+
+func (e *environment) StateMutability() StateMutability {
 	// A switch statement provides clearer code coverage for difficult-to-test
 	// cases.
 	switch {
+	// cases MUST be ordered from most to least restrictive
+	case e.pure:
+		return Pure
 	case e.callType == StaticCall:
 		// evm.interpreter.readOnly is only set to true via a call to
 		// EVMInterpreter.Run() so, if a precompile is called directly with
 		// StaticCall(), then readOnly might not be set yet.
-		return true
+		return ReadOnlyState
 	case e.evm.interpreter.readOnly:
-		return true
+		return ReadOnlyState
+	case e.view:
+		return ReadOnlyState
 	default:
-		return false
+		return MutableState
 	}
+}
+
+func (e *environment) ReadOnlyState() libevm.StateReader {
+	if e.pure {
+		return nil
+	}
+	return e.evm.StateDB
+}
+
+func (e *environment) StateDB() StateDB {
+	if e.StateMutability() != MutableState {
+		return nil
+	}
+	return e.evm.StateDB
 }
 
 func (e *environment) Addresses() *libevm.AddressContext {
@@ -80,13 +118,6 @@ func (e *environment) Addresses() *libevm.AddressContext {
 		Caller: e.self.CallerAddress,
 		Self:   e.self.Address(),
 	}
-}
-
-func (e *environment) StateDB() StateDB {
-	if e.ReadOnly() {
-		return nil
-	}
-	return e.evm.StateDB
 }
 
 func (e *environment) BlockHeader() (types.Header, error) {
@@ -105,7 +136,13 @@ func (e *environment) Call(addr common.Address, input []byte, gas uint64, value 
 	return e.callContract(Call, addr, input, gas, value, opts...)
 }
 
+var errPureFunctionMakeCall = errors.New("contract call from pure function")
+
 func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) (retData []byte, retErr error) {
+	if e.StateMutability() == Pure {
+		return nil, errPureFunctionMakeCall
+	}
+
 	// Depth and read-only setting are handled by [EVMInterpreter.Run], which
 	// isn't used for precompiles, so we need to do it ourselves to maintain the
 	// expected invariants.
@@ -114,7 +151,7 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
 
-	if e.ReadOnly() && !in.readOnly { // i.e. the precompile was StaticCall()ed
+	if e.StateMutability() != MutableState && !in.readOnly { // i.e. the precompile was StaticCall()ed
 		in.readOnly = true
 		defer func() { in.readOnly = false }()
 	}
