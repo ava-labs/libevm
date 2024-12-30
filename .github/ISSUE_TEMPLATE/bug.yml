@@ -7,7 +7,7 @@ body:
       value: |
         Thanks for taking the time to fill out this bug report!
 
-        ⚠️ Your issue will be instantly closed as not planned WITHOUT explanation if:
+        ⚠️ Your issue will be closed as "not planned" if:
         - you do not fill out **the title of the issue** ☝️
         - you do not provide the **libevm version** as requested below
   - type: input
