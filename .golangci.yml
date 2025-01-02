@@ -55,16 +55,19 @@ linters-settings:
       - dot
       - blank
   goheader:
-    values:
     template-path: .libevm-header
 
   gomodguard:
     blocked:
       modules:
         - github.com/ethereum/go-ethereum:
+            reason: ""
         - github.com/ava-labs/avalanchego:
+            reason: ""
         - github.com/ava-labs/coreth:
+            reason: ""
         - github.com/ava-labs/subnet-evm:
+            reason: ""
   revive:
     rules:
       - name: unused-parameter
@@ -73,8 +76,8 @@ linters-settings:
         disabled: true
 
 issues:
-   exclude-dirs-use-default: false
-   exclude-rules:
+  exclude-dirs-use-default: false
+  exclude-rules:
     - path-except: libevm
       linters:
         # If any issue is flagged in a non-libevm file, add the linter here
@@ -105,19 +108,19 @@ issues:
         - varnamelen
         - wastedassign
         - whitespace
-   include:
-   # Many of the default exclusions are because, verbatim "Annoying issue",
-   # which defeats the point of a linter.
-        - EXC0002
-        - EXC0004
-        - EXC0005
-        - EXC0006
-        - EXC0007
-        - EXC0008
-        - EXC0009
-        - EXC0010
-        - EXC0011
-        - EXC0012
-        - EXC0013
-        - EXC0014
-        - EXC0015
+  include:
+    # Many of the default exclusions are because, verbatim "Annoying issue",
+    # which defeats the point of a linter.
+    - EXC0002
+    - EXC0004
+    - EXC0005
+    - EXC0006
+    - EXC0007
+    - EXC0008
+    - EXC0009
+    - EXC0010
+    - EXC0011
+    - EXC0012
+    - EXC0013
+    - EXC0014
+    - EXC0015
