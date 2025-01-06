@@ -58,12 +58,10 @@ func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T,
 	}
 
 	if reuseJSONRoot {
-		err = json.Unmarshal(data, (*chainConfigWithoutMethods)(config))
-		if err != nil {
+		if err := json.Unmarshal(data, (*chainConfigWithoutMethods)(config)); err != nil {
 			return fmt.Errorf("decoding root chain config: %s", err)
 		}
-		err = json.Unmarshal(data, extra)
-		if err != nil {
+		if err := json.Unmarshal(data, extra); err != nil {
 			return fmt.Errorf("decoding extra config to %T: %s", extra, err)
 		}
 		return nil
@@ -76,8 +74,7 @@ func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T,
 		chainConfigWithoutMethods: (*chainConfigWithoutMethods)(config),
 		Extra:                     extra,
 	}
-	err = json.Unmarshal(data, &combined)
-	if err != nil {
+	if err := json.Unmarshal(data, &combined); err != nil {
 		return fmt.Errorf("decoding config to combined of chain config and %T: %s", extra, err)
 	}
 	return nil
