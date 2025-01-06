@@ -278,6 +278,7 @@ func TestMarshalChainConfigJSON(t *testing.T) {
 			}{},
 			reuseJSONRoot: true,
 			wantErrMessage: "converting extra config to JSON raw messages: " +
+				`encoding struct { Field chan struct {} "json:\"field\"" }: ` +
 				"json: unsupported type: chan struct {}",
 		},
 		"duplicate_key": {

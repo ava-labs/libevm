@@ -132,11 +132,11 @@ func MarshalChainConfigJSON[C any](config ChainConfig, extra C, reuseJSONRoot bo
 func toJSONRawMessages(v any) (map[string]json.RawMessage, error) {
 	buf, err := json.Marshal(v)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("encoding %T: %s", v, err)
 	}
 	msgs := make(map[string]json.RawMessage)
 	if err := json.Unmarshal(buf, &msgs); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decoding JSON encoding of %T into %T: %s", v, msgs, err)
 	}
 	return msgs, nil
 }
