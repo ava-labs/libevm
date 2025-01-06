@@ -27,3 +27,4 @@ jobs:
         with:
           version: v1.60
           only-new-issues: true
+          args: --enable goheader
