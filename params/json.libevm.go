@@ -30,14 +30,10 @@ var _ interface {
 // [ChainConfig.UnmarshalJSON].
 type chainConfigWithoutMethods ChainConfig
 
-// UnmarshalJSON implements the [json.Unmarshaler] interface and JSON decodes
-// `data` according to the following:
-//   - extra is not registered:
-//     `data` is decoded into `c` and the extra is ignored.
-//   - extra is registered and the registered reuseJSONRoot field is false:
-//     `data` is decoded into `c` and the "extra" JSON field in `data` is decoded into `c.extra`.
-//   - extra is registered and the registered reuseJSONRoot field is true:
-//     `data` is decoded into `c` and `data` is decoded into `c.extra`.
+// UnmarshalJSON implements the [json.Unmarshaler] interface. If extra payloads
+// were registered, UnmarshalJSON decodes data as described by [Extras] and
+// [RegisterExtras] otherwise it unmarshals directly into c as if ChainConfig
+// didn't implement json.Unmarshaler.
 func (c *ChainConfig) UnmarshalJSON(data []byte) (err error) {
 	if !registeredExtras.Registered() {
 		return json.Unmarshal(data, (*chainConfigWithoutMethods)(c))
