@@ -53,10 +53,10 @@ func UnmarshalChainConfigJSON[C any](data []byte, config *ChainConfig, extra *C,
 
 	if reuseJSONRoot {
 		if err := json.Unmarshal(data, (*chainConfigWithoutMethods)(config)); err != nil {
-			return fmt.Errorf("decoding root chain config: %s", err)
+			return fmt.Errorf("decoding JSON into %T: %s", config, err)
 		}
 		if err := json.Unmarshal(data, extra); err != nil {
-			return fmt.Errorf("decoding extra config to %T: %s", extra, err)
+			return fmt.Errorf("decoding JSON into %T: %s", extra, err)
 		}
 		return nil
 	}
@@ -69,7 +69,7 @@ func UnmarshalChainConfigJSON[C any](data []byte, config *ChainConfig, extra *C,
 		Extra:                     extra,
 	}
 	if err := json.Unmarshal(data, &combined); err != nil {
-		return fmt.Errorf("decoding config to combined of chain config and %T: %s", extra, err)
+		return fmt.Errorf(`decoding JSON into combination of %T and %T (as "extra" key): %s`, config, extra, err)
 	}
 	return nil
 }
@@ -106,7 +106,7 @@ func MarshalChainConfigJSON[C any](config ChainConfig, extra C, reuseJSONRoot bo
 		}
 		data, err = json.Marshal(jsonExtra)
 		if err != nil {
-			return nil, fmt.Errorf("encoding config with extra: %s", err)
+			return nil, fmt.Errorf(`encoding combination of %T and %T (as "extra" key) to JSON: %s`, config, extra, err)
 		}
 		return data, nil
 	}

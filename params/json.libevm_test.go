@@ -162,7 +162,7 @@ func TestUnmarshalChainConfigJSON(t *testing.T) {
 		"invalid_json": {
 			extra:     &testExtra{},
 			wantExtra: &testExtra{},
-			wantErrMessage: "decoding config to combined of chain config and *params.testExtra: " +
+			wantErrMessage: `decoding JSON into combination of *params.ChainConfig and *params.testExtra (as "extra" key): ` +
 				"unexpected end of JSON input",
 		},
 		"nil_extra_at_root_depth": {
@@ -196,7 +196,7 @@ func TestUnmarshalChainConfigJSON(t *testing.T) {
 			extra:      &testExtra{},
 			wantConfig: ChainConfig{ChainID: big.NewInt(1)},
 			wantExtra:  &testExtra{},
-			wantErrMessage: "decoding config to combined of chain config and *params.testExtra: " +
+			wantErrMessage: `decoding JSON into combination of *params.ChainConfig and *params.testExtra (as "extra" key): ` +
 				"json: cannot unmarshal number into Go struct field " +
 				".extra of type params.testExtra",
 		},
@@ -206,7 +206,7 @@ func TestUnmarshalChainConfigJSON(t *testing.T) {
 			reuseJSONRoot: true,
 			wantConfig:    ChainConfig{ChainID: big.NewInt(1)},
 			wantExtra:     &testExtra{},
-			wantErrMessage: "decoding extra config to *params.testExtra: " +
+			wantErrMessage: "decoding JSON into *params.testExtra: " +
 				"json: cannot unmarshal number into Go struct field " +
 				"testExtra.field of type string",
 		},
@@ -258,7 +258,8 @@ func TestMarshalChainConfigJSON(t *testing.T) {
 			extra: struct {
 				Field chan struct{} `json:"field"`
 			}{},
-			wantErrMessage: "encoding config with extra: " +
+			wantErrMessage: "encoding combination of params.ChainConfig and " +
+				`struct { Field chan struct {} "json:\"field\"" } (as "extra" key) to JSON: ` +
 				"json: unsupported type: chan struct {}",
 		},
 		"nil_extra_at_extra_key": {
