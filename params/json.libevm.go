@@ -74,14 +74,10 @@ func UnmarshalChainConfigJSON[C any](data []byte, config *ChainConfig, extra *C,
 	return nil
 }
 
-// MarshalJSON implements the [json.Marshaler] interface and JSON encodes
-// the chain config `c` according to the following:
-//   - extra is not registered:
-//     `c` is encoded into `data` and the extra is ignored.
-//   - extra is registered and the registered reuseJSONRoot field is false:
-//     `c` is encoded with `c.extra` encoded at the "extra" JSON field.
-//   - extra is registered and the registered reuseJSONRoot field is true:
-//     `c` is encoded with `c.extra` encoded at the root depth of the JSON object.
+// MarshalJSON implements the [json.Marshaler] interface.
+// If extra payloads were registered, MarshalJSON encodes JSON as
+// described by [Extras] and [RegisterExtras] otherwise it marshals
+// `c` as if ChainConfig didn't implement json.Marshaler.
 func (c *ChainConfig) MarshalJSON() ([]byte, error) {
 	if !registeredExtras.Registered() {
 		return json.Marshal((*chainConfigWithoutMethods)(c))
