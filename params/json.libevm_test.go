@@ -170,13 +170,13 @@ func TestUnmarshalChainConfigJSON(t *testing.T) {
 			extra:          nil,
 			reuseJSONRoot:  true,
 			wantExtra:      (*testExtra)(nil),
-			wantErrMessage: "extra pointer argument is nil",
+			wantErrMessage: "*params.testExtra argument is nil; use *params.ChainConfig.UnmarshalJSON() directly",
 		},
 		"nil_extra_at_extra_key": {
 			jsonData:       `{"chainId": 1}`,
 			extra:          nil,
 			wantExtra:      (*testExtra)(nil),
-			wantErrMessage: "extra pointer argument is nil",
+			wantErrMessage: "*params.testExtra argument is nil; use *params.ChainConfig.UnmarshalJSON() directly",
 		},
 		"no_extra_at_extra_key": {
 			jsonData:   `{"chainId": 1}`,

@@ -54,7 +54,7 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) (err error) {
 //     `data` is decoded into `config` and `data` is decoded into `extra`.
 func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T, reuseJSONRoot bool) (err error) {
 	if extra == nil {
-		return fmt.Errorf("extra pointer argument is nil")
+		return fmt.Errorf("%T argument is nil; use %T.UnmarshalJSON() directly", extra, config)
 	}
 
 	if reuseJSONRoot {
