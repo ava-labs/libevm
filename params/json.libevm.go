@@ -43,11 +43,9 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) (err error) {
 	return UnmarshalChainConfigJSON(data, c, c.extra, ec.reuseJSONRoot)
 }
 
-// UnmarshalChainConfigJSON JSON decodes `data` according to the following.
-//   - `reuseJSONRoot` is false:
-//     `data` is decoded into `config` and the "extra" JSON field in `data` is decoded into `extra`.
-//   - `reuseJSONRoot` is true:
-//     `data` is decoded into `config` and `data` is decoded into `extra`.
+// UnmarshalChainConfigJSON is equivalent to [ChainConfig.UnmarshalJSON]
+// had [Extras] with `C` been registered, but without the need to call
+// [RegisterExtras]. The `extra` argument MUST NOT be nil.
 func UnmarshalChainConfigJSON[C any](data []byte, config *ChainConfig, extra *C, reuseJSONRoot bool) (err error) {
 	if extra == nil {
 		return fmt.Errorf("%T argument is nil; use %T.UnmarshalJSON() directly", extra, config)
