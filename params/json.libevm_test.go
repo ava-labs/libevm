@@ -145,7 +145,7 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 	}
 }
 
-func TestUnmarshalChainConfigJSON(t *testing.T) {
+func TestUnmarshalChainConfigJSON_Errors(t *testing.T) {
 	t.Parallel()
 
 	type testExtra struct {
@@ -178,19 +178,6 @@ func TestUnmarshalChainConfigJSON(t *testing.T) {
 			wantExtra:    (*testExtra)(nil),
 			wantErrRegex: `^\*.+\.testExtra argument is nil; use \*.+\.ChainConfig.UnmarshalJSON\(\) directly$`,
 		},
-		"no_extra_at_extra_key": {
-			jsonData:   `{"chainId": 1}`,
-			extra:      &testExtra{},
-			wantConfig: ChainConfig{ChainID: big.NewInt(1)},
-			wantExtra:  &testExtra{},
-		},
-		"no_extra_at_root_depth": {
-			jsonData:      `{"chainId": 1}`,
-			extra:         &testExtra{},
-			reuseJSONRoot: true,
-			wantConfig:    ChainConfig{ChainID: big.NewInt(1)},
-			wantExtra:     &testExtra{},
-		},
 		"wrong_extra_type_at_extra_key": {
 			jsonData:     `{"chainId": 1, "extra": 1}`,
 			extra:        &testExtra{},
@@ -205,19 +192,6 @@ func TestUnmarshalChainConfigJSON(t *testing.T) {
 			wantConfig:    ChainConfig{ChainID: big.NewInt(1)},
 			wantExtra:     &testExtra{},
 			wantErrRegex:  `^decoding JSON into \*.+\.testExtra: .+`,
-		},
-		"extra_success_at_extra_key": {
-			jsonData:   `{"chainId": 1, "extra": {"field":"value"}}`,
-			extra:      &testExtra{},
-			wantConfig: ChainConfig{ChainID: big.NewInt(1)},
-			wantExtra:  &testExtra{Field: "value"},
-		},
-		"extra_success_at_root_depth": {
-			jsonData:      `{"chainId": 1, "field":"value"}`,
-			extra:         &testExtra{},
-			reuseJSONRoot: true,
-			wantConfig:    ChainConfig{ChainID: big.NewInt(1)},
-			wantExtra:     &testExtra{Field: "value"},
 		},
 	}
 
@@ -241,7 +215,7 @@ func TestUnmarshalChainConfigJSON(t *testing.T) {
 	}
 }
 
-func TestMarshalChainConfigJSON(t *testing.T) {
+func TestMarshalChainConfigJSON_Errors(t *testing.T) {
 	t.Parallel()
 
 	testCases := map[string]struct {
@@ -260,12 +234,6 @@ func TestMarshalChainConfigJSON(t *testing.T) {
 		"nil_extra_at_extra_key": {
 			wantJSONData: `{"chainId":null}`,
 		},
-		"extra_at_extra_key": {
-			extra: struct {
-				Field string `json:"field"`
-			}{Field: "value"},
-			wantJSONData: `{"chainId":null,"extra":{"field":"value"}}`,
-		},
 		"invalid_extra_at_root_depth": {
 			extra: struct {
 				Field chan struct{} `json:"field"`
@@ -279,18 +247,6 @@ func TestMarshalChainConfigJSON(t *testing.T) {
 			}{},
 			reuseJSONRoot: true,
 			wantErrRegex:  `^duplicate JSON key "chainId" in ChainConfig and extra struct .+$`,
-		},
-		"nil_extra_at_root_depth": {
-			extra:         nil,
-			reuseJSONRoot: true,
-			wantJSONData:  `{"chainId":null}`,
-		},
-		"extra_at_root_depth": {
-			extra: struct {
-				Field string `json:"field"`
-			}{},
-			reuseJSONRoot: true,
-			wantJSONData:  `{"chainId":null,"field":""}`,
 		},
 	}
 
