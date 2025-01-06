@@ -52,7 +52,7 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) (err error) {
 //     `data` is decoded into `config` and the "extra" JSON field in `data` is decoded into `extra`.
 //   - `reuseJSONRoot` is true:
 //     `data` is decoded into `config` and `data` is decoded into `extra`.
-func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T, reuseJSONRoot bool) (err error) {
+func UnmarshalChainConfigJSON[C any](data []byte, config *ChainConfig, extra *C, reuseJSONRoot bool) (err error) {
 	if extra == nil {
 		return fmt.Errorf("%T argument is nil; use %T.UnmarshalJSON() directly", extra, config)
 	}
@@ -69,7 +69,7 @@ func UnmarshalChainConfigJSON[T any](data []byte, config *ChainConfig, extra *T,
 
 	combined := struct {
 		*chainConfigWithoutMethods
-		Extra *T `json:"extra"`
+		Extra *C `json:"extra"`
 	}{
 		chainConfigWithoutMethods: (*chainConfigWithoutMethods)(config),
 		Extra:                     extra,
@@ -101,11 +101,11 @@ func (c *ChainConfig) MarshalJSON() ([]byte, error) {
 //     `config` is encoded with `extra` encoded at the "extra" JSON field.
 //   - `reuseJSONRoot` is true:
 //     `config` is encoded with `extra` encoded at the root depth of the JSON object.
-func MarshalChainConfigJSON[T any](config ChainConfig, extra T, reuseJSONRoot bool) (data []byte, err error) {
+func MarshalChainConfigJSON[C any](config ChainConfig, extra C, reuseJSONRoot bool) (data []byte, err error) {
 	if !reuseJSONRoot {
 		jsonExtra := struct {
 			ChainConfig
-			Extra T `json:"extra,omitempty"`
+			Extra C `json:"extra,omitempty"`
 		}{
 			ChainConfig: config,
 			Extra:       extra,
