@@ -86,11 +86,9 @@ func (c *ChainConfig) MarshalJSON() ([]byte, error) {
 	return MarshalChainConfigJSON(*c, c.extra, ec.reuseJSONRoot)
 }
 
-// MarshalChainConfigJSON JSON encodes `config` and `extra` according to the following.
-//   - `reuseJSONRoot` is false:
-//     `config` is encoded with `extra` encoded at the "extra" JSON field.
-//   - `reuseJSONRoot` is true:
-//     `config` is encoded with `extra` encoded at the root depth of the JSON object.
+// MarshalChainConfigJSON is equivalent to [ChainConfig.MarshalJSON]
+// had [Extras] with `C` been registered, but without the need to
+// call [RegisterExtras].
 func MarshalChainConfigJSON[C any](config ChainConfig, extra C, reuseJSONRoot bool) (data []byte, err error) {
 	if !reuseJSONRoot {
 		jsonExtra := struct {
