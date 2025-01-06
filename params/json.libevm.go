@@ -95,8 +95,8 @@ func MarshalChainConfigJSON[C any](config ChainConfig, extra C, reuseJSONRoot bo
 			ChainConfig
 			Extra C `json:"extra,omitempty"`
 		}{
-			ChainConfig: config,
-			Extra:       extra,
+			config,
+			extra,
 		}
 		data, err = json.Marshal(jsonExtra)
 		if err != nil {
