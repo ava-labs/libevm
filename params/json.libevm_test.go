@@ -41,10 +41,10 @@ type rootJSONChainConfigExtra struct {
 
 func TestChainConfigJSONRoundTrip(t *testing.T) {
 	tests := []struct {
-		name      string
-		register  func()
-		jsonInput string
-		want      *ChainConfig
+		name        string
+		register    func()
+		jsonInput   string
+		wantDecoded *ChainConfig
 	}{
 		{
 			name:     "no registered extras",
@@ -52,7 +52,7 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 			jsonInput: `{
 				"chainId": 1234
 			}`,
-			want: &ChainConfig{
+			wantDecoded: &ChainConfig{
 				ChainID: big.NewInt(1234),
 			},
 		},
@@ -67,7 +67,7 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 				"chainId": 5678,
 				"foo": "hello"
 			}`,
-			want: &ChainConfig{
+			wantDecoded: &ChainConfig{
 				ChainID: big.NewInt(5678),
 				extra:   pseudo.From(rootJSONChainConfigExtra{TopLevelFoo: "hello"}).Type,
 			},
@@ -83,7 +83,7 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 				"chainId": 5678,
 				"foo": "hello"
 			}`,
-			want: &ChainConfig{
+			wantDecoded: &ChainConfig{
 				ChainID: big.NewInt(5678),
 				extra:   pseudo.From(&rootJSONChainConfigExtra{TopLevelFoo: "hello"}).Type,
 			},
@@ -99,7 +99,7 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 				"chainId": 42,
 				"extra": {"foo": "world"}
 			}`,
-			want: &ChainConfig{
+			wantDecoded: &ChainConfig{
 				ChainID: big.NewInt(42),
 				extra:   pseudo.From(nestedChainConfigExtra{NestedFoo: "world"}).Type,
 			},
@@ -115,7 +115,7 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 				"chainId": 42,
 				"extra": {"foo": "world"}
 			}`,
-			want: &ChainConfig{
+			wantDecoded: &ChainConfig{
 				ChainID: big.NewInt(42),
 				extra:   pseudo.From(&nestedChainConfigExtra{NestedFoo: "world"}).Type,
 			},
@@ -128,18 +128,19 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 			t.Cleanup(TestOnlyClearRegisteredExtras)
 			tt.register()
 
-			expectedEncoded := bytes.NewBuffer(nil)
-			err := json.Compact(expectedEncoded, []byte(tt.jsonInput))
+			buffer := bytes.NewBuffer(nil)
+			err := json.Compact(buffer, []byte(tt.jsonInput))
 			require.NoError(t, err)
+			wantEncoded := buffer.String()
 
-			encoded, err := json.Marshal(tt.want)
-			require.NoError(t, err, "encoding error")
-			require.Equal(t, expectedEncoded.String(), string(encoded))
+			gotEncoded, err := json.Marshal(tt.wantDecoded)
+			require.NoError(t, err, "json.Marshal()")
+			require.Equal(t, wantEncoded, string(gotEncoded))
 
-			decoded := new(ChainConfig)
-			err = json.Unmarshal(encoded, decoded)
-			require.NoError(t, err, "decoding error")
-			require.Equal(t, tt.want, decoded)
+			gotDecoded := new(ChainConfig)
+			err = json.Unmarshal(gotEncoded, gotDecoded)
+			require.NoError(t, err, "json.Unmarshal()")
+			require.Equal(t, tt.wantDecoded, gotDecoded)
 		})
 	}
 }
