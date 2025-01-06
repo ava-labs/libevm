@@ -65,8 +65,8 @@ func UnmarshalChainConfigJSON[C any](data []byte, config *ChainConfig, extra *C,
 		*chainConfigWithoutMethods
 		Extra *C `json:"extra"`
 	}{
-		chainConfigWithoutMethods: (*chainConfigWithoutMethods)(config),
-		Extra:                     extra,
+		(*chainConfigWithoutMethods)(config),
+		extra,
 	}
 	if err := json.Unmarshal(data, &combined); err != nil {
 		return fmt.Errorf(`decoding JSON into combination of %T and %T (as "extra" key): %s`, config, extra, err)
