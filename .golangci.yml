@@ -65,7 +65,7 @@ linters-settings:
         - github.com/ethereum/go-ethereum:
             reason: "Original, forked repo"
         - github.com/ava-labs/avalanchego:
-            reason: ""
+            reason: "Avoid dependency loop"
         - github.com/ava-labs/coreth:
             reason: "Avoid dependency loop"
         - github.com/ava-labs/subnet-evm:
