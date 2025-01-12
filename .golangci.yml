@@ -69,7 +69,7 @@ linters-settings:
         - github.com/ava-labs/coreth:
             reason: "Avoid dependency loop"
         - github.com/ava-labs/subnet-evm:
-            reason: ""
+            reason: "Avoid dependency loop"
   revive:
     rules:
       - name: unused-parameter
