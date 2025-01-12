@@ -41,10 +41,10 @@ type rootJSONChainConfigExtra struct {
 
 func TestChainConfigJSONRoundTrip(t *testing.T) {
 	tests := []struct {
-		name        string
-		register    func()
-		jsonInput   string
-		wantDecoded *ChainConfig
+		name      string
+		register  func()
+		jsonInput string
+		want      *ChainConfig
 	}{
 		{
 			name:     "no registered extras",
@@ -52,7 +52,7 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 			jsonInput: `{
 				"chainId": 1234
 			}`,
-			wantDecoded: &ChainConfig{
+			want: &ChainConfig{
 				ChainID: big.NewInt(1234),
 			},
 		},
@@ -67,7 +67,7 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 				"chainId": 5678,
 				"foo": "hello"
 			}`,
-			wantDecoded: &ChainConfig{
+			want: &ChainConfig{
 				ChainID: big.NewInt(5678),
 				extra:   pseudo.From(rootJSONChainConfigExtra{TopLevelFoo: "hello"}).Type,
 			},
@@ -83,7 +83,7 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 				"chainId": 5678,
 				"foo": "hello"
 			}`,
-			wantDecoded: &ChainConfig{
+			want: &ChainConfig{
 				ChainID: big.NewInt(5678),
 				extra:   pseudo.From(&rootJSONChainConfigExtra{TopLevelFoo: "hello"}).Type,
 			},
@@ -99,7 +99,7 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 				"chainId": 42,
 				"extra": {"foo": "world"}
 			}`,
-			wantDecoded: &ChainConfig{
+			want: &ChainConfig{
 				ChainID: big.NewInt(42),
 				extra:   pseudo.From(nestedChainConfigExtra{NestedFoo: "world"}).Type,
 			},
@@ -115,7 +115,7 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 				"chainId": 42,
 				"extra": {"foo": "world"}
 			}`,
-			wantDecoded: &ChainConfig{
+			want: &ChainConfig{
 				ChainID: big.NewInt(42),
 				extra:   pseudo.From(&nestedChainConfigExtra{NestedFoo: "world"}).Type,
 			},
@@ -128,19 +128,20 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 			t.Cleanup(TestOnlyClearRegisteredExtras)
 			tt.register()
 
-			buffer := bytes.NewBuffer(nil)
-			err := json.Compact(buffer, []byte(tt.jsonInput))
-			require.NoError(t, err)
-			wantEncoded := buffer.String()
+			t.Run("json.Unmarshal()", func(t *testing.T) {
+				got := new(ChainConfig)
+				require.NoError(t, json.Unmarshal([]byte(tt.jsonInput), got))
+				require.Equal(t, tt.want, got)
+			})
 
-			gotEncoded, err := json.Marshal(tt.wantDecoded)
-			require.NoError(t, err, "json.Marshal()")
-			require.Equal(t, wantEncoded, string(gotEncoded))
+			t.Run("json.Marshal()", func(t *testing.T) {
+				var want bytes.Buffer
+				require.NoError(t, json.Compact(&want, []byte(tt.jsonInput)), "json.Compact()")
 
-			gotDecoded := new(ChainConfig)
-			err = json.Unmarshal(gotEncoded, gotDecoded)
-			require.NoError(t, err, "json.Unmarshal()")
-			require.Equal(t, tt.wantDecoded, gotDecoded)
+				got, err := json.Marshal(tt.want)
+				require.NoError(t, err, "json.Marshal()")
+				require.Equal(t, want.String(), string(got))
+			})
 		})
 	}
 }
