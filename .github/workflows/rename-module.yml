@@ -2,12 +2,6 @@ name: Rename Go module
 
 on:
   workflow_dispatch:
-    inputs:
-      source_commit:
-        description: "Upstream commit on which to base module renaming"
-        required: true
-        type: string
-        default: "2bd6bd01d2e8561dd7fc21b631f4a34ac16627a1"
 
 jobs:
   rename-module:
@@ -17,6 +11,10 @@ jobs:
         with:
           fetch-depth: 0 # everything
 
+      - name: Find base geth commit hash
+        id: geth-commit
+        run: echo "hash=$(.github/workflows/scripts/geth-commit.sh)" >> "$GITHUB_OUTPUT"
+
       - name: Set variables
         id: vars
         # Including hashes of both the source commit and the workflow file makes
@@ -25,11 +23,11 @@ jobs:
           WORKFLOW_HASH: ${{ hashFiles('.github/workflows/rename-module.yml') }}
         run: |
           echo "WORKFLOW_HASH=${WORKFLOW_HASH}" >> "$GITHUB_OUTPUT";
-          echo "DEST_BRANCH=auto-rename-module_source-${{ inputs.source_commit }}_workflow-${WORKFLOW_HASH}-${{ github.ref_name }}" \
+          echo "DEST_BRANCH=auto-rename-module_source-${{ steps.geth-commit.outputs.hash }}_workflow-${WORKFLOW_HASH}-${{ github.ref_name }}" \
             >> "$GITHUB_OUTPUT";
 
       - name: Check out source commit
-        run: git checkout ${{ inputs.source_commit }}
+        run: git checkout ${{ steps.geth-commit.outputs.hash }}
 
       - name: Globally update module name
         run: |
