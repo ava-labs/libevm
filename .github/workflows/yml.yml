@@ -14,5 +14,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate YAML file
-        run: yamllint -c .github/yamllint.yml .
+      - name: Validate YAML files
+        run: yamllint -c .yamllint.yml .
