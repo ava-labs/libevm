@@ -63,7 +63,7 @@ linters-settings:
     blocked:
       modules:
         - github.com/ethereum/go-ethereum:
-            reason: ""
+            reason: "Original, forked repo"
         - github.com/ava-labs/avalanchego:
             reason: ""
         - github.com/ava-labs/coreth:
