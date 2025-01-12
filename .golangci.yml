@@ -67,7 +67,7 @@ linters-settings:
         - github.com/ava-labs/avalanchego:
             reason: ""
         - github.com/ava-labs/coreth:
-            reason: ""
+            reason: "Avoid dependency loop"
         - github.com/ava-labs/subnet-evm:
             reason: ""
   revive:
