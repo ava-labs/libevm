@@ -18,7 +18,7 @@ jobs:
 
       - name: Find base commit hash
         id: base-commit
-        run: echo "LIBEVM_BASE=$(git rev-list --author "github-actions\[bot\]" --grep "\[AUTO\] rename Go module + update internal import paths" -n 1 origin/main)" >> "$GITHUB_OUTPUT"
+        run: echo "LIBEVM_BASE=$(git rev-list --author "github-actions\[bot\]" --grep "rename Go module" -n 1 origin/main)" >> "$GITHUB_OUTPUT"
 
       - name: Color-blindness a11y
         run:
