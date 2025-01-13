@@ -31,7 +31,7 @@ func (c PrecompiledStatefulContract) Upgrade() vm.PrecompiledStatefulContract {
 	return func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
 		gas := env.Gas()
 		ret, remainingGas, err := c(env, input, gas)
-		if used := gas - remainingGas; used < gas {
+		if used := gas - remainingGas; used <= gas {
 			env.UseGas(used)
 		}
 		return ret, err
