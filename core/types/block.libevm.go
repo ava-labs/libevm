@@ -169,3 +169,15 @@ func (*NOOPBlockHooks) EncodeRLP(b *Block, w io.Writer) error {
 func (*NOOPBlockHooks) DecodeRLP(b *Block, s *rlp.Stream) error {
 	return b.decodeRLP(s)
 }
+
+func (b *Block) SetHeader(header *Header) {
+	b.header = header
+}
+
+func (b *Block) SetUncles(uncles []*Header) {
+	b.uncles = uncles
+}
+
+func (b *Block) SetTransactions(transactions Transactions) {
+	b.transactions = transactions
+}
