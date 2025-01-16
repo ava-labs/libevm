@@ -43,7 +43,7 @@ func (h *Header) hooks() HeaderHooks {
 	return new(NOOPHeaderHooks)
 }
 
-func (e ExtraPayloads[HPtr, SA]) hooksFromHeader(h *Header) HeaderHooks {
+func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromHeader(h *Header) HeaderHooks {
 	return e.Header.Get(h)
 }
 
@@ -107,4 +107,65 @@ func (*NOOPHeaderHooks) EncodeRLP(h *Header, w io.Writer) error {
 func (*NOOPHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
 	type withoutMethods Header
 	return s.Decode((*withoutMethods)(h))
+}
+
+// BlockHooks are required for all types registered with [RegisterExtras] for
+// [Block] payloads.
+type BlockHooks interface {
+	EncodeRLP(*Block, io.Writer) error
+	DecodeRLP(*Block, *rlp.Stream) error
+}
+
+// hooks returns the Block's registered BlockHooks, if any, otherwise a
+// [*NOOPBlockHooks] suitable for running default behaviour.
+func (b *Block) hooks() BlockHooks {
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.hooksFromBlock(b)
+	}
+	return new(NOOPBlockHooks)
+}
+
+func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromBlock(b *Block) BlockHooks {
+	return e.Block.Get(b)
+}
+
+var _ interface {
+	rlp.Encoder
+	rlp.Decoder
+} = (*Block)(nil)
+
+// EncodeRLP implements the [rlp.Encoder] interface.
+func (b *Block) EncodeRLP(w io.Writer) error {
+	return b.hooks().EncodeRLP(b, w)
+}
+
+// DecodeRLP implements the [rlp.Decoder] interface.
+func (b *Block) DecodeRLP(s *rlp.Stream) error {
+	return b.hooks().DecodeRLP(b, s)
+}
+
+func (b *Block) extraPayload() *pseudo.Type {
+	r := registeredExtras
+	if !r.Registered() {
+		// See params.ChainConfig.extraPayload() for panic rationale.
+		panic(fmt.Sprintf("%T.extraPayload() called before RegisterExtras()", r))
+	}
+	if b.extra == nil {
+		b.extra = r.Get().newBlock()
+	}
+	return b.extra
+}
+
+// NOOPBlockHooks implements [BlockHooks] such that they are equivalent to
+// no type having been registered.
+type NOOPBlockHooks struct{}
+
+var _ BlockHooks = (*NOOPBlockHooks)(nil)
+
+func (*NOOPBlockHooks) EncodeRLP(b *Block, w io.Writer) error {
+	return b.encodeRLP(w)
+}
+
+func (*NOOPBlockHooks) DecodeRLP(b *Block, s *rlp.Stream) error {
+	return b.decodeRLP(s)
 }
