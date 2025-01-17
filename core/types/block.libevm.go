@@ -44,7 +44,7 @@ func (h *Header) hooks() HeaderHooks {
 	return new(NOOPHeaderHooks)
 }
 
-func (e ExtraPayloads[HPtr, SA]) hooksFromHeader(h *Header) HeaderHooks {
+func (e ExtraPayloads[HPtr, BodyExtraPtr, SA]) hooksFromHeader(h *Header) HeaderHooks {
 	return e.Header.Get(h)
 }
 
@@ -117,4 +117,67 @@ func (n *NOOPHeaderHooks) Copy(h *Header) *Header {
 // CopyHeader creates a deep copy of a block header.
 func CopyHeader(h *Header) *Header {
 	return h.hooks().Copy(h)
+}
+
+// BodyHooks are required for all types registered with [RegisterExtras] for
+// [Body] payloads.
+type BodyHooks interface {
+	EncodeRLP(*Body, io.Writer) error
+	DecodeRLP(*Body, *rlp.Stream) error
+}
+
+// hooks returns the Body's registered BodyHooks, if any, otherwise a
+// [*NOOPBodyHooks] suitable for running the default behaviour.
+func (b *Body) hooks() BodyHooks {
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.hooksFromBody(b)
+	}
+	return new(NOOPBodyHooks)
+}
+
+func (e ExtraPayloads[HPtr, BodyExtraPtr, SA]) hooksFromBody(b *Body) BodyHooks {
+	return e.Body.Get(b)
+}
+
+var _ interface {
+	rlp.Encoder
+	rlp.Decoder
+} = (*Body)(nil)
+
+// EncodeRLP implements the [rlp.Encoder] interface.
+func (b *Body) EncodeRLP(w io.Writer) error {
+	return b.hooks().EncodeRLP(b, w)
+}
+
+// DecodeRLP implements the [rlp.Decoder] interface.
+func (b *Body) DecodeRLP(s *rlp.Stream) error {
+	return b.hooks().DecodeRLP(b, s)
+}
+
+func (b *Body) extraPayload() *pseudo.Type {
+	r := registeredExtras
+	if !r.Registered() {
+		// See params.ChainConfig.extraPayload() for panic rationale.
+		panic(fmt.Sprintf("%T.extraPayload() called before RegisterExtras()", r))
+	}
+	if b.extra == nil {
+		b.extra = r.Get().newBody()
+	}
+	return b.extra
+}
+
+// NOOPBodyHooks implements [BodyHooks] such that they are equivalent to
+// no type having been registered.
+type NOOPBodyHooks struct{}
+
+var _ BodyHooks = (*NOOPBodyHooks)(nil)
+
+func (*NOOPBodyHooks) EncodeRLP(b *Body, w io.Writer) error {
+	type withoutMethods Body
+	return rlp.Encode(w, (*withoutMethods)(b))
+}
+
+func (*NOOPBodyHooks) DecodeRLP(b *Body, s *rlp.Stream) error {
+	type withoutMethods Body
+	return s.Decode((*withoutMethods)(b))
 }

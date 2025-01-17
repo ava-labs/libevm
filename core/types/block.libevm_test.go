@@ -79,11 +79,39 @@ func (hh *stubHeaderHooks) Copy(h *Header) *Header {
 	return h
 }
 
+type stubBodyHooks struct {
+	encoding                     []byte
+	gotRawRLPToDecode            []byte
+	setBodyToOnUnmarshalOrDecode Body
+
+	errEncode, errDecode error
+}
+
+func (bh *stubBodyHooks) EncodeRLP(b *Body, w io.Writer) error {
+	if _, err := w.Write(bh.encoding); err != nil {
+		return err
+	}
+	return bh.errEncode
+}
+
+func (bh *stubBodyHooks) DecodeRLP(b *Body, s *rlp.Stream) error {
+	r, err := s.Raw()
+	if err != nil {
+		return err
+	}
+	bh.gotRawRLPToDecode = r
+	*b = bh.setBodyToOnUnmarshalOrDecode
+	return bh.errDecode
+}
+
 func TestHeaderHooks(t *testing.T) {
 	TestOnlyClearRegisteredExtras()
 	defer TestOnlyClearRegisteredExtras()
 
-	extras := RegisterExtras[stubHeaderHooks, *stubHeaderHooks, struct{}]()
+	extras := RegisterExtras[
+		stubHeaderHooks, *stubHeaderHooks,
+		stubBodyHooks, *stubBodyHooks,
+		struct{}]()
 	rng := ethtest.NewPseudoRand(13579)
 
 	suffix := rng.Bytes(8)
