@@ -43,7 +43,7 @@ func (h *Header) hooks() HeaderHooks {
 	return new(NOOPHeaderHooks)
 }
 
-func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromHeader(h *Header) HeaderHooks {
+func (e ExtraPayloads[HPtr, BlockExtraPtr, SA]) hooksFromHeader(h *Header) HeaderHooks {
 	return e.Header.Get(h)
 }
 
@@ -125,7 +125,7 @@ func (b *Block) hooks() BlockHooks {
 	return new(NOOPBlockHooks)
 }
 
-func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromBlock(b *Block) BlockHooks {
+func (e ExtraPayloads[HPtr, BlockExtraPtr, SA]) hooksFromBlock(b *Block) BlockHooks {
 	return e.Block.Get(b)
 }
 
