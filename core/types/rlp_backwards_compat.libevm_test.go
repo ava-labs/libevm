@@ -43,6 +43,7 @@ func TestHeaderRLPBackwardsCompatibility(t *testing.T) {
 				RegisterExtras[
 					NOOPHeaderHooks, *NOOPHeaderHooks,
 					NOOPBlockHooks, *NOOPBlockHooks,
+					NOOPBodyHooks, *NOOPBodyHooks,
 					struct{}]()
 			},
 		},

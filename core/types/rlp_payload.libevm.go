@@ -50,9 +50,13 @@ func RegisterExtras[
 		BlockHooks
 		*BlockExtra
 	},
+	BodyExtra any, BodyExtraPtr interface {
+		BodyHooks
+		*BodyExtra
+	},
 	SA any,
-]() ExtraPayloads[HPtr, BlockExtraPtr, SA] {
-	extra := ExtraPayloads[HPtr, BlockExtraPtr, SA]{
+]() ExtraPayloads[HPtr, BlockExtraPtr, BodyExtraPtr, SA] {
+	extra := ExtraPayloads[HPtr, BlockExtraPtr, BodyExtraPtr, SA]{
 		Header: pseudo.NewAccessor[*Header, HPtr](
 			(*Header).extraPayload,
 			func(h *Header, t *pseudo.Type) { h.extra = t },
@@ -60,6 +64,10 @@ func RegisterExtras[
 		Block: pseudo.NewAccessor[*Block, BlockExtraPtr](
 			(*Block).extraPayload,
 			func(b *Block, t *pseudo.Type) { b.extra = t },
+		),
+		Body: pseudo.NewAccessor[*Body, BodyExtraPtr](
+			(*Body).extraPayload,
+			func(b *Body, t *pseudo.Type) { b.extra = t },
 		),
 		StateAccount: pseudo.NewAccessor[StateOrSlimAccount, SA](
 			func(a StateOrSlimAccount) *pseudo.Type { return a.extra().payload() },
@@ -71,11 +79,12 @@ func RegisterExtras[
 			var x SA
 			return fmt.Sprintf("%T", x)
 		}(),
-		// The [ExtraPayloads] that we returns is based on [HPtr,BlockExtraPtr,SA], not
-		// [H,BlockExtra,SA] so our constructors MUST match that. This guarantees that calls to
-		// the [HeaderHooks] and [BlockHooks] methods will never be performed on a nil pointer.
+		// The [ExtraPayloads] that we returns is based on [HPtr,BlockExtraPtr,BodyExtraPtr,SA], not
+		// [H,BlockExtra,BodyExtra,SA] so our constructors MUST match that. This guarantees that calls to
+		// the [HeaderHooks], [BlockHooks] and [BodyHooks] methods will never be performed on a nil pointer.
 		newHeader:         pseudo.NewConstructor[H]().NewPointer,          // i.e. non-nil HPtr
 		newBlock:          pseudo.NewConstructor[BlockExtra]().NewPointer, // i.e. non-nil BlockExtraPtr
+		newBody:           pseudo.NewConstructor[BodyExtra]().NewPointer,  // i.e. non-nil BodyExtraPtr
 		newStateAccount:   pseudo.NewConstructor[SA]().Zero,
 		cloneStateAccount: extra.cloneStateAccount,
 		hooks:             extra,
@@ -99,11 +108,13 @@ type extraConstructors struct {
 	stateAccountType  string
 	newHeader         func() *pseudo.Type
 	newBlock          func() *pseudo.Type
+	newBody           func() *pseudo.Type
 	newStateAccount   func() *pseudo.Type
 	cloneStateAccount func(*StateAccountExtra) *StateAccountExtra
 	hooks             interface {
 		hooksFromHeader(*Header) HeaderHooks
 		hooksFromBlock(*Block) BlockHooks
+		hooksFromBody(*Body) BodyHooks
 	}
 }
 
@@ -117,15 +128,16 @@ func (e *StateAccountExtra) clone() *StateAccountExtra {
 }
 
 // ExtraPayloads provides strongly typed access to the extra payload carried by
-// [Header], [Block], [StateAccount], and [SlimAccount] structs. The only valid way to
+// [Header], [Block], [Body], [StateAccount], and [SlimAccount] structs. The only valid way to
 // construct an instance is by a call to [RegisterExtras].
-type ExtraPayloads[HPtr HeaderHooks, BlockExtraPtr BlockHooks, SA any] struct {
+type ExtraPayloads[HPtr HeaderHooks, BlockExtraPtr BlockHooks, BodyExtraPtr BodyHooks, SA any] struct {
 	Header       pseudo.Accessor[*Header, HPtr]
 	Block        pseudo.Accessor[*Block, BlockExtraPtr]
+	Body         pseudo.Accessor[*Body, BodyExtraPtr]
 	StateAccount pseudo.Accessor[StateOrSlimAccount, SA] // Also provides [SlimAccount] access.
 }
 
-func (ExtraPayloads[HPtr, BlockExtraPtr, SA]) cloneStateAccount(s *StateAccountExtra) *StateAccountExtra {
+func (ExtraPayloads[HPtr, BlockExtraPtr, BodyExtraPtr, SA]) cloneStateAccount(s *StateAccountExtra) *StateAccountExtra {
 	v := pseudo.MustNewValue[SA](s.t)
 	return &StateAccountExtra{
 		t: pseudo.From(v.Get()).Type,
