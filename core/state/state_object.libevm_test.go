@@ -49,10 +49,12 @@ func TestStateObjectEmpty(t *testing.T) {
 				types.RegisterExtras[
 					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
 					types.NOOPBodyHooks, *types.NOOPBodyHooks,
+					types.NOOPBlockHooks, *types.NOOPBlockHooks,
 					bool]().StateAccount.Set(acc, false)
 				types.RegisterExtras[
 					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
 					types.NOOPBodyHooks, *types.NOOPBodyHooks,
+					types.NOOPBlockHooks, *types.NOOPBlockHooks,
 					bool]().StateAccount.Set(acc, false)
 			},
 			wantEmpty: true,
@@ -63,6 +65,7 @@ func TestStateObjectEmpty(t *testing.T) {
 				types.RegisterExtras[
 					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
 					types.NOOPBodyHooks, *types.NOOPBodyHooks,
+					types.NOOPBlockHooks, *types.NOOPBlockHooks,
 					bool]()
 			},
 			wantEmpty: true,
@@ -73,6 +76,7 @@ func TestStateObjectEmpty(t *testing.T) {
 				types.RegisterExtras[
 					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
 					types.NOOPBodyHooks, *types.NOOPBodyHooks,
+					types.NOOPBlockHooks, *types.NOOPBlockHooks,
 					bool]().StateAccount.Set(acc, true)
 			},
 			wantEmpty: false,

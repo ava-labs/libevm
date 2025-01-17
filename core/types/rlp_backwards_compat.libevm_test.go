@@ -43,6 +43,7 @@ func TestHeaderRLPBackwardsCompatibility(t *testing.T) {
 				RegisterExtras[
 					NOOPHeaderHooks, *NOOPHeaderHooks,
 					NOOPBodyHooks, *NOOPBodyHooks,
+					NOOPBlockHooks, *NOOPBlockHooks,
 					struct{}]()
 			},
 		},
@@ -88,7 +89,6 @@ func testHeaderRLPBackwardsCompatibility(t *testing.T) {
 		ExcessBlobGas:    rng.Uint64Ptr(),
 		ParentBeaconRoot: rng.HashPtr(),
 	}
-	t.Logf("%T:\n%+v", hdr, hdr)
 
 	// WARNING: changing this hex might break backwards compatibility of RLP
 	// encoding (i.e. block hashes might change)!

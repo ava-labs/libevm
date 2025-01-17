@@ -49,6 +49,7 @@ func TestStateAccountRLP(t *testing.T) {
 			RegisterExtras[
 				NOOPHeaderHooks, *NOOPHeaderHooks,
 				NOOPBodyHooks, *NOOPBodyHooks,
+				NOOPBlockHooks, *NOOPBlockHooks,
 				bool]()
 		},
 		acc: &StateAccount{
@@ -82,6 +83,7 @@ func TestStateAccountRLP(t *testing.T) {
 				RegisterExtras[
 					NOOPHeaderHooks, *NOOPHeaderHooks,
 					NOOPBodyHooks, *NOOPBodyHooks,
+					NOOPBlockHooks, *NOOPBlockHooks,
 					bool]()
 			},
 			acc: &StateAccount{

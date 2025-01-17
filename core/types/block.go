@@ -211,6 +211,8 @@ type Block struct {
 	// inter-peer block relay.
 	ReceivedAt   time.Time
 	ReceivedFrom interface{}
+
+	extra *pseudo.Type // See [RegisterExtras]
 }
 
 // "external" block encoding. used for eth protocol, etc.
@@ -315,8 +317,8 @@ func CopyEthHeader(h *Header) *Header {
 	return &cpy
 }
 
-// DecodeRLP decodes a block from RLP.
-func (b *Block) DecodeRLP(s *rlp.Stream) error {
+// decodeRLP decodes a block from RLP.
+func (b *Block) decodeRLP(s *rlp.Stream) error {
 	var eb extblock
 	_, size, _ := s.Kind()
 	if err := s.Decode(&eb); err != nil {
@@ -327,8 +329,8 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// EncodeRLP serializes a block as RLP.
-func (b *Block) EncodeRLP(w io.Writer) error {
+// encodeRLP serializes a block as RLP.
+func (b *Block) encodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &extblock{
 		Header:      b.header,
 		Txs:         b.transactions,

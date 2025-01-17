@@ -76,6 +76,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 				e := types.RegisterExtras[
 					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
 					types.NOOPBodyHooks, *types.NOOPBodyHooks,
+					types.NOOPBlockHooks, *types.NOOPBlockHooks,
 					bool]()
 				e.StateAccount.Set(a, true)
 				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
@@ -90,6 +91,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 				e := types.RegisterExtras[
 					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
 					types.NOOPBodyHooks, *types.NOOPBodyHooks,
+					types.NOOPBlockHooks, *types.NOOPBlockHooks,
 					bool]()
 				e.StateAccount.Set(a, false) // the explicit part
 
@@ -105,6 +107,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 				e := types.RegisterExtras[
 					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
 					types.NOOPBodyHooks, *types.NOOPBodyHooks,
+					types.NOOPBlockHooks, *types.NOOPBlockHooks,
 					bool]()
 				// Note that `a` is reflected, unchanged (the implicit part).
 				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
@@ -119,6 +122,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 				e := types.RegisterExtras[
 					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
 					types.NOOPBodyHooks, *types.NOOPBodyHooks,
+					types.NOOPBlockHooks, *types.NOOPBlockHooks,
 					arbitraryPayload]()
 				p := arbitraryPayload{arbitraryData}
 				e.StateAccount.Set(a, p)
