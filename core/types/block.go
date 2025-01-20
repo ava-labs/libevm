@@ -176,6 +176,8 @@ type Body struct {
 	Transactions []*Transaction
 	Uncles       []*Header
 	Withdrawals  []*Withdrawal `rlp:"optional"`
+
+	extra *pseudo.Type // See [RegisterExtras]
 }
 
 // Block represents an Ethereum block.
@@ -209,6 +211,8 @@ type Block struct {
 	// inter-peer block relay.
 	ReceivedAt   time.Time
 	ReceivedFrom interface{}
+
+	extra *pseudo.Type // See [RegisterExtras]
 }
 
 // "external" block encoding. used for eth protocol, etc.
@@ -309,11 +313,14 @@ func CopyHeader(h *Header) *Header {
 		cpy.ParentBeaconRoot = new(common.Hash)
 		*cpy.ParentBeaconRoot = *h.ParentBeaconRoot
 	}
+	if h.extra != nil {
+		cpy.extra = h.extra.Copy()
+	}
 	return &cpy
 }
 
-// DecodeRLP decodes a block from RLP.
-func (b *Block) DecodeRLP(s *rlp.Stream) error {
+// decodeRLP decodes a block from RLP.
+func (b *Block) decodeRLP(s *rlp.Stream) error {
 	var eb extblock
 	_, size, _ := s.Kind()
 	if err := s.Decode(&eb); err != nil {
@@ -324,8 +331,8 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// EncodeRLP serializes a block as RLP.
-func (b *Block) EncodeRLP(w io.Writer) error {
+// encodeRLP serializes a block as RLP.
+func (b *Block) encodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &extblock{
 		Header:      b.header,
 		Txs:         b.transactions,
@@ -337,7 +344,11 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 // Body returns the non-header content of the block.
 // Note the returned data is not an independent copy.
 func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.withdrawals}
+	return &Body{
+		Transactions: b.transactions,
+		Uncles:       b.uncles,
+		Withdrawals:  b.withdrawals,
+	}
 }
 
 // Accessors for body data. These do not return a copy because the content

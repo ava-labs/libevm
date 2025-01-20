@@ -75,11 +75,69 @@ func (hh *stubHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
 	return hh.errDecode
 }
 
+type stubBlockHooks struct {
+	suffix                        []byte
+	gotRawRLPToDecode             []byte
+	setBlockToOnUnmarshalOrDecode Block
+
+	errEncode, errDecode error
+}
+
+func fakeBlockRLP(b *Block, suffix []byte) []byte {
+	return append(crypto.Keccak256(b.Header().ParentHash[:]), suffix...)
+}
+
+func (bh *stubBlockHooks) EncodeRLP(b *Block, w io.Writer) error {
+	if _, err := w.Write(fakeBlockRLP(b, bh.suffix)); err != nil {
+		return err
+	}
+	return bh.errEncode
+}
+
+func (bh *stubBlockHooks) DecodeRLP(b *Block, s *rlp.Stream) error {
+	r, err := s.Raw()
+	if err != nil {
+		return err
+	}
+	bh.gotRawRLPToDecode = r
+	*b = bh.setBlockToOnUnmarshalOrDecode
+	return bh.errDecode
+}
+
+type stubBodyHooks struct {
+	encoding                     []byte
+	gotRawRLPToDecode            []byte
+	setBodyToOnUnmarshalOrDecode Body
+
+	errEncode, errDecode error
+}
+
+func (bh *stubBodyHooks) EncodeRLP(b *Body, w io.Writer) error {
+	if _, err := w.Write(bh.encoding); err != nil {
+		return err
+	}
+	return bh.errEncode
+}
+
+func (bh *stubBodyHooks) DecodeRLP(b *Body, s *rlp.Stream) error {
+	r, err := s.Raw()
+	if err != nil {
+		return err
+	}
+	bh.gotRawRLPToDecode = r
+	*b = bh.setBodyToOnUnmarshalOrDecode
+	return bh.errDecode
+}
+
 func TestHeaderHooks(t *testing.T) {
 	TestOnlyClearRegisteredExtras()
 	defer TestOnlyClearRegisteredExtras()
 
-	extras := RegisterExtras[stubHeaderHooks, *stubHeaderHooks, struct{}]()
+	extras := RegisterExtras[
+		stubHeaderHooks, *stubHeaderHooks,
+		stubBlockHooks, *stubBlockHooks,
+		stubBodyHooks, *stubBodyHooks,
+		struct{}]()
 	rng := ethtest.NewPseudoRand(13579)
 
 	suffix := rng.Bytes(8)
