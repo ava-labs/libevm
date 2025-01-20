@@ -61,7 +61,7 @@ func (p *Pseudo[T]) TypeAndValue() (*Type, *Value[T]) {
 }
 
 // From returns a Pseudo[T] constructed from `v`.
-func From[T any](v T) *Pseudo[T] {
+func From[T any](v copier[T]) *Pseudo[T] {
 	t := &Type{
 		val: &concrete[T]{
 			val: v,
@@ -74,14 +74,14 @@ func From[T any](v T) *Pseudo[T] {
 // that pointers, slices, maps, etc. will therefore be nil.
 //
 // [zero value]: https://go.dev/tour/basics/12
-func Zero[T any]() *Pseudo[T] {
+func Zero[T copier[T]]() *Pseudo[T] {
 	var x T
 	return From[T](x)
 }
 
 // PointerTo is equivalent to [From] called with a pointer to the payload
 // carried by `t`. It first confirms that the payload is of type `T`.
-func PointerTo[T any](t *Type) (*Pseudo[*T], error) {
+func PointerTo[T copier[T]](t *Type) (*Pseudo[*T], error) {
 	c, ok := t.val.(*concrete[T])
 	if !ok {
 		var want *T
@@ -92,7 +92,7 @@ func PointerTo[T any](t *Type) (*Pseudo[*T], error) {
 
 // MustPointerTo is equivalent to [PointerTo] except that it panics instead of
 // returning an error.
-func MustPointerTo[T any](t *Type) *Pseudo[*T] {
+func MustPointerTo[T copier[T]](t *Type) *Pseudo[*T] {
 	p, err := PointerTo[T](t)
 	if err != nil {
 		panic(err)
@@ -145,6 +145,13 @@ func (v *Value[T]) Get() T { return v.t.val.get().(T) } //nolint:forcetypeassert
 // Set sets the value.
 func (v *Value[T]) Set(val T) { v.t.val.mustSet(val) }
 
+// Copy deep copies the type.
+func (t *Type) Copy() *Type {
+	cpy := new(Type)
+	cpy.val = t.val.copy()
+	return cpy
+}
+
 // MarshalJSON implements the [json.Marshaler] interface.
 func (t *Type) MarshalJSON() ([]byte, error) { return t.val.MarshalJSON() }
 
@@ -188,6 +195,7 @@ type value interface {
 	canSetTo(any) bool
 	set(any) error
 	mustSet(any)
+	copy() value
 
 	json.Marshaler
 	json.Unmarshaler
@@ -197,7 +205,7 @@ type value interface {
 }
 
 type concrete[T any] struct {
-	val T
+	val copier[T]
 }
 
 func (c *concrete[T]) get() any { return c.val }
@@ -220,7 +228,7 @@ func (e *invalidTypeError[T]) Error() string {
 }
 
 func (c *concrete[T]) set(v any) error {
-	vv, ok := v.(T)
+	vv, ok := v.(copier[T])
 	if !ok {
 		// Other invariants in this implementation (aim to) guarantee that this
 		// will never happen.
@@ -237,10 +245,20 @@ func (c *concrete[T]) mustSet(v any) {
 	_ = 0 // for happy-path coverage inspection
 }
 
+type copier[T any] interface {
+	copy() copier[T]
+}
+
+func (c *concrete[T]) copy() value {
+	cpy := new(concrete[T])
+	cpy.val = c.val.copy()
+	return cpy
+}
+
 func (c *concrete[T]) MarshalJSON() ([]byte, error) { return json.Marshal(c.val) }
 
 func (c *concrete[T]) UnmarshalJSON(b []byte) error {
-	var v T
+	var v copier[T]
 	if err := json.Unmarshal(b, &v); err != nil {
 		return err
 	}

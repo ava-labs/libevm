@@ -314,7 +314,7 @@ func CopyHeader(h *Header) *Header {
 		*cpy.ParentBeaconRoot = *h.ParentBeaconRoot
 	}
 	if h.extra != nil {
-		cpy.extra = h.extra
+		cpy.extra = h.extra.Copy()
 	}
 	return &cpy
 }
