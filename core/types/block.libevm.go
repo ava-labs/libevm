@@ -32,6 +32,7 @@ type HeaderHooks interface {
 	UnmarshalJSON(*Header, []byte) error //nolint:govet
 	EncodeRLP(*Header, io.Writer) error
 	DecodeRLP(*Header, *rlp.Stream) error
+	Copy(*Header) *Header
 }
 
 // hooks returns the Header's registered HeaderHooks, if any, otherwise a
@@ -107,4 +108,13 @@ func (*NOOPHeaderHooks) EncodeRLP(h *Header, w io.Writer) error {
 func (*NOOPHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
 	type withoutMethods Header
 	return s.Decode((*withoutMethods)(h))
+}
+
+func (n *NOOPHeaderHooks) Copy(h *Header) *Header {
+	return copyHeader(h)
+}
+
+// CopyHeader creates a deep copy of a block header.
+func CopyHeader(h *Header) *Header {
+	return h.hooks().Copy(h)
 }
