@@ -75,6 +75,10 @@ func (hh *stubHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
 	return hh.errDecode
 }
 
+func (hh *stubHeaderHooks) Copy(h *Header) *Header {
+	return h
+}
+
 func TestHeaderHooks(t *testing.T) {
 	TestOnlyClearRegisteredExtras()
 	defer TestOnlyClearRegisteredExtras()
