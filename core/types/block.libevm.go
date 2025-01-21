@@ -111,7 +111,7 @@ func (*NOOPHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
 }
 
 func (n *NOOPHeaderHooks) Copy(h *Header) *Header {
-	return copyHeader(h)
+	return CopyEthHeader(h)
 }
 
 // CopyHeader creates a deep copy of a block header.
