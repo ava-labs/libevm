@@ -133,6 +133,10 @@ func (bh *stubBlockHooks) DecodeRLP(b *Block, s *rlp.Stream) error {
 	return bh.errDecode
 }
 
+func (bh *stubBlockHooks) Body(b *Block) *Body {
+	return b.EthBody()
+}
+
 func TestHeaderHooks(t *testing.T) {
 	TestOnlyClearRegisteredExtras()
 	defer TestOnlyClearRegisteredExtras()

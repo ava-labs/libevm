@@ -339,9 +339,10 @@ func (b *Block) encodeRLP(w io.Writer) error {
 	})
 }
 
-// Body returns the non-header content of the block.
+// EthBody returns the non-header content of an Ethereum block.
 // Note the returned data is not an independent copy.
-func (b *Block) Body() *Body {
+// Use [Block.Body] instead if your block has any registered extra.
+func (b *Block) EthBody() *Body {
 	return &Body{
 		Transactions: b.transactions,
 		Uncles:       b.uncles,

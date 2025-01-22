@@ -187,6 +187,7 @@ func (*NOOPBodyHooks) DecodeRLP(b *Body, s *rlp.Stream) error {
 type BlockHooks interface {
 	EncodeRLP(*Block, io.Writer) error
 	DecodeRLP(*Block, *rlp.Stream) error
+	Body(*Block) *Body
 }
 
 // hooks returns the Block's registered BlockHooks, if any, otherwise a
@@ -243,6 +244,10 @@ func (*NOOPBlockHooks) DecodeRLP(b *Block, s *rlp.Stream) error {
 	return b.decodeRLP(s)
 }
 
+func (*NOOPBlockHooks) Body(b *Block) *Body {
+	return b.EthBody()
+}
+
 func (b *Block) SetHeader(header *Header) {
 	b.header = header
 }
@@ -253,4 +258,10 @@ func (b *Block) SetUncles(uncles []*Header) {
 
 func (b *Block) SetTransactions(transactions Transactions) {
 	b.transactions = transactions
+}
+
+// Body returns the non-header content of the block.
+// Note the returned data is not an independent copy.
+func (b *Block) Body() *Body {
+	return b.hooks().Body(b)
 }
