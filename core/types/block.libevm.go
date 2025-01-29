@@ -108,3 +108,76 @@ func (*NOOPHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
 	type withoutMethods Header
 	return s.Decode((*withoutMethods)(h))
 }
+
+var (
+	_ interface {
+		rlp.Encoder
+		rlp.Decoder
+	} = (*Body)(nil)
+
+	// The implementations of [Body.EncodeRLP] and [Body.DecodeRLP] make
+	// assumptions about the struct fields, which we lock in here as a change
+	// detector. If this breaks then it MUST be updated and the RLP methods
+	// reviewed + new backwards-compatibility tests added.
+	_ = &Body{[]*Transaction{}, []*Header{}, []*Withdrawal{}}
+)
+
+// EncodeRLP implements the [rlp.Encoder] interface.
+func (b *Body) EncodeRLP(dst io.Writer) error {
+	w := rlp.NewEncoderBuffer(dst)
+
+	return w.InList(func() error {
+		if err := rlp.EncodeListToBuffer(w, b.Transactions); err != nil {
+			return err
+		}
+		if err := rlp.EncodeListToBuffer(w, b.Uncles); err != nil {
+			return err
+		}
+
+		withdraws := len(b.Withdrawals) > 0
+
+		// TODO(arr4n): call hook here, passing `withdraws` as a
+		// mustWriteEmptyOptional flag. The hook could also return a
+		// terminateEncoding boolean, which would signal that we should return
+		// immediately here (useful if the hook handles the later fields, but
+		// probably YAGNI for now).
+
+		if withdraws {
+			if err := rlp.EncodeListToBuffer(w, b.Withdrawals); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// DecodeRLP implements the [rlp.Decoder] interface.
+func (b *Body) DecodeRLP(s *rlp.Stream) error {
+	return s.FromList(func() error {
+		txs, err := rlp.DecodeList[Transaction](s)
+		if err != nil {
+			return err
+		}
+		uncles, err := rlp.DecodeList[Header](s)
+		if err != nil {
+			return err
+		}
+		*b = Body{
+			Transactions: txs,
+			Uncles:       uncles,
+		}
+
+		// TODO(arr4n): call hook here
+
+		if !s.MoreDataInList() {
+			return nil
+		}
+
+		ws, err := rlp.DecodeList[Withdrawal](s)
+		if err != nil {
+			return err
+		}
+		b.Withdrawals = ws
+		return nil
+	})
+}
