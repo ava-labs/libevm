@@ -19,6 +19,7 @@ package types_test
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -110,23 +111,39 @@ func testHeaderRLPBackwardsCompatibility(t *testing.T) {
 }
 
 func TestBodyRLPBackwardsCompatibility(t *testing.T) {
-	rng := ethtest.NewPseudoRand(0)
+	t.Parallel()
+	for seed := uint64(0); seed < 1_000; seed++ {
+		seed := seed
+		t.Run(fmt.Sprintf("seed_%d", seed), func(t *testing.T) {
+			t.Parallel()
+			testBodyRLPBackwardsCompatibility(t, seed)
+		})
+	}
+}
 
-	body := new(Body)
-	for i, n := 0, rng.Intn(3)+1; i < n; i++ {
+func testBodyRLPBackwardsCompatibility(t *testing.T, seed uint64) {
+	rng := ethtest.NewPseudoRand(seed)
+
+	body := &Body{
+		// As this is a round-trip test, the slices MUST NOT be nil as the rlp
+		// package will always set them.
+		Transactions: []*Transaction{},
+		Uncles:       []*Header{},
+	}
+	for i, n := 0, rng.Intn(5); i < n; i++ {
 		tx := NewTx(&LegacyTx{
 			Nonce: rng.Uint64(),
 		})
 		body.Transactions = append(body.Transactions, tx)
 	}
-	for i, n := 0, rng.Intn(3)+1; i < n; i++ {
+	for i, n := 0, rng.Intn(5); i < n; i++ {
 		body.Uncles = append(body.Uncles, &Header{
 			ParentHash: rng.Hash(),
 		})
 	}
 
 	var withdrawals Withdrawals
-	for i, n := 0, rng.Intn(3)+1; i < n; i++ {
+	for i, n := 0, rng.Intn(4)+1; i < n; i++ {
 		withdrawals = append(withdrawals, &Withdrawal{
 			Index: rng.Uint64(),
 		})
@@ -156,7 +173,7 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			body.Withdrawals = tt.withdrawals
 
-			// The originaly [Body] doesn't implement [rlp.Encoder] nor
+			// The original [Body] doesn't implement [rlp.Encoder] nor
 			// [rlp.Decoder] so we can use a methodless equivalent as gold
 			// standard.
 			type withoutMethods Body
