@@ -47,7 +47,14 @@ func (s *Stream) FromList(fn func() error) error {
 }
 
 func DecodeList[T any](s *Stream) ([]*T, error) {
-	var vals []*T
+	// From the package-level documentation:
+	//
+	// > Note that package rlp never leaves a pointer-type struct field as nil
+	// > unless one of the "nil" struct tags is present.
+	//
+	// We therefore return a non-nil pointer to maintain said invariant as it
+	// makes use of this function easier.
+	vals := make([]*T, 0)
 	err := s.FromList(func() error {
 		for s.MoreDataInList() {
 			var v T

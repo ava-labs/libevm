@@ -134,7 +134,7 @@ func (b *Body) EncodeRLP(dst io.Writer) error {
 			return err
 		}
 
-		withdraws := len(b.Withdrawals) > 0
+		withdraws := b.Withdrawals != nil
 
 		// TODO(arr4n): call hook here, passing `withdraws` as a
 		// mustWriteEmptyOptional flag. The hook could also return a
