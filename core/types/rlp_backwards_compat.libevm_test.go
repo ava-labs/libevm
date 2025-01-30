@@ -121,6 +121,7 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 	}
 }
 
+//nolint:thelper
 func testBodyRLPBackwardsCompatibility(t *testing.T, seed uint64) {
 	rng := ethtest.NewPseudoRand(seed)
 
@@ -205,14 +206,19 @@ func testBodyRLPBackwardsCompatibility(t *testing.T, seed uint64) {
 	}
 }
 
+// txComparer returns an equality checker for use with [cmp.Comparer].
 func txComparer(tb testing.TB) func(_, _ *Transaction) bool {
+	tb.Helper()
 	return func(a, b *Transaction) bool {
+		tb.Helper()
+
 		if a == nil && b == nil {
 			return true
 		}
 		if a == nil || b == nil {
 			return false
 		}
+
 		aBuf, err := a.MarshalBinary()
 		require.NoErrorf(tb, err, "%T.MarshalBinary()", a)
 		bBuf, err := b.MarshalBinary()
