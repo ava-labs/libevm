@@ -134,20 +134,14 @@ func (b *Body) EncodeRLP(dst io.Writer) error {
 			return err
 		}
 
-		withdraws := b.Withdrawals != nil
-
-		// TODO(arr4n): call hook here, passing `withdraws` as a
-		// mustWriteEmptyOptional flag. The hook could also return a
-		// terminateEncoding boolean, which would signal that we should return
-		// immediately here (useful if the hook handles the later fields, but
-		// probably YAGNI for now).
-
-		if withdraws {
-			if err := rlp.EncodeListToBuffer(w, b.Withdrawals); err != nil {
-				return err
-			}
+		hasLaterOptionalField := b.Withdrawals != nil
+		if err := b.hooks().AppendRLPFields(w, hasLaterOptionalField); err != nil {
+			return err
 		}
-		return nil
+		if !hasLaterOptionalField {
+			return nil
+		}
+		return rlp.EncodeListToBuffer(w, b.Withdrawals)
 	})
 }
 
@@ -167,8 +161,9 @@ func (b *Body) DecodeRLP(s *rlp.Stream) error {
 			Uncles:       uncles,
 		}
 
-		// TODO(arr4n): call hook here
-
+		if err := b.hooks().DecodeExtraRLPFields(s); err != nil {
+			return err
+		}
 		if !s.MoreDataInList() {
 			return nil
 		}
@@ -181,3 +176,19 @@ func (b *Body) DecodeRLP(s *rlp.Stream) error {
 		return nil
 	})
 }
+
+type BodyHooks interface {
+	AppendRLPFields(_ rlp.EncoderBuffer, mustWriteEmptyOptional bool) error
+	DecodeExtraRLPFields(*rlp.Stream) error
+}
+
+var todoRegisteredBodyHooks BodyHooks = NOOPBodyHooks{}
+
+func (b *Body) hooks() BodyHooks {
+	return todoRegisteredBodyHooks
+}
+
+type NOOPBodyHooks struct{}
+
+func (NOOPBodyHooks) AppendRLPFields(rlp.EncoderBuffer, bool) error { return nil }
+func (NOOPBodyHooks) DecodeExtraRLPFields(*rlp.Stream) error        { return nil }
