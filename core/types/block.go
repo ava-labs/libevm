@@ -277,9 +277,8 @@ func NewBlockWithWithdrawals(header *Header, txs []*Transaction, uncles []*Heade
 	return b.WithWithdrawals(withdrawals)
 }
 
-// CopyEthHeader creates a deep copy of an Ethereum block header.
-// Use [CopyHeader] instead if your header has any registered extra.
-func CopyEthHeader(h *Header) *Header {
+// CopyHeader creates a deep copy of a block header.
+func CopyHeader(h *Header) *Header {
 	cpy := *h
 	if cpy.Difficulty = new(big.Int); h.Difficulty != nil {
 		cpy.Difficulty.Set(h.Difficulty)
@@ -310,6 +309,7 @@ func CopyEthHeader(h *Header) *Header {
 		cpy.ParentBeaconRoot = new(common.Hash)
 		*cpy.ParentBeaconRoot = *h.ParentBeaconRoot
 	}
+	h.hooks().PostCopy(&cpy, h)
 	return &cpy
 }
 
