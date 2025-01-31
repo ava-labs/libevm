@@ -175,7 +175,7 @@ func testBodyRLPBackwardsCompatibility(t *testing.T, seed uint64) {
 			body.Withdrawals = tt.withdrawals
 
 			// The original [Body] doesn't implement [rlp.Encoder] nor
-			// [rlp.Decoder] so we can use a methodless equivalent as gold
+			// [rlp.Decoder] so we can use a methodless equivalent as the gold
 			// standard.
 			type withoutMethods Body
 			wantRLP, err := rlp.EncodeToBytes((*withoutMethods)(body))
