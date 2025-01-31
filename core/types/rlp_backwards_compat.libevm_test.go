@@ -17,7 +17,6 @@
 package types_test
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
 	"testing"
@@ -26,7 +25,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/libevm/common"
 	. "github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/libevm/cmpeth"
 	"github.com/ava-labs/libevm/libevm/ethtest"
 	"github.com/ava-labs/libevm/rlp"
 )
@@ -193,10 +194,8 @@ func testBodyRLPBackwardsCompatibility(t *testing.T, seed uint64) {
 				require.NoErrorf(t, err, "rlp.DecodeBytes(..., %T)", got)
 
 				opts := cmp.Options{
-					cmp.Comparer(func(a, b *Header) bool {
-						return a.Hash() == b.Hash()
-					}),
-					cmp.Comparer(txComparer(t)),
+					cmpeth.CompareHeadersByHash(),
+					cmpeth.CompareTransactionsByBinary(t),
 				}
 				if diff := cmp.Diff(body, got, opts); diff != "" {
 					t.Errorf("rlp.DecodeBytes(rlp.EncodeToBytes(%T)) diff (-want +got):\n%s", body, diff)
@@ -206,23 +205,116 @@ func testBodyRLPBackwardsCompatibility(t *testing.T, seed uint64) {
 	}
 }
 
-// txComparer returns an equality checker for use with [cmp.Comparer].
-func txComparer(tb testing.TB) func(_, _ *Transaction) bool {
-	tb.Helper()
-	return func(a, b *Transaction) bool {
-		tb.Helper()
+// cChainBodyExtras carries the same additional fields as the ava-labs/coreth
+// [Body] and implements [BodyHooks] to achieve equivalent RLP {en,de}coding.
+type cChainBodyExtras struct {
+	Version uint32
+	ExtData *[]byte
+}
 
-		if a == nil && b == nil {
-			return true
-		}
-		if a == nil || b == nil {
-			return false
-		}
+var _ BodyHooks = (*cChainBodyExtras)(nil)
 
-		aBuf, err := a.MarshalBinary()
-		require.NoErrorf(tb, err, "%T.MarshalBinary()", a)
-		bBuf, err := b.MarshalBinary()
-		require.NoErrorf(tb, err, "%T.MarshalBinary()", b)
-		return bytes.Equal(aBuf, bBuf)
+func (e *cChainBodyExtras) AppendRLPFields(b rlp.EncoderBuffer, _ bool) error {
+	b.WriteUint64(uint64(e.Version))
+	if e.ExtData != nil {
+		b.WriteString(string(*e.ExtData))
+	} else {
+		b.WriteString("")
+	}
+	return nil
+}
+
+func (e *cChainBodyExtras) DecodeExtraRLPFields(s *rlp.Stream) error {
+	if err := s.Decode(&e.Version); err != nil {
+		return err
+	}
+
+	buf, err := s.Bytes()
+	if err != nil {
+		return err
+	}
+	if len(buf) > 0 {
+		e.ExtData = &buf
+	} else {
+		// Respect the `rlp:"nil"` field tag.
+		e.ExtData = nil
+	}
+
+	return nil
+}
+
+func TestBodyRLPCChainCompat(t *testing.T) {
+	// The inputs to this test were used to generate the expected RLP with
+	// ava-labs/coreth. This serves as both an example of how to use [BodyHooks]
+	// and a test of compatibility.
+
+	t.Cleanup(func() {
+		TestOnlyRegisterBodyHooks(NOOPBodyHooks{})
+	})
+
+	to := common.HexToAddress(`decafc0ffeebad`)
+	body := &Body{
+		Transactions: []*Transaction{
+			NewTx(&LegacyTx{
+				Nonce: 42,
+				To:    &to,
+			}),
+		},
+		Uncles: []*Header{ /* RLP encoding differs in ava-labs/coreth */ },
+	}
+
+	const version = 314159
+	tests := []struct {
+		name  string
+		extra *cChainBodyExtras
+		// WARNING: changing these values might break backwards compatibility of
+		// RLP encoding!
+		wantRLPHex string
+	}{
+		{
+			extra: &cChainBodyExtras{
+				Version: version,
+			},
+			wantRLPHex: `e5dedd2a80809400000000000000000000000000decafc0ffeebad8080808080c08304cb2f80`,
+		},
+		{
+			extra: &cChainBodyExtras{
+				Version: version,
+				ExtData: &[]byte{1, 4, 2, 8, 5, 7},
+			},
+			wantRLPHex: `ebdedd2a80809400000000000000000000000000decafc0ffeebad8080808080c08304cb2f86010402080507`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wantRLP, err := hex.DecodeString(tt.wantRLPHex)
+			require.NoError(t, err)
+
+			t.Run("Encode", func(t *testing.T) {
+				TestOnlyRegisterBodyHooks(tt.extra)
+				got, err := rlp.EncodeToBytes(body)
+				require.NoError(t, err)
+				assert.Equal(t, wantRLP, got)
+			})
+
+			t.Run("Decode", func(t *testing.T) {
+				var extra cChainBodyExtras
+				TestOnlyRegisterBodyHooks(&extra)
+
+				got := new(Body)
+				err := rlp.DecodeBytes(wantRLP, got)
+				require.NoError(t, err)
+				assert.Equal(t, tt.extra, &extra)
+
+				opts := cmp.Options{
+					cmpeth.CompareHeadersByHash(),
+					cmpeth.CompareTransactionsByBinary(t),
+				}
+				if diff := cmp.Diff(body, got, opts); diff != "" {
+					t.Errorf("%s", diff)
+				}
+			})
+		})
 	}
 }

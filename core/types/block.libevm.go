@@ -22,6 +22,7 @@ import (
 	"io"
 
 	"github.com/ava-labs/libevm/libevm/pseudo"
+	"github.com/ava-labs/libevm/libevm/testonly"
 	"github.com/ava-labs/libevm/rlp"
 )
 
@@ -180,6 +181,12 @@ func (b *Body) DecodeRLP(s *rlp.Stream) error {
 type BodyHooks interface {
 	AppendRLPFields(_ rlp.EncoderBuffer, mustWriteEmptyOptional bool) error
 	DecodeExtraRLPFields(*rlp.Stream) error
+}
+
+func TestOnlyRegisterBodyHooks(h BodyHooks) {
+	testonly.OrPanic(func() {
+		todoRegisteredBodyHooks = h
+	})
 }
 
 var todoRegisteredBodyHooks BodyHooks = NOOPBodyHooks{}
