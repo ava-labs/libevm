@@ -32,7 +32,7 @@ type HeaderHooks interface {
 	UnmarshalJSON(*Header, []byte) error //nolint:govet
 	EncodeRLP(*Header, io.Writer) error
 	DecodeRLP(*Header, *rlp.Stream) error
-	PostCopy(dst, src *Header)
+	PostCopy(dst *Header)
 }
 
 // hooks returns the Header's registered HeaderHooks, if any, otherwise a
@@ -110,4 +110,4 @@ func (*NOOPHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
 	return s.Decode((*withoutMethods)(h))
 }
 
-func (n *NOOPHeaderHooks) PostCopy(dst, src *Header) {}
+func (n *NOOPHeaderHooks) PostCopy(dst *Header) {}
