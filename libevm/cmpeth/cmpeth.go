@@ -21,8 +21,9 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/ava-labs/libevm/core/types"
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/ava-labs/libevm/core/types"
 )
 
 // CompareHeadersByHash returns an option to compare Headers based on
