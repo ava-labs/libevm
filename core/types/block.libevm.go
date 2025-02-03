@@ -178,23 +178,33 @@ func (b *Body) DecodeRLP(s *rlp.Stream) error {
 	})
 }
 
+// BodyHooks are required for all types registered with [RegisterExtras] for
+// [Body] payloads.
 type BodyHooks interface {
 	AppendRLPFields(_ rlp.EncoderBuffer, mustWriteEmptyOptional bool) error
 	DecodeExtraRLPFields(*rlp.Stream) error
 }
 
+// TestOnlyRegisterBodyHooks is a temporary means of "registering" BodyHooks for
+// the purpose of testing. It will panic if called outside of a test.
 func TestOnlyRegisterBodyHooks(h BodyHooks) {
 	testonly.OrPanic(func() {
 		todoRegisteredBodyHooks = h
 	})
 }
 
+// todoRegisteredBodyHooks is a temporary placeholder for "registering"
+// BodyHooks, before they are included in [RegisterExtras].
 var todoRegisteredBodyHooks BodyHooks = NOOPBodyHooks{}
 
 func (b *Body) hooks() BodyHooks {
+	// TODO(arr4n): when incorporating BodyHooks into [RegisterExtras], the
+	// [todoRegisteredBodyHooks] variable MUST be removed.
 	return todoRegisteredBodyHooks
 }
 
+// NOOPBodyHooks implements [BodyHooks] such that they are equivalent to no type
+// having been registered.
 type NOOPBodyHooks struct{}
 
 func (NOOPBodyHooks) AppendRLPFields(rlp.EncoderBuffer, bool) error { return nil }
