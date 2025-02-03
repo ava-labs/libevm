@@ -61,7 +61,7 @@ func newInspectOpt(fn func(*inspectDatabaseConfig)) InspectDatabaseOption {
 // for every `key` not otherwise matched by the [InspectDatabase] iterator loop.
 // The returned boolean signals whether the recorder matches the key, thus
 // stopping further matches.
-func WithDatabaseStatRecorder(rec func(key []byte, _ common.StorageSize) bool) InspectDatabaseOption {
+func WithDatabaseStatRecorder(rec func(key []byte, size common.StorageSize) bool) InspectDatabaseOption {
 	return newInspectOpt(func(c *inspectDatabaseConfig) {
 		c.statRecorder = rec
 	})
