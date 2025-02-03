@@ -216,11 +216,13 @@ var _ BodyHooks = (*cChainBodyExtras)(nil)
 
 func (e *cChainBodyExtras) AppendRLPFields(b rlp.EncoderBuffer, _ bool) error {
 	b.WriteUint64(uint64(e.Version))
+
+	var data []byte
 	if e.ExtData != nil {
-		b.WriteString(string(*e.ExtData))
-	} else {
-		b.WriteString("")
+		data = *e.ExtData
 	}
+	b.WriteBytes(data)
+
 	return nil
 }
 
