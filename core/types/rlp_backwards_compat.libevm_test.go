@@ -184,8 +184,8 @@ func testBodyRLPBackwardsCompatibility(t *testing.T, seed uint64) {
 
 			t.Run("Encode", func(t *testing.T) {
 				got, err := rlp.EncodeToBytes(body)
-				require.NoErrorf(t, err, "rlp.EncodeToBytes(%T)", body)
-				assert.Equalf(t, wantRLP, got, "rlp.EncodeToBytes(%T)", body)
+				require.NoErrorf(t, err, "rlp.EncodeToBytes(%#v)", body)
+				assert.Equalf(t, wantRLP, got, "rlp.EncodeToBytes(%#v)", body)
 			})
 
 			t.Run("Decode", func(t *testing.T) {
