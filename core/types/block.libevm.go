@@ -117,7 +117,7 @@ var (
 	} = (*Body)(nil)
 
 	// The implementations of [Body.EncodeRLP] and [Body.DecodeRLP] make
-	// assumptions about the struct fields, which we lock in here as a change
+	// assumptions about the struct fields and their order, which we lock in here as a change
 	// detector. If this breaks then it MUST be updated and the RLP methods
 	// reviewed + new backwards-compatibility tests added.
 	_ = &Body{[]*Transaction{}, []*Header{}, []*Withdrawal{}}

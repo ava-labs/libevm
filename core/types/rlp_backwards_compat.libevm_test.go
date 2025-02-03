@@ -191,14 +191,14 @@ func testBodyRLPBackwardsCompatibility(t *testing.T, seed uint64) {
 			t.Run("Decode", func(t *testing.T) {
 				got := new(Body)
 				err := rlp.DecodeBytes(wantRLP, got)
-				require.NoErrorf(t, err, "rlp.DecodeBytes(..., %T)", got)
+				require.NoErrorf(t, err, "rlp.DecodeBytes(%v, %T)", wantRLP, got)
 
 				opts := cmp.Options{
 					cmpeth.CompareHeadersByHash(),
 					cmpeth.CompareTransactionsByBinary(t),
 				}
 				if diff := cmp.Diff(body, got, opts); diff != "" {
-					t.Errorf("rlp.DecodeBytes(rlp.EncodeToBytes(%T)) diff (-want +got):\n%s", body, diff)
+					t.Errorf("rlp.DecodeBytes(rlp.EncodeToBytes(%#v)) diff (-want +got):\n%s", body, diff)
 				}
 			})
 		})
