@@ -254,12 +254,11 @@ func TestBodyRLPCChainCompat(t *testing.T) {
 		TestOnlyRegisterBodyHooks(NOOPBodyHooks{})
 	})
 
-	to := common.HexToAddress(`decafc0ffeebad`)
 	body := &Body{
 		Transactions: []*Transaction{
 			NewTx(&LegacyTx{
 				Nonce: 42,
-				To:    &to,
+				To:    common.PointerTo(common.HexToAddress(`decafc0ffeebad`)),
 			}),
 		},
 		Uncles: []*Header{ /* RLP encoding differs in ava-labs/coreth */ },
