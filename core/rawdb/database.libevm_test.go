@@ -17,6 +17,8 @@
 package rawdb_test
 
 import (
+	"fmt"
+
 	"github.com/ava-labs/libevm/common"
 	// To ensure that all methods are available to importing packages, this test
 	// is defined in package `rawdb_test` instead of `rawdb`.
@@ -26,15 +28,17 @@ import (
 // ExampleDatabaseStat demonstrates the method signatures of DatabaseStat, which
 // exposes an otherwise unexported type that won't have its methods documented.
 func ExampleDatabaseStat() {
-	var (
-		stat rawdb.DatabaseStat
-		size common.StorageSize
-	)
+	var stat rawdb.DatabaseStat
 
-	stat.Add(size)
+	stat.Add(common.StorageSize(0)) // only to demonstrate param type
+	stat.Add(1)
+	stat.Add(2)
+	stat.Add(4)
 
-	var (
-		_ string = stat.Size()  // sum of all values passed to Add()
-		_ string = stat.Count() // number of calls to Add()
-	)
+	fmt.Println("Sum:", stat.Size())    // sum of all values passed to Add()
+	fmt.Println("Count:", stat.Count()) // number of calls to Add()
+
+	// Output:
+	// Sum: 7.00 B
+	// Count: 4
 }
