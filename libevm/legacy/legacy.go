@@ -44,7 +44,9 @@ func (c PrecompiledStatefulContract) Upgrade() vm.PrecompiledStatefulContract {
 			return nil, fmt.Errorf("%w: %d > %d", errRemainingGasExceedsSuppliedGas, remainingGas, gas)
 		}
 		if used := gas - remainingGas; used > 0 {
-			env.UseGas(used)
+			if hasEnoughGas := env.UseGas(used); !hasEnoughGas {
+				return nil, vm.ErrOutOfGas
+			}
 		}
 		return ret, err
 	}
