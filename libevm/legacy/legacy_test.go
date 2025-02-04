@@ -1,0 +1,100 @@
+// Copyright 2025 the libevm authors.
+//
+// The libevm additions to go-ethereum are free software: you can redistribute
+// them and/or modify them under the terms of the GNU Lesser General Public License
+// as published by the Free Software Foundation, either version 3 of the License,
+// or (at your option) any later version.
+//
+// The libevm additions are distributed in the hope that they will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser
+// General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see
+// <http://www.gnu.org/licenses/>.
+
+package legacy
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/libevm/core/vm"
+)
+
+func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
+	t.Parallel()
+
+	testCases := map[string]struct {
+		envGas        uint64
+		input         []byte
+		cRet          []byte
+		cRemainingGas uint64
+		cErr          error
+		wantRet       []byte
+		wantErr       string
+		wantGasUsed   uint64
+	}{
+		"call_error": {
+			envGas:        10,
+			input:         []byte{1},
+			cRet:          []byte{2},
+			cRemainingGas: 6,
+			cErr:          errors.New("test error"),
+			wantRet:       []byte{2},
+			wantErr:       "test error",
+			wantGasUsed:   4,
+		},
+		"remaining_gas_exceeds_supplied_gas": {
+			envGas:        10,
+			input:         []byte{1},
+			cRet:          []byte{2},
+			cRemainingGas: 11,
+			wantErr:       "remaining gas 11 exceeds supplied gas 10",
+		},
+		"zero_remaining_gas": {
+			envGas:      10,
+			input:       []byte{1},
+			cRet:        []byte{2},
+			wantRet:     []byte{2},
+			wantGasUsed: 10,
+		},
+		"used_one_gas": {
+			envGas:        10,
+			input:         []byte{1},
+			cRet:          []byte{2},
+			cRemainingGas: 9,
+			wantRet:       []byte{2},
+			wantGasUsed:   1,
+		},
+	}
+
+	for name, testCase := range testCases {
+		testCase := testCase
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			env := &stubPrecompileEnvironment{
+				gasToReturn: testCase.envGas,
+			}
+			c := PrecompiledStatefulContract(func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+				return testCase.cRet, testCase.cRemainingGas, testCase.cErr
+			})
+
+			upgraded := c.Upgrade()
+
+			ret, err := upgraded(env, testCase.input)
+			if testCase.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, testCase.wantErr)
+			}
+			assert.Equal(t, testCase.wantRet, ret)
+			assert.Equal(t, testCase.wantGasUsed, env.gasUsed)
+		})
+	}
+}
