@@ -47,29 +47,31 @@ func (s *stubPrecompileEnvironment) UseGas(gas uint64) bool {
 func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 	t.Parallel()
 
+	errTest := errors.New("test error")
+
 	tests := map[string]struct {
 		envGas        uint64
 		precompileRet []byte
 		remainingGas  uint64
 		precompileErr error
 		wantRet       []byte
-		wantErr       string
+		wantErr       error
 		wantGasUsed   uint64
 	}{
 		"call_error": {
 			envGas:        10,
 			precompileRet: []byte{2},
 			remainingGas:  6,
-			precompileErr: errors.New("test error"),
+			precompileErr: errTest,
 			wantRet:       []byte{2},
-			wantErr:       "test error",
+			wantErr:       errTest,
 			wantGasUsed:   4,
 		},
 		"remaining_gas_exceeds_supplied_gas": {
 			envGas:        10,
 			precompileRet: []byte{2},
 			remainingGas:  11,
-			wantErr:       "remaining gas 11 exceeds supplied gas 10",
+			wantErr:       errRemainingGasExceedsSuppliedGas,
 		},
 		"zero_remaining_gas": {
 			envGas:        10,
@@ -103,11 +105,7 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 			input := []byte("unused")
 
 			ret, err := upgraded(env, input)
-			if testCase.wantErr == "" {
-				require.NoError(t, err)
-			} else {
-				require.EqualError(t, err, testCase.wantErr)
-			}
+			require.ErrorIs(t, err, testCase.wantErr)
 			assert.Equal(t, testCase.wantRet, ret, "bytes returned by upgraded contract")
 			assert.Equalf(t, testCase.wantGasUsed, env.gasUsed, "sum of %T.UseGas() calls", env)
 		})

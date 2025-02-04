@@ -19,9 +19,14 @@
 package legacy
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ava-labs/libevm/core/vm"
+)
+
+var (
+	errRemainingGasExceedsSuppliedGas = errors.New("remaining gas exceeds supplied gas")
 )
 
 // PrecompiledStatefulContract is the legacy signature of
@@ -36,7 +41,7 @@ func (c PrecompiledStatefulContract) Upgrade() vm.PrecompiledStatefulContract {
 		gas := env.Gas()
 		ret, remainingGas, err := c(env, input, gas)
 		if remainingGas > gas {
-			return nil, fmt.Errorf("remaining gas %d exceeds supplied gas %d", remainingGas, gas)
+			return nil, fmt.Errorf("%w: %d > %d", errRemainingGasExceedsSuppliedGas, remainingGas, gas)
 		}
 		if used := gas - remainingGas; used > 0 {
 			env.UseGas(used)
