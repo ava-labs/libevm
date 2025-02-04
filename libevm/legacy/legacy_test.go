@@ -26,6 +26,24 @@ import (
 	"github.com/ava-labs/libevm/core/vm"
 )
 
+// stubPrecompileEnvironment implements [vm.PrecompileEnvironment] for testing.
+type stubPrecompileEnvironment struct {
+	vm.PrecompileEnvironment
+	gasToReturn uint64
+	gasUsed     uint64
+}
+
+// Gas returns the gas supplied to the precompile.
+func (s *stubPrecompileEnvironment) Gas() uint64 {
+	return s.gasToReturn
+}
+
+// UseGas records the gas used by the precompile.
+func (s *stubPrecompileEnvironment) UseGas(gas uint64) bool {
+	s.gasUsed += gas
+	return true
+}
+
 func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 	t.Parallel()
 
