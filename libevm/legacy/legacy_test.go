@@ -47,7 +47,7 @@ func (s *stubPrecompileEnvironment) UseGas(gas uint64) bool {
 func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 	t.Parallel()
 
-	testCases := map[string]struct {
+	tests := map[string]struct {
 		envGas        uint64
 		input         []byte
 		cRet          []byte
@@ -91,8 +91,8 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 		},
 	}
 
-	for name, testCase := range testCases {
-		testCase := testCase
+	for name, test := range tests {
+		testCase := test
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
