@@ -18,7 +18,12 @@
 // equivalents.
 package legacy
 
-import "github.com/ava-labs/libevm/core/vm"
+import (
+	"errors"
+	"fmt"
+
+	"github.com/ava-labs/libevm/core/vm"
+)
 
 // PrecompiledStatefulContract is the legacy signature of
 // [vm.PrecompiledStatefulContract], which explicitly accepts and returns gas
@@ -26,11 +31,18 @@ import "github.com/ava-labs/libevm/core/vm"
 // gas-management methods as this may result in unexpected behaviour.
 type PrecompiledStatefulContract func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error)
 
+var (
+	ErrGasRemainingExceedsGasSupplied = errors.New("remaining gas exceeds supplied gas")
+)
+
 // Upgrade converts the legacy precompile signature into the now-required form.
 func (c PrecompiledStatefulContract) Upgrade() vm.PrecompiledStatefulContract {
 	return func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
 		gas := env.Gas()
 		ret, remainingGas, err := c(env, input, gas)
+		if remainingGas > gas {
+			return nil, fmt.Errorf("%w: %d > %d", ErrGasRemainingExceedsGasSupplied, remainingGas, gas)
+		}
 		if used := gas - remainingGas; used < gas {
 			env.UseGas(used)
 		}
