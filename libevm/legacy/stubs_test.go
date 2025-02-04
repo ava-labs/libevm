@@ -17,21 +17,14 @@
 package legacy
 
 import (
-	"math/big"
-
-	"github.com/holiman/uint256"
-
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
-	"github.com/ava-labs/libevm/libevm"
-	"github.com/ava-labs/libevm/params"
 )
 
 var _ vm.PrecompileEnvironment = (*stubPrecompileEnvironment)(nil)
 
 // stubPrecompileEnvironment implements [vm.PrecompileEnvironment] for testing.
 type stubPrecompileEnvironment struct {
+	vm.PrecompileEnvironment
 	gasToReturn uint64
 	gasUsed     uint64
 }
@@ -46,19 +39,3 @@ func (s *stubPrecompileEnvironment) UseGas(gas uint64) bool {
 	s.gasUsed += gas
 	return true
 }
-
-func (s *stubPrecompileEnvironment) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...vm.CallOption) (ret []byte, _ error) {
-	return nil, nil
-}
-
-func (s *stubPrecompileEnvironment) ChainConfig() *params.ChainConfig         { return nil }
-func (s *stubPrecompileEnvironment) Rules() params.Rules                      { return params.Rules{} }
-func (s *stubPrecompileEnvironment) StateDB() vm.StateDB                      { return nil }
-func (s *stubPrecompileEnvironment) ReadOnlyState() libevm.StateReader        { return nil }
-func (s *stubPrecompileEnvironment) IncomingCallType() vm.CallType            { return vm.Call }
-func (s *stubPrecompileEnvironment) Addresses() *libevm.AddressContext        { return nil }
-func (s *stubPrecompileEnvironment) ReadOnly() bool                           { return false }
-func (s *stubPrecompileEnvironment) Value() *uint256.Int                      { return nil }
-func (s *stubPrecompileEnvironment) BlockHeader() (h types.Header, err error) { return h, nil }
-func (s *stubPrecompileEnvironment) BlockNumber() *big.Int                    { return nil }
-func (s *stubPrecompileEnvironment) BlockTime() uint64                        { return 0 }
