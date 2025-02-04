@@ -91,15 +91,15 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			env := &stubPrecompileEnvironment{
-				gasToReturn: testCase.envGas,
-			}
 			c := PrecompiledStatefulContract(func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
 				return testCase.precompileRet, testCase.remainingGas, testCase.precompileErr
 			})
 
 			upgraded := c.Upgrade()
 
+			env := &stubPrecompileEnvironment{
+				gasToReturn: testCase.envGas,
+			}
 			input := []byte("unused")
 
 			ret, err := upgraded(env, input)
