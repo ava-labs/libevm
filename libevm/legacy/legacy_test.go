@@ -49,7 +49,7 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 
 	tests := map[string]struct {
 		envGas        uint64
-		cRet          []byte
+		precompileRet []byte
 		cRemainingGas uint64
 		cErr          error
 		wantRet       []byte
@@ -58,7 +58,7 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 	}{
 		"call_error": {
 			envGas:        10,
-			cRet:          []byte{2},
+			precompileRet: []byte{2},
 			cRemainingGas: 6,
 			cErr:          errors.New("test error"),
 			wantRet:       []byte{2},
@@ -67,19 +67,19 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 		},
 		"remaining_gas_exceeds_supplied_gas": {
 			envGas:        10,
-			cRet:          []byte{2},
+			precompileRet: []byte{2},
 			cRemainingGas: 11,
 			wantErr:       "remaining gas 11 exceeds supplied gas 10",
 		},
 		"zero_remaining_gas": {
-			envGas:      10,
-			cRet:        []byte{2},
-			wantRet:     []byte{2},
-			wantGasUsed: 10,
+			envGas:        10,
+			precompileRet: []byte{2},
+			wantRet:       []byte{2},
+			wantGasUsed:   10,
 		},
 		"used_one_gas": {
 			envGas:        10,
-			cRet:          []byte{2},
+			precompileRet: []byte{2},
 			cRemainingGas: 9,
 			wantRet:       []byte{2},
 			wantGasUsed:   1,
@@ -95,7 +95,7 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 				gasToReturn: testCase.envGas,
 			}
 			c := PrecompiledStatefulContract(func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
-				return testCase.cRet, testCase.cRemainingGas, testCase.cErr
+				return testCase.precompileRet, testCase.cRemainingGas, testCase.cErr
 			})
 
 			upgraded := c.Upgrade()
