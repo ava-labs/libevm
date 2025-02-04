@@ -146,16 +146,14 @@ func TestHeaderHooks(t *testing.T) {
 		hdr := new(Header)
 		stub := &stubHeaderHooks{
 			accessor: extras.Header,
-			copied: &stubHeaderHooks{
+			toCopy: &stubHeaderHooks{
 				suffix: []byte("copied"),
 			},
 		}
 		extras.Header.Set(hdr, stub)
-		cpy := CopyHeader(hdr)
 
-		copiedStub := extras.Header.Get(cpy)
-
-		assert.Equal(t, stub.copied, copiedStub)
+		got := extras.Header.Get(CopyHeader(hdr))
+		assert.Equal(t, stub.toCopy, got)
 	})
 
 	t.Run("error_propagation", func(t *testing.T) {
