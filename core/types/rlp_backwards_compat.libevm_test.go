@@ -18,7 +18,6 @@ package types_test
 
 import (
 	"encoding/hex"
-	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -112,68 +111,42 @@ func testHeaderRLPBackwardsCompatibility(t *testing.T) {
 }
 
 func TestBodyRLPBackwardsCompatibility(t *testing.T) {
-	t.Parallel()
-	for seed := uint64(0); seed < 1_000; seed++ {
-		seed := seed
-		t.Run(fmt.Sprintf("seed_%d", seed), func(t *testing.T) {
-			t.Parallel()
-			testBodyRLPBackwardsCompatibility(t, seed)
-		})
-	}
-}
+	rng := ethtest.NewPseudoRand(0)
 
-//nolint:thelper
-func testBodyRLPBackwardsCompatibility(t *testing.T, seed uint64) {
-	rng := ethtest.NewPseudoRand(seed)
+	randTx := func() *Transaction { return NewTx(&LegacyTx{Nonce: rng.Uint64()}) }
+	randHdr := func() *Header { return &Header{ParentHash: rng.Hash()} }
+	randWithdraw := func() *Withdrawal { return &Withdrawal{Index: rng.Uint64()} }
 
-	body := &Body{
-		// As this is a round-trip test, the slices MUST NOT be nil as the rlp
-		// package will always set them.
-		Transactions: []*Transaction{},
-		Uncles:       []*Header{},
+	// We build up test-case [Body] instances from the power set of each of
+	// these components.
+	txs := [][]*Transaction{
+		nil, {}, // Must be equivalent for non-optional field
+		{randTx()},
+		{randTx(), randTx()}, // Demonstrates nested lists
 	}
-	for i, n := 0, rng.Intn(5); i < n; i++ {
-		tx := NewTx(&LegacyTx{
-			Nonce: rng.Uint64(),
-		})
-		body.Transactions = append(body.Transactions, tx)
+	uncles := [][]*Header{
+		nil, {},
+		{randHdr()},
+		{randHdr(), randHdr()},
 	}
-	for i, n := 0, rng.Intn(5); i < n; i++ {
-		body.Uncles = append(body.Uncles, &Header{
-			ParentHash: rng.Hash(),
-		})
+	withdrawals := [][]*Withdrawal{
+		nil, {}, // Must be different for optional field
+		{randWithdraw()},
+		{randWithdraw(), randWithdraw()},
 	}
 
-	var withdrawals Withdrawals
-	for i, n := 0, rng.Intn(4)+1; i < n; i++ {
-		withdrawals = append(withdrawals, &Withdrawal{
-			Index: rng.Uint64(),
-		})
+	var bodies []*Body
+	for _, t := range txs {
+		for _, u := range uncles {
+			for _, w := range withdrawals {
+				bodies = append(bodies, &Body{t, u, w})
+			}
+		}
 	}
 
-	tests := []struct {
-		name        string
-		withdrawals []*Withdrawal
-	}{
-		{
-			name: "with_nil_Withdrawals",
-		},
-		{
-			name: "with_empty_Withdrawals",
-			// As the struct field has an `rlp:"optional"` tag, we need to
-			// differentiate between nil (nothing added to RLP) and an empty
-			// slice (empty list added to RLP).
-			withdrawals: []*Withdrawal{},
-		},
-		{
-			name:        "with_Withdrawals",
-			withdrawals: withdrawals,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			body.Withdrawals = tt.withdrawals
+	for _, body := range bodies {
+		t.Run("", func(t *testing.T) {
+			t.Logf("%T: %+[1]v", body)
 
 			// The original [Body] doesn't implement [rlp.Encoder] nor
 			// [rlp.Decoder] so we can use a methodless equivalent as the gold
@@ -192,6 +165,16 @@ func testBodyRLPBackwardsCompatibility(t *testing.T, seed uint64) {
 				got := new(Body)
 				err := rlp.DecodeBytes(wantRLP, got)
 				require.NoErrorf(t, err, "rlp.DecodeBytes(%v, %T)", wantRLP, got)
+
+				want := body
+				// Regular RLP decoding will never leave these non-optional
+				// fields nil.
+				if want.Transactions == nil {
+					want.Transactions = []*Transaction{}
+				}
+				if want.Uncles == nil {
+					want.Uncles = []*Header{}
+				}
 
 				opts := cmp.Options{
 					cmpeth.CompareHeadersByHash(),
