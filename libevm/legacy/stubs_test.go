@@ -14,9 +14,6 @@
 // along with the go-ethereum library. If not, see
 // <http://www.gnu.org/licenses/>.
 
-// Package legacy provides converters between legacy types and their refactored
-// equivalents.
-
 package legacy
 
 import (
