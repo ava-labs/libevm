@@ -49,7 +49,6 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 
 	tests := map[string]struct {
 		envGas        uint64
-		input         []byte
 		cRet          []byte
 		cRemainingGas uint64
 		cErr          error
@@ -59,7 +58,6 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 	}{
 		"call_error": {
 			envGas:        10,
-			input:         []byte{1},
 			cRet:          []byte{2},
 			cRemainingGas: 6,
 			cErr:          errors.New("test error"),
@@ -69,21 +67,18 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 		},
 		"remaining_gas_exceeds_supplied_gas": {
 			envGas:        10,
-			input:         []byte{1},
 			cRet:          []byte{2},
 			cRemainingGas: 11,
 			wantErr:       "remaining gas 11 exceeds supplied gas 10",
 		},
 		"zero_remaining_gas": {
 			envGas:      10,
-			input:       []byte{1},
 			cRet:        []byte{2},
 			wantRet:     []byte{2},
 			wantGasUsed: 10,
 		},
 		"used_one_gas": {
 			envGas:        10,
-			input:         []byte{1},
 			cRet:          []byte{2},
 			cRemainingGas: 9,
 			wantRet:       []byte{2},
@@ -105,7 +100,9 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 
 			upgraded := c.Upgrade()
 
-			ret, err := upgraded(env, testCase.input)
+			input := []byte("unused")
+
+			ret, err := upgraded(env, input)
 			if testCase.wantErr == "" {
 				require.NoError(t, err)
 			} else {
