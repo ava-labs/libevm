@@ -93,8 +93,8 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 			} else {
 				require.EqualError(t, err, testCase.wantErr)
 			}
-			assert.Equal(t, testCase.wantRet, ret)
-			assert.Equal(t, testCase.wantGasUsed, env.gasUsed)
+			assert.Equal(t, testCase.wantRet, ret, "bytes returned by upgraded contract")
+			assert.Equalf(t, testCase.wantGasUsed, env.gasUsed, "sum of %T.UseGas() calls", env)
 		})
 	}
 }
