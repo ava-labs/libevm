@@ -136,10 +136,10 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 	}
 
 	var bodies []*Body
-	for _, t := range txs {
+	for _, tx := range txs {
 		for _, u := range uncles {
 			for _, w := range withdrawals {
-				bodies = append(bodies, &Body{t, u, w})
+				bodies = append(bodies, &Body{tx, u, w})
 			}
 		}
 	}
