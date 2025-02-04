@@ -38,7 +38,7 @@ type stubHeaderHooks struct {
 	gotRawJSONToUnmarshal, gotRawRLPToDecode []byte
 	setHeaderToOnUnmarshalOrDecode           Header
 	accessor                                 pseudo.Accessor[*Header, *stubHeaderHooks]
-	copied                                   *stubHeaderHooks
+	toCopy                                   *stubHeaderHooks
 
 	errMarshal, errUnmarshal, errEncode, errDecode error
 }
@@ -79,7 +79,7 @@ func (hh *stubHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
 }
 
 func (hh *stubHeaderHooks) PostCopy(dst *Header) {
-	hh.accessor.Set(dst, hh.copied)
+	hh.accessor.Set(dst, hh.toCopy)
 }
 
 func TestHeaderHooks(t *testing.T) {
