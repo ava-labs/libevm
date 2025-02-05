@@ -119,26 +119,26 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 
 	// We build up test-case [Body] instances from the power set of each of
 	// these components.
-	txs := [][]*Transaction{
+	txMatrix := [][]*Transaction{
 		nil, {}, // Must be equivalent for non-optional field
 		{randTx()},
 		{randTx(), randTx()}, // Demonstrates nested lists
 	}
-	uncles := [][]*Header{
+	uncleMatrix := [][]*Header{
 		nil, {},
 		{randHdr()},
 		{randHdr(), randHdr()},
 	}
-	withdrawals := [][]*Withdrawal{
+	withdrawMatrix := [][]*Withdrawal{
 		nil, {}, // Must be different for optional field
 		{randWithdraw()},
 		{randWithdraw(), randWithdraw()},
 	}
 
 	var bodies []*Body
-	for _, tx := range txs {
-		for _, u := range uncles {
-			for _, w := range withdrawals {
+	for _, tx := range txMatrix {
+		for _, u := range uncleMatrix {
+			for _, w := range withdrawMatrix {
 				bodies = append(bodies, &Body{tx, u, w})
 			}
 		}
@@ -188,8 +188,9 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 	}
 }
 
-// cChainBodyExtras carries the same additional fields as the ava-labs/coreth
-// [Body] and implements [BodyHooks] to achieve equivalent RLP {en,de}coding.
+// cChainBodyExtras carries the same additional fields as the Avalanche C-Chain
+// (ava-labs/coreth) [Body] and implements [BodyHooks] to achieve equivalent RLP
+// {en,de}coding.
 type cChainBodyExtras struct {
 	Version uint32
 	ExtData *[]byte
@@ -273,13 +274,13 @@ func TestBodyRLPCChainCompat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			wantRLP, err := hex.DecodeString(tt.wantRLPHex)
-			require.NoError(t, err)
+			require.NoErrorf(t, err, "hex.DecodeString(%q)", tt.wantRLPHex)
 
 			t.Run("Encode", func(t *testing.T) {
 				TestOnlyRegisterBodyHooks(tt.extra)
 				got, err := rlp.EncodeToBytes(body)
-				require.NoError(t, err)
-				assert.Equal(t, wantRLP, got)
+				require.NoErrorf(t, err, "rlp.EncodeToBytes(%+v)", body)
+				assert.Equalf(t, wantRLP, got, "rlp.EncodeToBytes(%+v)", body)
 			})
 
 			t.Run("Decode", func(t *testing.T) {
@@ -288,15 +289,15 @@ func TestBodyRLPCChainCompat(t *testing.T) {
 
 				got := new(Body)
 				err := rlp.DecodeBytes(wantRLP, got)
-				require.NoError(t, err)
-				assert.Equal(t, tt.extra, &extra)
+				require.NoErrorf(t, err, "rlp.DecodeBytes(%#x, %T)", wantRLP, got)
+				assert.Equal(t, tt.extra, &extra, "rlp.DecodeBytes(%#x, [%T as registered extra in %T carrier])", wantRLP, &extra, got)
 
 				opts := cmp.Options{
 					cmpeth.CompareHeadersByHash(),
 					cmpeth.CompareTransactionsByBinary(t),
 				}
 				if diff := cmp.Diff(body, got, opts); diff != "" {
-					t.Errorf("%s", diff)
+					t.Errorf("rlp.DecodeBytes(%#x, [%T while carrying registered %T extra payload]) diff (-want +got):\n%s", wantRLP, got, &extra, diff)
 				}
 			})
 		})
