@@ -12,6 +12,9 @@ jobs:
     env:
       FLAKY_REGEX: "ava-labs/libevm/(triedb/pathdb|eth|eth/tracers/js|eth/tracers/logger|accounts/abi/bind|accounts/keystore|eth/downloader|miner|ethclient|ethclient/gethclient|eth/catalyst)$"
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Go
@@ -30,6 +33,9 @@ jobs:
     env:
       EXCLUDE_REGEX: "ava-labs/libevm/(accounts/usbwallet/trezor)$"
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Go
