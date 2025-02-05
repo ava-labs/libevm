@@ -54,7 +54,6 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 		precompileRet []byte
 		remainingGas  uint64
 		precompileErr error
-		wantRet       []byte
 		wantErr       error
 		wantGasUsed   uint64
 	}{
@@ -63,7 +62,6 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 			precompileRet: []byte{2},
 			remainingGas:  6,
 			precompileErr: errTest,
-			wantRet:       []byte{2},
 			wantErr:       errTest,
 			wantGasUsed:   4,
 		},
@@ -77,14 +75,12 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 			remainingGas:  0,
 			envGas:        10,
 			precompileRet: []byte{2},
-			wantRet:       []byte{2},
 			wantGasUsed:   10,
 		},
 		"used_one_gas": {
 			envGas:        10,
 			precompileRet: []byte{2},
 			remainingGas:  9,
-			wantRet:       []byte{2},
 			wantGasUsed:   1,
 		},
 	}
@@ -107,7 +103,7 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 
 			ret, err := upgraded(env, input)
 			require.ErrorIs(t, err, testCase.wantErr)
-			assert.Equal(t, testCase.wantRet, ret, "bytes returned by upgraded contract")
+			assert.Equal(t, testCase.precompileRet, ret, "bytes returned by upgraded contract")
 			assert.Equalf(t, testCase.wantGasUsed, env.gasUsed, "sum of %T.UseGas() calls", env)
 		})
 	}
