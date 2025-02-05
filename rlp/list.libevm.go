@@ -62,7 +62,7 @@ func (s *Stream) FromList(fn func() error) error {
 // This is in keeping with other behaviour in this package and it is therefore
 // the responsibility of callers to respect `rlp:"nil"` struct tags.
 func DecodeList[T any](s *Stream) ([]*T, error) {
-	vals := make([]*T, 0)
+	vals := []*T{}
 	err := s.FromList(func() error {
 		for s.MoreDataInList() {
 			var v T
