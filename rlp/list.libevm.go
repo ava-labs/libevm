@@ -53,6 +53,8 @@ func EncodeListToBuffer[T any](b EncoderBuffer, vals []T) error {
 // concatenated as a single list, as if they were fields in a struct. The
 // optional "fields" are treated identically to those tagged with
 // `rlp:"optional"`.
+//
+// See the example for [DecodeStructFields].
 func EncodeStructFields(w io.Writer, required, optional []any) error {
 	includeOptional, err := optionalFieldInclusionFlags(optional)
 	if err != nil {
@@ -137,4 +139,31 @@ func DecodeList[T any](s *Stream) ([]*T, error) {
 		return nil
 	})
 	return vals, err
+}
+
+// DecodeStructFields is the inverse of [EncodeStructFields]. All destination
+// fields, be they `required` or `optional`, MUST be pointers and all `optional`
+// fields MUST be provided in case they are present in the RLP being decoded.
+//
+// Typically, the arguments to this function mirror those passed to
+// [EncodeStructFields] except for being pointers. See the example.
+func DecodeStructFields(r io.Reader, required, optional []any) error {
+	s := NewStream(r, 0)
+	return s.FromList(func() error {
+		for _, v := range required {
+			if err := s.Decode(v); err != nil {
+				return err
+			}
+		}
+
+		for _, v := range optional {
+			if !s.MoreDataInList() {
+				return nil
+			}
+			if err := s.Decode(v); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

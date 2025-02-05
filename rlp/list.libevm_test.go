@@ -18,6 +18,7 @@ package rlp
 
 import (
 	"bytes"
+	"io"
 	"testing"
 
 	"github.com/kr/pretty"
@@ -58,8 +59,8 @@ func TestDecodeList(t *testing.T) {
 	}
 }
 
-func TestEncodeStructFields(t *testing.T) {
-	type goldStandard struct {
+func TestStructFieldHelpers(t *testing.T) {
+	type foo struct {
 		A uint64
 		B uint64
 		C *uint64
@@ -79,7 +80,7 @@ func TestEncodeStructFields(t *testing.T) {
 	e := []uint64{40, 41}
 	f := common.PointerTo([]uint64{50, 51})
 
-	tests := []goldStandard{
+	tests := []foo{
 		{a, b, c, d, e, f},       // 000 (which of d/e/f are nil)
 		{a, b, c, d, e, nil},     // 001
 		{a, b, c, d, nil, f},     // 010
@@ -97,18 +98,78 @@ func TestEncodeStructFields(t *testing.T) {
 		t.Run("", func(t *testing.T) {
 			t.Logf("\n%s", pretty.Sprint(obj))
 
-			want, err := EncodeToBytes(obj)
+			wantRLP, err := EncodeToBytes(obj)
 			require.NoErrorf(t, err, "EncodeToBytes([actual struct])")
 
-			var got bytes.Buffer
-			err = EncodeStructFields(
-				&got,
-				[]any{obj.A, obj.B, obj.C},
-				[]any{obj.D, obj.E, obj.F},
-			)
-			require.NoErrorf(t, err, "EncodeStructFields(..., [required], [optional])")
+			t.Run("EncodeStructFields", func(t *testing.T) {
+				var got bytes.Buffer
+				err = EncodeStructFields(
+					&got,
+					[]any{obj.A, obj.B, obj.C},
+					[]any{obj.D, obj.E, obj.F},
+				)
+				require.NoErrorf(t, err, "EncodeStructFields(..., [required], [optional])")
 
-			assert.Equal(t, want, got.Bytes(), "EncodeToBytes() vs EncodeStructFields()")
+				assert.Equal(t, wantRLP, got.Bytes(), "EncodeToBytes() vs EncodeStructFields()")
+			})
+
+			t.Run("DecodeStructFields", func(t *testing.T) {
+				var got foo
+				err := DecodeStructFields(
+					bytes.NewReader(wantRLP),
+					[]any{&got.A, &got.B, &got.C},
+					[]any{&got.D, &got.E, &got.F},
+				)
+				require.NoError(t, err, "DecodeStructFields(...)")
+
+				var want foo
+				err = DecodeBytes(wantRLP, &want)
+				require.NoError(t, err, "DecodeBytes(...)")
+
+				assert.Equal(t, want, got, "DecodeBytes(..., [original struct]) vs DecodeStructFields(...)")
+			})
 		})
 	}
+}
+
+//nolint:testableexamples // Demonstrating code equivalence, not outputs.
+func ExampleDecodeStructFields() {
+	type inner struct {
+		X uint64
+	}
+
+	type outer struct {
+		A uint64
+		B *inner `rlp:"optional"`
+	}
+
+	val := outer{
+		A: 42,
+		B: &inner{X: 99},
+	}
+
+	// Errors are dropped for brevity for the sake of the example only.
+
+	_ = Encode(io.Discard, val)
+	// is equivalent to
+	_ = EncodeStructFields(
+		io.Discard,
+		[]any{val.A},
+		[]any{val.B},
+	)
+
+	r := bytes.NewReader(nil /*arbitrary RLP buffer*/)
+	var decoded outer
+	_ = Decode(r, &decoded)
+	// is equivalent to
+	_ = DecodeStructFields(
+		r,
+		[]any{&val.A},
+		[]any{&val.B},
+	)
+
+	// Note the parallels between the arguments passed to
+	// {En,De}codeStructFields() and that, when decoding an optional field, a
+	// pointer to the _field_ is required even though in this example it will be
+	// a `**inner`.
 }
