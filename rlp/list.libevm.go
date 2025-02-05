@@ -149,6 +149,10 @@ func DecodeList[T any](s *Stream) ([]*T, error) {
 // [EncodeStructFields] except for being pointers. See the example.
 func DecodeStructFields(r io.Reader, required, optional []any) error {
 	s := NewStream(r, 0)
+	return s.DecodeStructFields(required, optional)
+}
+
+func (s *Stream) DecodeStructFields(required, optional []any) error {
 	return s.FromList(func() error {
 		for _, v := range required {
 			if err := s.Decode(v); err != nil {

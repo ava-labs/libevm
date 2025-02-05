@@ -197,35 +197,12 @@ type cChainBodyExtras struct {
 
 var _ BodyHooks = (*cChainBodyExtras)(nil)
 
-func (e *cChainBodyExtras) AppendRLPFields(b rlp.EncoderBuffer, _ bool) error {
-	b.WriteUint64(uint64(e.Version))
-
-	var data []byte
-	if e.ExtData != nil {
-		data = *e.ExtData
-	}
-	b.WriteBytes(data)
-
-	return nil
+func (e *cChainBodyExtras) RLPFieldsForEncoding(b *Body) ([]any, []any) {
+	return []any{b.Transactions, b.Uncles, e.Version, e.ExtData}, nil
 }
 
-func (e *cChainBodyExtras) DecodeExtraRLPFields(s *rlp.Stream) error {
-	if err := s.Decode(&e.Version); err != nil {
-		return err
-	}
-
-	buf, err := s.Bytes()
-	if err != nil {
-		return err
-	}
-	if len(buf) > 0 {
-		e.ExtData = &buf
-	} else {
-		// Respect the `rlp:"nil"` field tag.
-		e.ExtData = nil
-	}
-
-	return nil
+func (e *cChainBodyExtras) RLPFieldPointersForDecoding(b *Body) ([]any, []any) {
+	return []any{&b.Transactions, &b.Uncles, &e.Version, &e.ExtData}, nil
 }
 
 func TestBodyRLPCChainCompat(t *testing.T) {
