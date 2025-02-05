@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/kr/pretty"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -111,28 +112,26 @@ func testHeaderRLPBackwardsCompatibility(t *testing.T) {
 }
 
 func TestBodyRLPBackwardsCompatibility(t *testing.T) {
-	rng := ethtest.NewPseudoRand(0)
-
-	randTx := func() *Transaction { return NewTx(&LegacyTx{Nonce: rng.Uint64()}) }
-	randHdr := func() *Header { return &Header{ParentHash: rng.Hash()} }
-	randWithdraw := func() *Withdrawal { return &Withdrawal{Index: rng.Uint64()} }
+	newTx := func(nonce uint64) *Transaction { return NewTx(&LegacyTx{Nonce: nonce}) }
+	newHdr := func(hashLow byte) *Header { return &Header{ParentHash: common.Hash{hashLow}} }
+	newWithdraw := func(idx uint64) *Withdrawal { return &Withdrawal{Index: idx} }
 
 	// We build up test-case [Body] instances from the power set of each of
 	// these components.
 	txMatrix := [][]*Transaction{
 		nil, {}, // Must be equivalent for non-optional field
-		{randTx()},
-		{randTx(), randTx()}, // Demonstrates nested lists
+		{newTx(1)},
+		{newTx(2), newTx(3)}, // Demonstrates nested lists
 	}
 	uncleMatrix := [][]*Header{
 		nil, {},
-		{randHdr()},
-		{randHdr(), randHdr()},
+		{newHdr(1)},
+		{newHdr(2), newHdr(3)},
 	}
 	withdrawMatrix := [][]*Withdrawal{
 		nil, {}, // Must be different for optional field
-		{randWithdraw()},
-		{randWithdraw(), randWithdraw()},
+		{newWithdraw(1)},
+		{newWithdraw(2), newWithdraw(3)},
 	}
 
 	var bodies []*Body
@@ -146,7 +145,7 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 
 	for _, body := range bodies {
 		t.Run("", func(t *testing.T) {
-			t.Logf("%T: %+[1]v", body)
+			t.Logf("\n%s", pretty.Sprint(body))
 
 			// The original [Body] doesn't implement [rlp.Encoder] nor
 			// [rlp.Decoder] so we can use a methodless equivalent as the gold
