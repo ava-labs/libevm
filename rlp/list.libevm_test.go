@@ -20,8 +20,11 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/kr/pretty"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/libevm/common"
 )
 
 func TestEncodeListToBuffer(t *testing.T) {
@@ -52,5 +55,60 @@ func TestDecodeList(t *testing.T) {
 	require.Equal(t, len(vals), len(got), "number of values returned by DecodeList()")
 	for i, gotPtr := range got {
 		assert.Equalf(t, vals[i], *gotPtr, "DecodeList()[%d]", i)
+	}
+}
+
+func TestEncodeStructFields(t *testing.T) {
+	type goldStandard struct {
+		A uint64
+		B uint64
+		C *uint64
+		D *uint64   `rlp:"optional"`
+		E []uint64  `rlp:"optional"`
+		F *[]uint64 `rlp:"optional"`
+	}
+
+	const (
+		a uint64 = iota
+		b
+		cVal
+		dVal
+	)
+	c := common.PointerTo(cVal)
+	d := common.PointerTo(dVal)
+	e := []uint64{40, 41}
+	f := common.PointerTo([]uint64{50, 51})
+
+	tests := []goldStandard{
+		{a, b, c, d, e, f},       // 000 (which of d/e/f are nil)
+		{a, b, c, d, e, nil},     // 001
+		{a, b, c, d, nil, f},     // 010
+		{a, b, c, d, nil, nil},   // 011
+		{a, b, c, nil, e, f},     // 100
+		{a, b, c, nil, e, nil},   // 101
+		{a, b, c, nil, nil, f},   // 110
+		{a, b, c, nil, nil, nil}, // 111
+		// Empty and nil slices are treated differently when optional
+		{a, b, c, nil, []uint64{}, nil},
+	}
+
+	for _, obj := range tests {
+		obj := obj
+		t.Run("", func(t *testing.T) {
+			t.Logf("\n%s", pretty.Sprint(obj))
+
+			want, err := EncodeToBytes(obj)
+			require.NoErrorf(t, err, "EncodeToBytes([actual struct])")
+
+			var got bytes.Buffer
+			err = EncodeStructFields(
+				&got,
+				[]any{obj.A, obj.B, obj.C},
+				[]any{obj.D, obj.E, obj.F},
+			)
+			require.NoErrorf(t, err, "EncodeStructFields(..., [required], [optional])")
+
+			assert.Equal(t, want, got.Bytes(), "EncodeToBytes() vs EncodeStructFields()")
+		})
 	}
 }

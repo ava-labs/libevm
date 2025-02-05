@@ -16,6 +16,13 @@
 
 package rlp
 
+import (
+	"errors"
+	"fmt"
+	"io"
+	"reflect"
+)
+
 // InList is a convenience wrapper, calling `fn` between calls to
 // [EncoderBuffer.List] and [EncoderBuffer.ListEnd]. If `fn` returns an error,
 // it is propagated directly.
@@ -40,6 +47,62 @@ func EncodeListToBuffer[T any](b EncoderBuffer, vals []T) error {
 		}
 		return nil
 	})
+}
+
+// EncodeStructFields encodes the `required` and `optional` slices to `w`,
+// concatenated as a single list, as if they were fields in a struct. The
+// optional "fields" are treated identically to those tagged with
+// `rlp:"optional"`.
+func EncodeStructFields(w io.Writer, required, optional []any) error {
+	includeOptional, err := optionalFieldInclusionFlags(optional)
+	if err != nil {
+		return err
+	}
+
+	b := NewEncoderBuffer(w)
+	err = b.InList(func() error {
+		for _, v := range required {
+			if err := Encode(b, v); err != nil {
+				return err
+			}
+		}
+
+		for i, v := range optional {
+			if !includeOptional[i] {
+				return nil
+			}
+			if err := Encode(b, v); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return b.Flush()
+}
+
+var errUnsupportedOptionalFieldType = errors.New("unsupported optional field type")
+
+// optionalFieldInclusionFlags returns a slice of booleans, the same length as
+// `vals`, indicating whether or not the respective optional value MUST be
+// written to a list. A value must be written if it or any later value is
+// non-nil; the returned slice is therefore monotonic non-increasing from true
+// to false.
+func optionalFieldInclusionFlags(vals []any) ([]bool, error) {
+	flags := make([]bool, len(vals))
+	var include bool
+	for i := len(vals) - 1; i >= 0; i-- {
+		switch v := reflect.ValueOf(vals[i]); v.Kind() {
+		case reflect.Slice, reflect.Pointer:
+			include = include || !v.IsNil()
+		default:
+			return nil, fmt.Errorf("%w: %T", errUnsupportedOptionalFieldType, vals[i])
+		}
+		flags[i] = include
+	}
+	return flags, nil
 }
 
 // FromList is a convenience wrapper, calling `fn` between calls to
