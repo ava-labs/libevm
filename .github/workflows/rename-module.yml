@@ -46,7 +46,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.20
+          go-version-file: "go.mod"
 
       - name: Smoke tests
         # `go list` shows us the module name and grep will non-zero exit on mismatch
@@ -75,18 +75,3 @@ jobs:
           commit_message: "[AUTO] rename Go module + update internal import paths\n\nWorkflow: ${{ steps.vars.outputs.WORKFLOW_HASH }} on branch ${{ github.ref_name }}"
           repo: ${{ github.repository }}
           branch: ${{ steps.vars.outputs.DEST_BRANCH }}
-
-      - name: Update .github yml files "go-version" properties
-        shell: bash
-        run: |
-          gomodver=$(sed -n 's/^go \([0-9.]*\)/\1/p' go.mod)
-          sed -i '' -E "s/go-version: 1\.[0-9]\+/go-version: \$gomodver/g" .github/workflows/*.yml
-
-      - name: Signed commit to branch
-        uses: planetscale/ghcommit-action@d4176bfacef926cc2db351eab20398dfc2f593b5 # v0.2.0
-        env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-        with:
-          commit_message: "[AUTO] update .github workflows go-version properties"
-          repo: ${{ github.repository }}
-          branch: ${{ needs.rename-module.outputs.vars.DEST_BRANCH }}
