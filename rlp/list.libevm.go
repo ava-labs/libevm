@@ -54,7 +54,7 @@ func EncodeListToBuffer[T any](b EncoderBuffer, vals []T) error {
 // optional "fields" are treated identically to those tagged with
 // `rlp:"optional"`.
 //
-// See the example for [DecodeStructFields].
+// See the example for [Stream.DecodeStructFields].
 func EncodeStructFields(w io.Writer, required, optional []any) error {
 	includeOptional, err := optionalFieldInclusionFlags(optional)
 	if err != nil {
@@ -147,11 +147,6 @@ func DecodeList[T any](s *Stream) ([]*T, error) {
 //
 // Typically, the arguments to this function mirror those passed to
 // [EncodeStructFields] except for being pointers. See the example.
-func DecodeStructFields(r io.Reader, required, optional []any) error {
-	s := NewStream(r, 0)
-	return s.DecodeStructFields(required, optional)
-}
-
 func (s *Stream) DecodeStructFields(required, optional []any) error {
 	return s.FromList(func() error {
 		for _, v := range required {

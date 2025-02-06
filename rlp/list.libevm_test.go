@@ -114,38 +114,40 @@ func TestStructFieldHelpers(t *testing.T) {
 			})
 
 			t.Run("DecodeStructFields", func(t *testing.T) {
+				s := NewStream(bytes.NewReader(wantRLP), 0)
 				var got foo
-				err := DecodeStructFields(
-					bytes.NewReader(wantRLP),
+				err := s.DecodeStructFields(
 					[]any{&got.A, &got.B, &got.C},
 					[]any{&got.D, &got.E, &got.F},
 				)
-				require.NoError(t, err, "DecodeStructFields(...)")
+				require.NoError(t, err, "Stream.DecodeStructFields(...)")
 
 				var want foo
 				err = DecodeBytes(wantRLP, &want)
 				require.NoError(t, err, "DecodeBytes(...)")
 
-				assert.Equal(t, want, got, "DecodeBytes(..., [original struct]) vs DecodeStructFields(...)")
+				assert.Equal(t, want, got, "DecodeBytes(..., [original struct]) vs Stream.DecodeStructFields(...)")
 			})
 		})
 	}
 }
 
 //nolint:testableexamples // Demonstrating code equivalence, not outputs.
-func ExampleDecodeStructFields() {
+func ExampleStream_DecodeStructFields() {
 	type inner struct {
 		X uint64
 	}
 
 	type outer struct {
 		A uint64
-		B *inner `rlp:"optional"`
+		B *inner `rlp:"nil"`
+		C *inner `rlp:"optional"`
 	}
 
 	val := outer{
 		A: 42,
-		B: &inner{X: 99},
+		B: &inner{X: 42},
+		C: &inner{X: 99},
 	}
 
 	// Errors are dropped for brevity for the sake of the example only.
@@ -154,24 +156,26 @@ func ExampleDecodeStructFields() {
 	// is equivalent to
 	_ = EncodeStructFields(
 		io.Discard,
-		[]any{val.A},
-		[]any{val.B},
+		[]any{val.A, val.B},
+		[]any{val.C},
 	)
 
 	r := bytes.NewReader(nil /*arbitrary RLP buffer*/)
 	var decoded outer
 	_ = Decode(r, &decoded)
 	// is equivalent to
-	_ = DecodeStructFields(
-		r,
-		[]any{&val.A},
-		[]any{&val.B},
+	_ = NewStream(r, 0).DecodeStructFields(
+		[]any{
+			&val.A,
+			Nillable(&val.B),
+		},
+		[]any{&val.C},
 	)
 
 	// Note the parallels between the arguments passed to
-	// {En,De}codeStructFields() and that, when decoding an optional field, a
-	// pointer to the _field_ is required even though in this example it will be
-	// a `**inner`.
+	// {En,De}codeStructFields() and that, when decoding an optional or
+	// `rlp:"nil`-tagged field, a pointer to the _field_ is required even though
+	// in this example it will be a `**inner`.
 }
 
 func TestNillable(t *testing.T) {
@@ -218,9 +222,9 @@ func TestNillable(t *testing.T) {
 			err = DecodeBytes(rlp, &want)
 			require.NoErrorf(t, err, "DecodeBytes(%#x, %T)", rlp, &want)
 
+			s := NewStream(bytes.NewReader(rlp), 0)
 			got := corruptInitialValue()
-			err = DecodeStructFields(
-				bytes.NewReader(rlp),
+			err = s.DecodeStructFields(
 				[]any{
 					Nillable(&got.A),
 					Nillable(&got.B),
@@ -228,9 +232,9 @@ func TestNillable(t *testing.T) {
 				},
 				nil,
 			)
-			require.NoError(t, err, "DecodeStructFields(...)")
+			require.NoError(t, err, "Stream.DecodeStructFields(...)")
 
-			assert.Equal(t, want, got, "DecodeBytes(...) vs DecodeStructFields(...)")
+			assert.Equal(t, want, got, "DecodeBytes(...) vs Stream.DecodeStructFields([fields wrapped in Nillable()])")
 		})
 	}
 }
