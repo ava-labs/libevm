@@ -73,9 +73,9 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 			wantGas:       10,
 		},
 		"zero_remaining_gas": {
-			remainingGas:  0,
 			suppliedGas:   10,
 			precompileRet: []byte{2},
+			remainingGas:  0,
 			wantGas:       0,
 		},
 		"used_one_gas": {
