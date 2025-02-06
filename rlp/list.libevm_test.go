@@ -78,7 +78,7 @@ func TestStructFieldHelpers(t *testing.T) {
 	c := common.PointerTo(cVal)
 	d := common.PointerTo(dVal)
 	e := []uint64{40, 41}
-	f := common.PointerTo([]uint64{50, 51})
+	f := &[]uint64{50, 51}
 
 	tests := []foo{
 		{a, b, c, d, e, f},       // 000 (which of d/e/f are nil)
@@ -91,6 +91,7 @@ func TestStructFieldHelpers(t *testing.T) {
 		{a, b, c, nil, nil, nil}, // 111
 		// Empty and nil slices are treated differently when optional
 		{a, b, c, nil, []uint64{}, nil},
+		{a, b, c, nil, nil, &[]uint64{}},
 	}
 
 	for _, obj := range tests {
@@ -189,17 +190,28 @@ func TestNillable(t *testing.T) {
 		C *[]uint64 `rlp:"nil"`
 	}
 
-	aMatrix := []*uint64{nil, common.PointerTo[uint64](0)}
-	bMatrix := []*inner{nil, {0}}
-	cMatrix := []*[]uint64{nil, {}, {0}}
-
+	// Unlike the `rlp:"optional"` tag, there is no interplay between nil-tagged
+	// fields so we don't need the Cartesian product of all possible
+	// combinations.
 	var tests []outer
-	for _, a := range aMatrix {
-		for _, b := range bMatrix {
-			for _, c := range cMatrix {
-				tests = append(tests, outer{a, b, c})
-			}
-		}
+	for _, a := range []*uint64{
+		nil,
+		common.PointerTo[uint64](0),
+	} {
+		tests = append(tests, outer{a, nil, nil})
+	}
+	for _, b := range []*inner{
+		nil,
+		{0},
+	} {
+		tests = append(tests, outer{nil, b, nil})
+	}
+	for _, c := range []*[]uint64{
+		nil,
+		{},
+		{0},
+	} {
+		tests = append(tests, outer{nil, nil, c})
 	}
 
 	// When a Nillable encounters an empty list it MUST set the field to nil,

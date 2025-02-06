@@ -116,8 +116,8 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 	newHdr := func(hashLow byte) *Header { return &Header{ParentHash: common.Hash{hashLow}} }
 	newWithdraw := func(idx uint64) *Withdrawal { return &Withdrawal{Index: idx} }
 
-	// We build up test-case [Body] instances from the power set of each of
-	// these components.
+	// We build up test-case [Body] instances from the Cartesian product of each
+	// of these components.
 	txMatrix := [][]*Transaction{
 		nil, {}, // Must be equivalent for non-optional field
 		{newTx(1)},
