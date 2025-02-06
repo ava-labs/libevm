@@ -29,18 +29,18 @@ import (
 // stubPrecompileEnvironment implements [vm.PrecompileEnvironment] for testing.
 type stubPrecompileEnvironment struct {
 	vm.PrecompileEnvironment
-	gasToReturn uint64
-	gasUsed     uint64
+	gas uint64
 }
 
-// Gas returns the gas supplied to the precompile.
 func (s *stubPrecompileEnvironment) Gas() uint64 {
-	return s.gasToReturn
+	return s.gas
 }
 
-// UseGas records the gas used by the precompile.
-func (s *stubPrecompileEnvironment) UseGas(gas uint64) bool {
-	s.gasUsed += gas
+func (s *stubPrecompileEnvironment) UseGas(gas uint64) (hasEnoughGas bool) {
+	if s.gas < gas {
+		return false
+	}
+	s.gas -= gas
 	return true
 }
 
@@ -50,38 +50,39 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 	errTest := errors.New("test error")
 
 	tests := map[string]struct {
-		envGas        uint64
+		gas           uint64
 		precompileRet []byte
 		remainingGas  uint64
 		precompileErr error
 		wantErr       error
-		wantGasUsed   uint64
+		wantGas       uint64
 	}{
 		"call_error": {
-			envGas:        10,
+			gas:           10,
 			precompileRet: []byte{2},
 			remainingGas:  6,
 			precompileErr: errTest,
 			wantErr:       errTest,
-			wantGasUsed:   4,
+			wantGas:       6,
 		},
 		"remaining_gas_exceeds_supplied_gas": {
-			envGas:        10,
+			gas:           10,
 			precompileRet: []byte{2},
 			remainingGas:  11,
 			wantErr:       errRemainingGasExceedsSuppliedGas,
+			wantGas:       10,
 		},
 		"zero_remaining_gas": {
 			remainingGas:  0,
-			envGas:        10,
+			gas:           10,
 			precompileRet: []byte{2},
-			wantGasUsed:   10,
+			wantGas:       0,
 		},
 		"used_one_gas": {
-			envGas:        10,
+			gas:           10,
 			precompileRet: []byte{2},
 			remainingGas:  9,
-			wantGasUsed:   1,
+			wantGas:       9,
 		},
 	}
 
@@ -97,14 +98,14 @@ func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 			upgraded := c.Upgrade()
 
 			env := &stubPrecompileEnvironment{
-				gasToReturn: testCase.envGas,
+				gas: testCase.gas,
 			}
 			input := []byte("unused")
 
 			ret, err := upgraded(env, input)
 			require.ErrorIs(t, err, testCase.wantErr)
 			assert.Equal(t, testCase.precompileRet, ret, "bytes returned by upgraded contract")
-			assert.Equalf(t, testCase.wantGasUsed, env.gasUsed, "sum of %T.UseGas() calls", env)
+			assert.Equalf(t, testCase.wantGas, env.gas, "remaining gas in %T", env)
 		})
 	}
 }
