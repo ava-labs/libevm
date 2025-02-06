@@ -168,9 +168,10 @@ func (s *Stream) DecodeStructFields(required, optional []any) error {
 }
 
 // Nillable wraps `field` to mirror the behaviour of an `rlp:"nil"` tag; i.e. if
-// an empty RLP string is decoded into the returned Decoder then it is dropped,
-// otherwise it is decoded into `field` as normal. The return argument is
-// intended for use with [Stream.DecodeStructFields].
+// a zero-sized RLP item is decoded into the returned Decoder then it is dropped
+// and `*field` is set to nil, otherwise the RLP item is decoded directly into
+// `field`. The return argument is intended for use with
+// [Stream.DecodeStructFields].
 func Nillable[T any](field **T) Decoder {
 	return &nillable[T]{field}
 }
@@ -183,7 +184,7 @@ func (n *nillable[T]) DecodeRLP(s *Stream) error {
 		return err
 	}
 	if size > 0 {
-		return s.Decode(*n.v)
+		return s.Decode(n.v)
 	}
 	*n.v = nil
 	_, err = s.Raw() // consume the item
