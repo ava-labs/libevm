@@ -173,3 +173,64 @@ func ExampleDecodeStructFields() {
 	// pointer to the _field_ is required even though in this example it will be
 	// a `**inner`.
 }
+
+func TestNillable(t *testing.T) {
+	type inner struct {
+		X uint64
+	}
+
+	type outer struct {
+		A *uint64   `rlp:"nil"`
+		B *inner    `rlp:"nil"`
+		C *[]uint64 `rlp:"nil"`
+	}
+
+	aMatrix := []*uint64{nil, common.PointerTo[uint64](0)}
+	bMatrix := []*inner{nil, {0}}
+	cMatrix := []*[]uint64{nil, {}, {0}}
+
+	var tests []outer
+	for _, a := range aMatrix {
+		for _, b := range bMatrix {
+			for _, c := range cMatrix {
+				tests = append(tests, outer{a, b, c})
+			}
+		}
+	}
+
+	// When a Nillable encounters an empty list it MUST set the field to nil,
+	// not just ignore it.
+	corruptInitialValue := func() outer {
+		return outer{common.PointerTo[uint64](42), &inner{42}, &[]uint64{42}}
+	}
+
+	for _, obj := range tests {
+		obj := obj
+		t.Run("", func(t *testing.T) {
+			rlp, err := EncodeToBytes(obj)
+			require.NoErrorf(t, err, "EncodeToBytes(%+v)", obj)
+			t.Logf("%s => %#x", pretty.Sprint(obj), rlp)
+
+			// Although this is an immediate inversion of the line above, it
+			// provides us with the canonical RLP decoding, which our input
+			// struct may not honour.
+			want := corruptInitialValue()
+			err = DecodeBytes(rlp, &want)
+			require.NoErrorf(t, err, "DecodeBytes(%#x, %T)", rlp, &want)
+
+			got := corruptInitialValue()
+			err = DecodeStructFields(
+				bytes.NewReader(rlp),
+				[]any{
+					Nillable(&got.A),
+					Nillable(&got.B),
+					Nillable(&got.C),
+				},
+				nil,
+			)
+			require.NoError(t, err, "DecodeStructFields(...)")
+
+			assert.Equal(t, want, got, "DecodeBytes(...) vs DecodeStructFields(...)")
+		})
+	}
+}

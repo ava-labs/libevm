@@ -198,11 +198,21 @@ type cChainBodyExtras struct {
 var _ BodyHooks = (*cChainBodyExtras)(nil)
 
 func (e *cChainBodyExtras) RLPFieldsForEncoding(b *Body) ([]any, []any) {
-	return []any{b.Transactions, b.Uncles, e.Version, e.ExtData}, nil
+	return []any{
+		b.Transactions,
+		b.Uncles,
+		e.Version,
+		e.ExtData,
+	}, nil
 }
 
 func (e *cChainBodyExtras) RLPFieldPointersForDecoding(b *Body) ([]any, []any) {
-	return []any{&b.Transactions, &b.Uncles, &e.Version, &e.ExtData}, nil
+	return []any{
+		&b.Transactions,
+		&b.Uncles,
+		&e.Version,
+		rlp.Nillable(&e.ExtData), // equivalent to `rlp:"nil"`
+	}, nil
 }
 
 func TestBodyRLPCChainCompat(t *testing.T) {
