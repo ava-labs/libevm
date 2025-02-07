@@ -49,14 +49,14 @@ func EncodeListToBuffer[T any](b EncoderBuffer, vals []T) error {
 	})
 }
 
-// EncodeStructFields encodes the `required` and `optional` slices to `w`,
+// EncodeStructFields encodes the required and optional slices to `w`,
 // concatenated as a single list, as if they were fields in a struct. The
-// optional "fields" are treated identically to those tagged with
-// `rlp:"optional"`.
+// optional "fields", which MAY be nil, are treated identically to those tagged
+// with `rlp:"optional"`.
 //
 // See the example for [Stream.DecodeStructFields].
-func EncodeStructFields(w io.Writer, required, optional []any) error {
-	includeOptional, err := optionalFieldInclusionFlags(optional)
+func EncodeStructFields(w io.Writer, required []any, opt *OptionalFields) error {
+	includeOptional, err := opt.inclusionFlags()
 	if err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func EncodeStructFields(w io.Writer, required, optional []any) error {
 			}
 		}
 
-		for i, v := range optional {
+		for i, v := range opt.vals() {
 			if !includeOptional[i] {
 				return nil
 			}
@@ -85,22 +85,51 @@ func EncodeStructFields(w io.Writer, required, optional []any) error {
 	return b.Flush()
 }
 
+// Optional returns the `vals` as [OptionalFields]; see the type's documentation
+// for the resulting behaviour.
+func Optional(vals ...any) *OptionalFields {
+	return &OptionalFields{vals}
+}
+
+// OptionalFields are treated by [EncodeStructFields] and
+// [Stream.DecodeStructFields] as if they were tagged with `rlp:"optional"`.
+type OptionalFields struct {
+	// Note that the [OptionalFields] type exists primarily to improve
+	// readability at the call sites of [EncodeStructFields] and
+	// [Stream.DecodeStructFields]. While an `[]any` slice would suffice, it
+	// results in ambiguous usage of field functionality.
+
+	v []any
+}
+
+// vals is a convenience wrapper, returning o.v, but allowing for a nil
+// receiver, in which case it returns a nil slice.
+func (o *OptionalFields) vals() []any {
+	if o == nil {
+		return nil
+	}
+	return o.v
+}
+
 var errUnsupportedOptionalFieldType = errors.New("unsupported optional field type")
 
-// optionalFieldInclusionFlags returns a slice of booleans, the same length as
-// `vals`, indicating whether or not the respective optional value MUST be
-// written to a list. A value must be written if it or any later value is
-// non-nil; the returned slice is therefore monotonic non-increasing from true
-// to false.
-func optionalFieldInclusionFlags(vals []any) ([]bool, error) {
-	flags := make([]bool, len(vals))
+// inclusionFlags returns a slice of booleans, the same length as `fs`,
+// indicating whether or not the respective field MUST be written to a list. A
+// field must be written if it or any later field value is non-nil; the returned
+// slice is therefore monotonic non-increasing from true to false.
+func (o *OptionalFields) inclusionFlags() ([]bool, error) {
+	if o == nil {
+		return nil, nil
+	}
+
+	flags := make([]bool, len(o.v))
 	var include bool
-	for i := len(vals) - 1; i >= 0; i-- {
-		switch v := reflect.ValueOf(vals[i]); v.Kind() {
+	for i := len(o.v) - 1; i >= 0; i-- {
+		switch v := reflect.ValueOf(o.v[i]); v.Kind() {
 		case reflect.Slice, reflect.Pointer:
 			include = include || !v.IsNil()
 		default:
-			return nil, fmt.Errorf("%w: %T", errUnsupportedOptionalFieldType, vals[i])
+			return nil, fmt.Errorf("%w: %T", errUnsupportedOptionalFieldType, o.v[i])
 		}
 		flags[i] = include
 	}
@@ -142,12 +171,13 @@ func DecodeList[T any](s *Stream) ([]*T, error) {
 }
 
 // DecodeStructFields is the inverse of [EncodeStructFields]. All destination
-// fields, be they `required` or `optional`, MUST be pointers and all `optional`
-// fields MUST be provided in case they are present in the RLP being decoded.
+// fields, be they required or optional, MUST be pointers and all optional
+// fields MUST be provided in case they are present in the RLP being decoded. If
+// no optional fields exist, the argument MAY be nil.
 //
 // Typically, the arguments to this function mirror those passed to
 // [EncodeStructFields] except for being pointers. See the example.
-func (s *Stream) DecodeStructFields(required, optional []any) error {
+func (s *Stream) DecodeStructFields(required []any, opt *OptionalFields) error {
 	return s.FromList(func() error {
 		for _, v := range required {
 			if err := s.Decode(v); err != nil {
@@ -155,7 +185,7 @@ func (s *Stream) DecodeStructFields(required, optional []any) error {
 			}
 		}
 
-		for _, v := range optional {
+		for _, v := range opt.vals() {
 			if !s.MoreDataInList() {
 				return nil
 			}

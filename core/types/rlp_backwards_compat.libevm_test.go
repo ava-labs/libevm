@@ -197,7 +197,7 @@ type cChainBodyExtras struct {
 
 var _ BodyHooks = (*cChainBodyExtras)(nil)
 
-func (e *cChainBodyExtras) RLPFieldsForEncoding(b *Body) ([]any, []any) {
+func (e *cChainBodyExtras) RLPFieldsForEncoding(b *Body) ([]any, *rlp.OptionalFields) {
 	// The Avalanche C-Chain uses all of the geth required fields (but none of
 	// the optional ones) so there's no need to explicitly list them. This
 	// pattern might not be ideal for readability but is used here for
@@ -205,11 +205,11 @@ func (e *cChainBodyExtras) RLPFieldsForEncoding(b *Body) ([]any, []any) {
 	//
 	// All new fields will always be tagged as optional for backwards
 	// compatibility so this is safe to do, but only for the required fields.
-	req, _ /*drop all optional*/ := NOOPBodyHooks{}.RLPFieldsForEncoding(b)
-	return append(req, e.Version, e.ExtData), nil
+	required, _ /*drop all optional*/ := NOOPBodyHooks{}.RLPFieldsForEncoding(b)
+	return append(required, e.Version, e.ExtData), nil
 }
 
-func (e *cChainBodyExtras) RLPFieldPointersForDecoding(b *Body) ([]any, []any) {
+func (e *cChainBodyExtras) RLPFieldPointersForDecoding(b *Body) ([]any, *rlp.OptionalFields) {
 	// An alternative to the pattern used above is to explicitly list all
 	// fields for better introspection.
 	return []any{

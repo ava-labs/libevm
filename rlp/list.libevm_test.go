@@ -107,7 +107,7 @@ func TestStructFieldHelpers(t *testing.T) {
 				err = EncodeStructFields(
 					&got,
 					[]any{obj.A, obj.B, obj.C},
-					[]any{obj.D, obj.E, obj.F},
+					Optional(obj.D, obj.E, obj.F),
 				)
 				require.NoErrorf(t, err, "EncodeStructFields(..., [required], [optional])")
 
@@ -119,7 +119,7 @@ func TestStructFieldHelpers(t *testing.T) {
 				var got foo
 				err := s.DecodeStructFields(
 					[]any{&got.A, &got.B, &got.C},
-					[]any{&got.D, &got.E, &got.F},
+					Optional(&got.D, &got.E, &got.F),
 				)
 				require.NoError(t, err, "Stream.DecodeStructFields(...)")
 
@@ -158,7 +158,7 @@ func ExampleStream_DecodeStructFields() {
 	_ = EncodeStructFields(
 		io.Discard,
 		[]any{val.A, val.B},
-		[]any{val.C},
+		Optional(val.C),
 	)
 
 	r := bytes.NewReader(nil /*arbitrary RLP buffer*/)
@@ -170,7 +170,7 @@ func ExampleStream_DecodeStructFields() {
 			&val.A,
 			Nillable(&val.B),
 		},
-		[]any{&val.C},
+		Optional(&val.C),
 	)
 
 	// Note the parallels between the arguments passed to
