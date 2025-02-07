@@ -38,8 +38,11 @@ jobs:
       - name: Globally update module name
         run: |
           go mod edit -module github.com/ava-labs/libevm;
-          find . -iname '*.go' -o -iname '*.txt' | xargs sed -i -E \
-            's|(["`]github\.com/)ethereum/go-ethereum|\1ava-labs/libevm|g';
+          find . \
+            -iname '*.go' \
+            -o -iname '*.txt' \
+            -o -iname '*.go.tpl' | xargs \
+            sed -i -E 's|(["`]github\.com/)ethereum/go-ethereum|\1ava-labs/libevm|g';
 
       - name: Remnant references
         run: |
