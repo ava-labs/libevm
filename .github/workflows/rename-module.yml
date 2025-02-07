@@ -41,7 +41,8 @@ jobs:
           find . \
             -iname '*.go' \
             -o -iname '*.txt' \
-            -o -iname '*.go.tpl' | xargs \
+            -o -iname '*.go.tpl' \
+            -o -iname '*.proto' | xargs \
             sed -i -E 's|(["`]github\.com/)ethereum/go-ethereum|\1ava-labs/libevm|g';
 
       - name: Remnant references
