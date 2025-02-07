@@ -21,10 +21,11 @@ import (
 	"io"
 	"testing"
 
-	"github.com/ava-labs/libevm/common"
 	"github.com/kr/pretty"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/libevm/common"
 )
 
 func TestFields(t *testing.T) {
