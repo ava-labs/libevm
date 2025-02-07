@@ -19,6 +19,7 @@ package rawdb_test
 import (
 	"bytes"
 	"fmt"
+	"sort"
 
 	"github.com/ava-labs/libevm/common"
 	// To ensure that all methods are available to importing packages, this test
@@ -74,22 +75,19 @@ func ExampleInspectDatabase() {
 		rawdb.WithDatabaseMetadataKeys(func(key []byte) bool {
 			return bytes.Equal(key, []byte("mymetadatakey"))
 		}),
-		rawdb.WithDatabaseStatsTransformer(func(s [][]string) [][]string {
-			var modified [][]string
-			// Remove lines
-			for _, line := range s {
-				database, category := line[0], line[1]
-				switch {
-				case database == "Ancient store (Chain)":
-				case database == "Key-Value store" && category == "Difficulties":
-				default:
-					modified = append(modified, line)
+		rawdb.WithDatabaseStatsTransformer(func(rows [][]string) [][]string {
+			sort.Slice(rows, func(i, j int) bool {
+				ri, rj := rows[i], rows[j]
+				if ri[0] != rj[0] {
+					return ri[0] < rj[0]
 				}
-			}
-			// Add lines for data collected with [rawdb.WithDatabaseStatRecorder]
-			line := []string{"My database", "My category", myStat.Size(), myStat.Count()}
-			modified = append(modified, line)
-			return modified
+				return ri[1] < rj[1]
+			})
+
+			return append(
+				rows,
+				[]string{"My database", "My category", myStat.Size(), myStat.Count()},
+			)
 		}),
 	}
 
@@ -98,33 +96,39 @@ func ExampleInspectDatabase() {
 		fmt.Println(err)
 	}
 	// Output:
-	// +-----------------+-------------------------+---------+-------+
-	// |    DATABASE     |        CATEGORY         |  SIZE   | ITEMS |
-	// +-----------------+-------------------------+---------+-------+
-	// | Key-Value store | Headers                 | 0.00 B  |     0 |
-	// | Key-Value store | Bodies                  | 0.00 B  |     0 |
-	// | Key-Value store | Receipt lists           | 0.00 B  |     0 |
-	// | Key-Value store | Block number->hash      | 0.00 B  |     0 |
-	// | Key-Value store | Block hash->number      | 0.00 B  |     0 |
-	// | Key-Value store | Transaction index       | 0.00 B  |     0 |
-	// | Key-Value store | Bloombit index          | 6.00 B  |     1 |
-	// | Key-Value store | Contract codes          | 0.00 B  |     0 |
-	// | Key-Value store | Hash trie nodes         | 0.00 B  |     0 |
-	// | Key-Value store | Path trie state lookups | 0.00 B  |     0 |
-	// | Key-Value store | Path trie account nodes | 0.00 B  |     0 |
-	// | Key-Value store | Path trie storage nodes | 0.00 B  |     0 |
-	// | Key-Value store | Trie preimages          | 0.00 B  |     0 |
-	// | Key-Value store | Account snapshot        | 0.00 B  |     0 |
-	// | Key-Value store | Storage snapshot        | 0.00 B  |     0 |
-	// | Key-Value store | Beacon sync headers     | 0.00 B  |     0 |
-	// | Key-Value store | Clique snapshots        | 0.00 B  |     0 |
-	// | Key-Value store | Singleton metadata      | 20.00 B |     1 |
-	// | Light client    | CHT trie nodes          | 0.00 B  |     0 |
-	// | Light client    | Bloom trie nodes        | 0.00 B  |     0 |
-	// | My database     | My category             | 12.00 B |     1 |
-	// +-----------------+-------------------------+---------+-------+
-	// |                            TOTAL          | 38.00 B |       |
-	// +-----------------+-------------------------+---------+-------+
+	// +-----------------------+-------------------------+---------+-------+
+	// |       DATABASE        |        CATEGORY         |  SIZE   | ITEMS |
+	// +-----------------------+-------------------------+---------+-------+
+	// | Ancient store (Chain) | Bodies                  | 0.00 B  |     0 |
+	// | Ancient store (Chain) | Diffs                   | 0.00 B  |     0 |
+	// | Ancient store (Chain) | Hashes                  | 0.00 B  |     0 |
+	// | Ancient store (Chain) | Headers                 | 0.00 B  |     0 |
+	// | Ancient store (Chain) | Receipts                | 0.00 B  |     0 |
+	// | Key-Value store       | Account snapshot        | 0.00 B  |     0 |
+	// | Key-Value store       | Beacon sync headers     | 0.00 B  |     0 |
+	// | Key-Value store       | Block hash->number      | 0.00 B  |     0 |
+	// | Key-Value store       | Block number->hash      | 0.00 B  |     0 |
+	// | Key-Value store       | Bloombit index          | 6.00 B  |     1 |
+	// | Key-Value store       | Bodies                  | 0.00 B  |     0 |
+	// | Key-Value store       | Clique snapshots        | 0.00 B  |     0 |
+	// | Key-Value store       | Contract codes          | 0.00 B  |     0 |
+	// | Key-Value store       | Difficulties            | 0.00 B  |     0 |
+	// | Key-Value store       | Hash trie nodes         | 0.00 B  |     0 |
+	// | Key-Value store       | Headers                 | 0.00 B  |     0 |
+	// | Key-Value store       | Path trie account nodes | 0.00 B  |     0 |
+	// | Key-Value store       | Path trie state lookups | 0.00 B  |     0 |
+	// | Key-Value store       | Path trie storage nodes | 0.00 B  |     0 |
+	// | Key-Value store       | Receipt lists           | 0.00 B  |     0 |
+	// | Key-Value store       | Singleton metadata      | 20.00 B |     1 |
+	// | Key-Value store       | Storage snapshot        | 0.00 B  |     0 |
+	// | Key-Value store       | Transaction index       | 0.00 B  |     0 |
+	// | Key-Value store       | Trie preimages          | 0.00 B  |     0 |
+	// | Light client          | Bloom trie nodes        | 0.00 B  |     0 |
+	// | Light client          | CHT trie nodes          | 0.00 B  |     0 |
+	// | My database           | My category             | 12.00 B |     1 |
+	// +-----------------------+-------------------------+---------+-------+
+	// |                                  TOTAL          | 38.00 B |       |
+	// +-----------------------+-------------------------+---------+-------+
 }
 
 type stubDatabase struct {
@@ -159,7 +163,7 @@ func (s *stubDatabase) ReadAncients(fn func(ethdb.AncientReaderOp) error) error 
 
 type stubIterator struct {
 	ethdb.Iterator
-	i   int // see pos()
+	i   int // see [stubIterator.pos]
 	kvs []keyValue
 }
 
