@@ -20,35 +20,30 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/libevm/common"
 	. "github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/libevm/ethtest"
 	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/rlp"
 )
 
 type stubHeaderHooks struct {
-	suffix                                   []byte
-	gotRawJSONToUnmarshal, gotRawRLPToDecode []byte
-	setHeaderToOnUnmarshalOrDecode           Header
-	accessor                                 pseudo.Accessor[*Header, *stubHeaderHooks]
-	toCopy                                   *stubHeaderHooks
+	suffix                 []byte
+	gotRawJSONToUnmarshal  []byte
+	setHeaderToOnUnmarshal Header
+	accessor               pseudo.Accessor[*Header, *stubHeaderHooks]
+	toCopy                 *stubHeaderHooks
 
-	errMarshal, errUnmarshal, errEncode, errDecode error
+	errMarshal, errUnmarshal error
 }
 
 func fakeHeaderJSON(h *Header, suffix []byte) []byte {
 	return []byte(fmt.Sprintf(`"%#x:%#x"`, h.ParentHash, suffix))
-}
-
-func fakeHeaderRLP(h *Header, suffix []byte) []byte {
-	return append(crypto.Keccak256(h.ParentHash[:]), suffix...)
 }
 
 func (hh *stubHeaderHooks) MarshalJSON(h *Header) ([]byte, error) { //nolint:govet
@@ -57,25 +52,30 @@ func (hh *stubHeaderHooks) MarshalJSON(h *Header) ([]byte, error) { //nolint:gov
 
 func (hh *stubHeaderHooks) UnmarshalJSON(h *Header, b []byte) error { //nolint:govet
 	hh.gotRawJSONToUnmarshal = b
-	*h = hh.setHeaderToOnUnmarshalOrDecode
+	*h = hh.setHeaderToOnUnmarshal
 	return hh.errUnmarshal
 }
 
-func (hh *stubHeaderHooks) EncodeRLP(h *Header, w io.Writer) error {
-	if _, err := w.Write(fakeHeaderRLP(h, hh.suffix)); err != nil {
-		return err
-	}
-	return hh.errEncode
+func directEncodeHeaderRLP(tb testing.TB, h *Header, extraPayloadSuffix []byte) []byte {
+	tb.Helper()
+
+	// The encoded type mirrors the fields returned by
+	// [stubHeaderHooks.RLPFieldsForEncoding].
+	buf, err := rlp.EncodeToBytes(struct {
+		ParentHash common.Hash
+		Suffix     []byte
+	}{h.ParentHash, extraPayloadSuffix})
+
+	require.NoError(tb, err)
+	return buf
 }
 
-func (hh *stubHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
-	r, err := s.Raw()
-	if err != nil {
-		return err
-	}
-	hh.gotRawRLPToDecode = r
-	*h = hh.setHeaderToOnUnmarshalOrDecode
-	return hh.errDecode
+func (hh *stubHeaderHooks) RLPFieldsForEncoding(h *Header) *rlp.Fields {
+	return &rlp.Fields{Required: []any{h.ParentHash, hh.suffix}}
+}
+
+func (hh *stubHeaderHooks) RLPFieldPointersForDecoding(h *Header) *rlp.Fields {
+	return &rlp.Fields{Required: []any{&h.ParentHash, &hh.suffix}}
 }
 
 func (hh *stubHeaderHooks) PostCopy(dst *Header) {
@@ -104,7 +104,7 @@ func TestHeaderHooks(t *testing.T) {
 	t.Run("UnmarshalJSON", func(t *testing.T) {
 		hdr := new(Header)
 		stub := &stubHeaderHooks{
-			setHeaderToOnUnmarshalOrDecode: Header{
+			setHeaderToOnUnmarshal: Header{
 				Extra: []byte("can you solve this puzzle? 0xbda01b6cf56c303bd3f581599c0d5c0b"),
 			},
 		}
@@ -115,31 +115,26 @@ func TestHeaderHooks(t *testing.T) {
 		require.NoErrorf(t, err, "json.Unmarshal()")
 
 		assert.Equal(t, input, string(stub.gotRawJSONToUnmarshal), "raw JSON received by hook")
-		assert.Equal(t, &stub.setHeaderToOnUnmarshalOrDecode, hdr, "%T after JSON unmarshalling with hook", hdr)
+		assert.Equal(t, &stub.setHeaderToOnUnmarshal, hdr, "%T after JSON unmarshalling with hook", hdr)
 	})
 
 	t.Run("EncodeRLP", func(t *testing.T) {
 		got, err := rlp.EncodeToBytes(hdr)
 		require.NoError(t, err, "rlp.EncodeToBytes(%T)", hdr)
-		assert.Equal(t, fakeHeaderRLP(hdr, suffix), got)
+		assert.Equal(t, directEncodeHeaderRLP(t, hdr, suffix), got)
 	})
 
 	t.Run("DecodeRLP", func(t *testing.T) {
-		input, err := rlp.EncodeToBytes(rng.Bytes(8))
-		require.NoError(t, err)
+		input := directEncodeHeaderRLP(t, hdr, suffix)
 
-		hdr := new(Header)
-		stub := &stubHeaderHooks{
-			setHeaderToOnUnmarshalOrDecode: Header{
-				Extra: []byte("arr4n was here"),
-			},
-		}
-		extras.Header.Set(hdr, stub)
-		err = rlp.DecodeBytes(input, hdr)
+		got := new(Header)
+		stub := &stubHeaderHooks{}
+		extras.Header.Set(got, stub)
+		err := rlp.DecodeBytes(input, got)
 		require.NoErrorf(t, err, "rlp.DecodeBytes(%#x)", input)
 
-		assert.Equal(t, input, stub.gotRawRLPToDecode, "raw RLP received by hooks")
-		assert.Equalf(t, &stub.setHeaderToOnUnmarshalOrDecode, hdr, "%T after RLP decoding with hook", hdr)
+		assert.Equalf(t, hdr.ParentHash, got.ParentHash, "RLP-decoded %T.ParentHash", hdr)
+		assert.Equalf(t, suffix, stub.suffix, "RLP-decoded %T.suffix", stub)
 	})
 
 	t.Run("PostCopy", func(t *testing.T) {
@@ -159,16 +154,12 @@ func TestHeaderHooks(t *testing.T) {
 	t.Run("error_propagation", func(t *testing.T) {
 		errMarshal := errors.New("whoops")
 		errUnmarshal := errors.New("is it broken?")
-		errEncode := errors.New("uh oh")
-		errDecode := errors.New("something bad happened")
 
 		hdr := new(Header)
 		setStub := func() {
 			extras.Header.Set(hdr, &stubHeaderHooks{
 				errMarshal:   errMarshal,
 				errUnmarshal: errUnmarshal,
-				errEncode:    errEncode,
-				errDecode:    errDecode,
 			})
 		}
 
@@ -183,16 +174,6 @@ func TestHeaderHooks(t *testing.T) {
 		{
 			err := json.Unmarshal([]byte("{}"), hdr)
 			assert.Equal(t, errUnmarshal, err, "via json.Unmarshal()")
-		}
-
-		setStub() // [stubHeaderHooks] completely overrides the Header
-		{
-			err := rlp.Encode(io.Discard, hdr)
-			assert.Equal(t, errEncode, err, "via rlp.Encode()")
-		}
-		{
-			err := rlp.DecodeBytes([]byte{0}, hdr)
-			assert.Equal(t, errDecode, err, "via rlp.DecodeBytes()")
 		}
 	})
 }

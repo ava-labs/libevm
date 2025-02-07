@@ -20,7 +20,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/libevm/testonly"
 	"github.com/ava-labs/libevm/rlp"
@@ -31,8 +33,8 @@ import (
 type HeaderHooks interface {
 	MarshalJSON(*Header) ([]byte, error) //nolint:govet // Type-specific override hook
 	UnmarshalJSON(*Header, []byte) error //nolint:govet
-	EncodeRLP(*Header, io.Writer) error
-	DecodeRLP(*Header, *rlp.Stream) error
+	RLPFieldsForEncoding(*Header) *rlp.Fields
+	RLPFieldPointersForDecoding(*Header) *rlp.Fields
 	PostCopy(dst *Header)
 }
 
@@ -68,12 +70,12 @@ func (h *Header) UnmarshalJSON(b []byte) error {
 
 // EncodeRLP implements the [rlp.Encoder] interface.
 func (h *Header) EncodeRLP(w io.Writer) error {
-	return h.hooks().EncodeRLP(h, w)
+	return h.hooks().RLPFieldsForEncoding(h).EncodeRLP(w)
 }
 
 // DecodeRLP implements the [rlp.Decoder] interface.
 func (h *Header) DecodeRLP(s *rlp.Stream) error {
-	return h.hooks().DecodeRLP(h, s)
+	return h.hooks().RLPFieldPointersForDecoding(h).DecodeRLP(s)
 }
 
 func (h *Header) extraPayload() *pseudo.Type {
@@ -102,14 +104,46 @@ func (*NOOPHeaderHooks) UnmarshalJSON(h *Header, b []byte) error { //nolint:gove
 	return h.unmarshalJSON(b)
 }
 
-func (*NOOPHeaderHooks) EncodeRLP(h *Header, w io.Writer) error {
-	return h.encodeRLP(w)
+func init() {
+	var (
+		h  common.Hash
+		a  common.Address
+		bi *big.Int
+		u  uint64
+		_  = Header{
+			h, h, a, h, h, h, Bloom{}, bi, bi, u, u, u, []byte{}, h, BlockNonce{}, // required
+			bi, &h, &u, &u, &h, //optional
+			&pseudo.Type{}, // libevm
+		}
+	)
 }
 
-func (*NOOPHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
-	type withoutMethods Header
-	return s.Decode((*withoutMethods)(h))
+func (*NOOPHeaderHooks) RLPFieldsForEncoding(h *Header) *rlp.Fields {
+	// TODO(arr4n): write a generator for this and the pointer equivalent, and
+	// include [NOOPBodyHooks] when running it.
+	return &rlp.Fields{
+		Required: []any{
+			h.ParentHash, h.UncleHash, h.Coinbase, h.Root, h.TxHash, h.ReceiptHash, h.Bloom,
+			h.Difficulty, h.Number, h.GasLimit, h.GasUsed, h.Time, h.Extra, h.MixDigest, h.Nonce,
+		},
+		Optional: []any{
+			h.BaseFee, h.WithdrawalsHash, h.BlobGasUsed, h.ExcessBlobGas, h.ParentBeaconRoot,
+		},
+	}
 }
+
+func (*NOOPHeaderHooks) RLPFieldPointersForDecoding(h *Header) *rlp.Fields {
+	return &rlp.Fields{
+		Required: []any{
+			&h.ParentHash, &h.UncleHash, &h.Coinbase, &h.Root, &h.TxHash, &h.ReceiptHash, &h.Bloom,
+			&h.Difficulty, &h.Number, &h.GasLimit, &h.GasUsed, &h.Time, &h.Extra, &h.MixDigest, &h.Nonce,
+		},
+		Optional: []any{
+			&h.BaseFee, &h.WithdrawalsHash, &h.BlobGasUsed, &h.ExcessBlobGas, &h.ParentBeaconRoot,
+		},
+	}
+}
+
 func (*NOOPHeaderHooks) PostCopy(dst *Header) {}
 
 var _ interface {
