@@ -248,14 +248,14 @@ func TestBodyRLPCChainCompat(t *testing.T) {
 		wantRLPHex string
 	}{
 		{
-			name: "nil ExtData",
+			name: "nil_ExtData",
 			extra: &cChainBodyExtras{
 				Version: version,
 			},
 			wantRLPHex: `e5dedd2a80809400000000000000000000000000decafc0ffeebad8080808080c08304cb2f80`,
 		},
 		{
-			name: "non-nil ExtData",
+			name: "non-nil_ExtData",
 			extra: &cChainBodyExtras{
 				Version: version,
 				ExtData: &[]byte{1, 4, 2, 8, 5, 7},

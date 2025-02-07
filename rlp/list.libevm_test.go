@@ -95,7 +95,6 @@ func TestStructFieldHelpers(t *testing.T) {
 	}
 
 	for _, obj := range tests {
-		obj := obj
 		t.Run("", func(t *testing.T) {
 			t.Logf("\n%s", pretty.Sprint(obj))
 
@@ -221,7 +220,6 @@ func TestNillable(t *testing.T) {
 	}
 
 	for _, obj := range tests {
-		obj := obj
 		t.Run("", func(t *testing.T) {
 			rlp, err := EncodeToBytes(obj)
 			require.NoErrorf(t, err, "EncodeToBytes(%+v)", obj)
