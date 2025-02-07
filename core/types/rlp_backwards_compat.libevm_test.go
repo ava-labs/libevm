@@ -197,7 +197,7 @@ type cChainBodyExtras struct {
 
 var _ BodyHooks = (*cChainBodyExtras)(nil)
 
-func (e *cChainBodyExtras) RLPFieldsForEncoding(b *Body) ([]any, *rlp.OptionalFields) {
+func (e *cChainBodyExtras) RLPFieldsForEncoding(b *Body) *rlp.Fields {
 	// The Avalanche C-Chain uses all of the geth required fields (but none of
 	// the optional ones) so there's no need to explicitly list them. This
 	// pattern might not be ideal for readability but is used here for
@@ -205,19 +205,25 @@ func (e *cChainBodyExtras) RLPFieldsForEncoding(b *Body) ([]any, *rlp.OptionalFi
 	//
 	// All new fields will always be tagged as optional for backwards
 	// compatibility so this is safe to do, but only for the required fields.
-	required, _ /*drop all optional*/ := NOOPBodyHooks{}.RLPFieldsForEncoding(b)
-	return append(required, e.Version, e.ExtData), nil
+	return &rlp.Fields{
+		Required: append(
+			NOOPBodyHooks{}.RLPFieldsForEncoding(b).Required,
+			e.Version, e.ExtData,
+		),
+	}
 }
 
-func (e *cChainBodyExtras) RLPFieldPointersForDecoding(b *Body) ([]any, *rlp.OptionalFields) {
+func (e *cChainBodyExtras) RLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 	// An alternative to the pattern used above is to explicitly list all
 	// fields for better introspection.
-	return []any{
-		&b.Transactions,
-		&b.Uncles,
-		&e.Version,
-		rlp.Nillable(&e.ExtData), // equivalent to `rlp:"nil"`
-	}, nil
+	return &rlp.Fields{
+		Required: []any{
+			&b.Transactions,
+			&b.Uncles,
+			&e.Version,
+			rlp.Nillable(&e.ExtData), // equivalent to `rlp:"nil"`
+		},
+	}
 }
 
 func TestBodyRLPCChainCompat(t *testing.T) {

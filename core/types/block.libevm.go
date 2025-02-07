@@ -118,23 +118,20 @@ var _ interface {
 } = (*Body)(nil)
 
 // EncodeRLP implements the [rlp.Encoder] interface.
-func (b *Body) EncodeRLP(dst io.Writer) error {
-	required, optional := b.hooks().RLPFieldsForEncoding(b)
-	return rlp.EncodeStructFields(dst, required, optional)
+func (b *Body) EncodeRLP(w io.Writer) error {
+	return b.hooks().RLPFieldsForEncoding(b).EncodeRLP(w)
 }
 
 // DecodeRLP implements the [rlp.Decoder] interface.
 func (b *Body) DecodeRLP(s *rlp.Stream) error {
-	return s.DecodeStructFields(
-		b.hooks().RLPFieldPointersForDecoding(b),
-	)
+	return b.hooks().RLPFieldPointersForDecoding(b).DecodeRLP(s)
 }
 
 // BodyHooks are required for all types registered with [RegisterExtras] for
 // [Body] payloads.
 type BodyHooks interface {
-	RLPFieldsForEncoding(*Body) ([]any, *rlp.OptionalFields)
-	RLPFieldPointersForDecoding(*Body) ([]any, *rlp.OptionalFields)
+	RLPFieldsForEncoding(*Body) *rlp.Fields
+	RLPFieldPointersForDecoding(*Body) *rlp.Fields
 }
 
 // TestOnlyRegisterBodyHooks is a temporary means of "registering" BodyHooks for
@@ -165,10 +162,16 @@ type NOOPBodyHooks struct{}
 // backwards-compatibility tests added.
 var _ = &Body{[]*Transaction{}, []*Header{}, []*Withdrawal{}}
 
-func (NOOPBodyHooks) RLPFieldsForEncoding(b *Body) ([]any, *rlp.OptionalFields) {
-	return []any{b.Transactions, b.Uncles}, rlp.Optional(b.Withdrawals)
+func (NOOPBodyHooks) RLPFieldsForEncoding(b *Body) *rlp.Fields {
+	return &rlp.Fields{
+		Required: []any{b.Transactions, b.Uncles},
+		Optional: []any{b.Withdrawals},
+	}
 }
 
-func (NOOPBodyHooks) RLPFieldPointersForDecoding(b *Body) ([]any, *rlp.OptionalFields) {
-	return []any{&b.Transactions, &b.Uncles}, rlp.Optional(&b.Withdrawals)
+func (NOOPBodyHooks) RLPFieldPointersForDecoding(b *Body) *rlp.Fields {
+	return &rlp.Fields{
+		Required: []any{&b.Transactions, &b.Uncles},
+		Optional: []any{&b.Withdrawals},
+	}
 }
