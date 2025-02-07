@@ -118,8 +118,7 @@ func (f *Fields) DecodeRLP(s *Stream) error {
 // Nillable wraps `field` to mirror the behaviour of an `rlp:"nil"` tag; i.e. if
 // a zero-sized RLP item is decoded into the returned Decoder then it is dropped
 // and `*field` is set to nil, otherwise the RLP item is decoded directly into
-// `field`. The return argument is intended for use with
-// [Fields.DecodeRLP].
+// `field`. The return argument is intended for use with [Fields].
 func Nillable[T any](field **T) Decoder {
 	return &nillable[T]{field}
 }
