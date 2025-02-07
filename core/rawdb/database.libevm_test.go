@@ -17,12 +17,14 @@
 package rawdb_test
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/ava-labs/libevm/common"
 	// To ensure that all methods are available to importing packages, this test
 	// is defined in package `rawdb_test` instead of `rawdb`.
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/ethdb"
 )
 
 // ExampleDatabaseStat demonstrates the method signatures of DatabaseStat, which
@@ -41,4 +43,146 @@ func ExampleDatabaseStat() {
 	// Output:
 	// Sum: 7.00 B
 	// Count: 4
+}
+
+func ExampleInspectDatabase() {
+	db := &stubDatabase{
+		iterator: &stubIterator{
+			i: -1,
+			kvs: []keyValue{
+				// Bloom bits total = 5 + 1 = 6
+				{key: []byte("iBxxx"), value: []byte("m")},
+				// Optional stat record total = 5 + 7 = 12
+				{key: []byte("mykey"), value: []byte("myvalue")},
+				// metadata total = 13 + 7 = 20
+				{key: []byte("mymetadatakey"), value: []byte("myvalue")},
+			},
+		},
+	}
+
+	keyPrefix := []byte(nil)
+	keyStart := []byte(nil)
+
+	var (
+		myStat rawdb.DatabaseStat
+	)
+	options := []rawdb.InspectDatabaseOption{
+		rawdb.WithDatabaseStatRecorder(func(key []byte, size common.StorageSize) bool {
+			if bytes.Equal(key, []byte("mykey")) {
+				myStat.Add(size)
+				return true
+			}
+			return false
+		}),
+		rawdb.WithDatabaseMetadataKeys(func(key []byte) bool {
+			return bytes.Equal(key, []byte("mymetadatakey"))
+		}),
+		rawdb.WithDatabaseStatsTransformer(func(s [][]string) [][]string {
+			var modified [][]string
+			// Remove lines
+			for _, line := range s {
+				database, category := line[0], line[1]
+				switch {
+				case database == "Ancient store (Chain)":
+				case database == "Key-Value store" && category == "Difficulties":
+				default:
+					modified = append(modified, line)
+				}
+			}
+			// Add lines for data collected with [rawdb.WithDatabaseStatRecorder]
+			line := []string{"My database", "My category", myStat.Size(), myStat.Count()}
+			modified = append(modified, line)
+			return modified
+		}),
+	}
+
+	err := rawdb.InspectDatabase(db, keyPrefix, keyStart, options...)
+	if err != nil {
+		fmt.Println(err)
+	}
+	// Output:
+	// +-----------------+-------------------------+---------+-------+
+	// |    DATABASE     |        CATEGORY         |  SIZE   | ITEMS |
+	// +-----------------+-------------------------+---------+-------+
+	// | Key-Value store | Headers                 | 0.00 B  |     0 |
+	// | Key-Value store | Bodies                  | 0.00 B  |     0 |
+	// | Key-Value store | Receipt lists           | 0.00 B  |     0 |
+	// | Key-Value store | Block number->hash      | 0.00 B  |     0 |
+	// | Key-Value store | Block hash->number      | 0.00 B  |     0 |
+	// | Key-Value store | Transaction index       | 0.00 B  |     0 |
+	// | Key-Value store | Bloombit index          | 6.00 B  |     1 |
+	// | Key-Value store | Contract codes          | 0.00 B  |     0 |
+	// | Key-Value store | Hash trie nodes         | 0.00 B  |     0 |
+	// | Key-Value store | Path trie state lookups | 0.00 B  |     0 |
+	// | Key-Value store | Path trie account nodes | 0.00 B  |     0 |
+	// | Key-Value store | Path trie storage nodes | 0.00 B  |     0 |
+	// | Key-Value store | Trie preimages          | 0.00 B  |     0 |
+	// | Key-Value store | Account snapshot        | 0.00 B  |     0 |
+	// | Key-Value store | Storage snapshot        | 0.00 B  |     0 |
+	// | Key-Value store | Beacon sync headers     | 0.00 B  |     0 |
+	// | Key-Value store | Clique snapshots        | 0.00 B  |     0 |
+	// | Key-Value store | Singleton metadata      | 20.00 B |     1 |
+	// | Light client    | CHT trie nodes          | 0.00 B  |     0 |
+	// | Light client    | Bloom trie nodes        | 0.00 B  |     0 |
+	// | My database     | My category             | 12.00 B |     1 |
+	// +-----------------+-------------------------+---------+-------+
+	// |                            TOTAL          | 38.00 B |       |
+	// +-----------------+-------------------------+---------+-------+
+}
+
+type stubDatabase struct {
+	ethdb.Database
+	iterator ethdb.Iterator
+}
+
+func (s *stubDatabase) NewIterator(keyPrefix, keyStart []byte) ethdb.Iterator {
+	return s.iterator
+}
+
+// AncientSize is used in [InspectDatabase] to determine the ancient sizes.
+func (s *stubDatabase) AncientSize(kind string) (uint64, error) {
+	return 0, nil
+}
+
+func (s *stubDatabase) Ancients() (uint64, error) {
+	return 0, nil
+}
+
+func (s *stubDatabase) Tail() (uint64, error) {
+	return 0, nil
+}
+
+func (s *stubDatabase) Get(key []byte) ([]byte, error) {
+	return nil, nil
+}
+
+func (s *stubDatabase) ReadAncients(fn func(ethdb.AncientReaderOp) error) (err error) {
+	return nil
+}
+
+type stubIterator struct {
+	ethdb.Iterator
+	i   int
+	kvs []keyValue
+}
+
+type keyValue struct {
+	key   []byte
+	value []byte
+}
+
+func (s *stubIterator) Next() bool {
+	s.i++
+	available := s.i < len(s.kvs)
+	return available
+}
+
+func (s *stubIterator) Release() {}
+
+func (s *stubIterator) Key() []byte {
+	return s.kvs[s.i].key
+}
+
+func (s *stubIterator) Value() []byte {
+	return s.kvs[s.i].value
 }
