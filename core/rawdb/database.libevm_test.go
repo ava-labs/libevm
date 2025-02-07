@@ -32,17 +32,15 @@ import (
 func ExampleDatabaseStat() {
 	var stat rawdb.DatabaseStat
 
-	stat.Add(common.StorageSize(0)) // only to demonstrate param type
-	stat.Add(1)
+	stat.Add(common.StorageSize(1)) // only to demonstrate param type
 	stat.Add(2)
-	stat.Add(4)
 
 	fmt.Println("Sum:", stat.Size())    // sum of all values passed to Add()
 	fmt.Println("Count:", stat.Count()) // number of calls to Add()
 
 	// Output:
-	// Sum: 7.00 B
-	// Count: 4
+	// Sum: 3.00 B
+	// Count: 2
 }
 
 func ExampleInspectDatabase() {
@@ -155,7 +153,7 @@ func (s *stubDatabase) Get(key []byte) ([]byte, error) {
 	return nil, nil
 }
 
-func (s *stubDatabase) ReadAncients(fn func(ethdb.AncientReaderOp) error) (err error) {
+func (s *stubDatabase) ReadAncients(fn func(ethdb.AncientReaderOp) error) error {
 	return nil
 }
 
@@ -178,8 +176,7 @@ func (s *stubIterator) pos() int {
 
 func (s *stubIterator) Next() bool {
 	s.i++
-	available := s.pos() < len(s.kvs)
-	return available
+	return s.pos() < len(s.kvs)
 }
 
 func (s *stubIterator) Release() {}

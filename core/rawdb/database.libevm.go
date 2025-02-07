@@ -79,10 +79,11 @@ func WithDatabaseMetadataKeys(isMetadata func(key []byte) bool) InspectDatabaseO
 	})
 }
 
-// WithDatabaseStatsTransformer returns an option that causes all statistics to
+// WithDatabaseStatsTransformer returns an option that causes all statistics rows to
 // be passed to the provided function, with its return value being printed
 // instead of the original values.
-func WithDatabaseStatsTransformer(transform func([][]string) [][]string) InspectDatabaseOption {
+// Each row contains 4 columns: database, category, size and count.
+func WithDatabaseStatsTransformer(transform func(rows [][]string) [][]string) InspectDatabaseOption {
 	return newInspectOpt(func(c *inspectDatabaseConfig) {
 		c.statsTransformer = transform
 	})
