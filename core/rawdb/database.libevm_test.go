@@ -48,7 +48,6 @@ func ExampleDatabaseStat() {
 func ExampleInspectDatabase() {
 	db := &stubDatabase{
 		iterator: &stubIterator{
-			i: -1,
 			kvs: []keyValue{
 				// Bloom bits total = 5 + 1 = 6
 				{key: []byte("iBxxx"), value: []byte("m")},
@@ -162,7 +161,7 @@ func (s *stubDatabase) ReadAncients(fn func(ethdb.AncientReaderOp) error) (err e
 
 type stubIterator struct {
 	ethdb.Iterator
-	i   int
+	i   int // see pos()
 	kvs []keyValue
 }
 
@@ -171,18 +170,24 @@ type keyValue struct {
 	value []byte
 }
 
+// pos returns the true iterator position, which is otherwise off by one because
+// Next() is called _before_ usage.
+func (s *stubIterator) pos() int {
+	return s.i - 1
+}
+
 func (s *stubIterator) Next() bool {
 	s.i++
-	available := s.i < len(s.kvs)
+	available := s.pos() < len(s.kvs)
 	return available
 }
 
 func (s *stubIterator) Release() {}
 
 func (s *stubIterator) Key() []byte {
-	return s.kvs[s.i].key
+	return s.kvs[s.pos()].key
 }
 
 func (s *stubIterator) Value() []byte {
-	return s.kvs[s.i].value
+	return s.kvs[s.pos()].value
 }
