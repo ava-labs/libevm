@@ -28,6 +28,12 @@ jobs:
           echo "DEST_BRANCH=auto-rename-module_source-${{ inputs.source_commit }}_workflow-${WORKFLOW_HASH}-${{ github.ref_name }}" \
             >> "$GITHUB_OUTPUT";
 
+      - name: Fetch tags from ethereum/go-ethereum
+        run: git fetch --tags https://github.com/ethereum/go-ethereum.git
+
+      - name: Tags pointing to source commit
+        run: git tag --points-at  ${{ inputs.source_commit }}
+
       - name: Check out source commit
         run: git checkout ${{ inputs.source_commit }}
 
