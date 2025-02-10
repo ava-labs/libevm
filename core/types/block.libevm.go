@@ -29,7 +29,7 @@ import (
 // HeaderHooks are required for all types registered with [RegisterExtras] for
 // [Header] payloads.
 type HeaderHooks interface {
-	EncodeJSON(*Header) ([]byte, error) // Type-specific override hook
+	EncodeJSON(*Header) ([]byte, error)
 	DecodeJSON(*Header, []byte) error
 	EncodeRLP(*Header, io.Writer) error
 	DecodeRLP(*Header, *rlp.Stream) error
