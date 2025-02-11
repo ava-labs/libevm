@@ -255,7 +255,7 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash,
 		ParentBeaconRoot: beaconRoot,
 	}
 	block := types.NewBlockWithHeader(header).
-		WithBody(types.Body{Transactions: txs, Uncles: nil}).WithWithdrawals(params.Withdrawals)
+		WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: params.Withdrawals})
 	if block.Hash() != params.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
 	}

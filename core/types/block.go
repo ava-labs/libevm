@@ -23,6 +23,7 @@ import (
 	"io"
 	"math/big"
 	"reflect"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -465,7 +466,7 @@ func (b *Block) WithBody(body Body) *Block {
 		header:       b.header,
 		transactions: make([]*Transaction, len(body.Transactions)),
 		uncles:       make([]*Header, len(body.Uncles)),
-		withdrawals:  b.withdrawals,
+		withdrawals:  slices.Clone(body.Withdrawals),
 	}
 	copy(block.transactions, body.Transactions)
 	for i := range body.Uncles {
