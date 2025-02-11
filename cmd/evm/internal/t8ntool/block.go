@@ -160,8 +160,7 @@ func (i *bbInput) ToBlock() *types.Block {
 	if i.Header.Difficulty != nil {
 		header.Difficulty = i.Header.Difficulty
 	}
-	body := &types.Body{Transactions: i.Txs, Uncles: i.Ommers}
-	return types.NewBlockWithHeader(header).WithBody(body).WithWithdrawals(i.Withdrawals)
+	return types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: i.Txs, Uncles: i.Ommers}).WithWithdrawals(i.Withdrawals)
 }
 
 // SealBlock seals the given block using the configured engine.

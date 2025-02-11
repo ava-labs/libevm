@@ -191,8 +191,11 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		}
 		txs[i] = tx.tx
 	}
-	blockBody := &types.Body{Transactions: txs, Uncles: uncles}
-	return types.NewBlockWithHeader(head).WithBody(blockBody).WithWithdrawals(body.Withdrawals), nil
+	return types.NewBlockWithHeader(head).WithBody(
+		types.Body{
+			Transactions: txs,
+			Uncles:       uncles,
+		}).WithWithdrawals(body.Withdrawals), nil
 }
 
 // HeaderByHash returns the block header with the given hash.

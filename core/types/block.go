@@ -460,7 +460,7 @@ func (b *Block) WithSeal(header *Header) *Block {
 }
 
 // WithBody returns a copy of the block with the given transaction and uncle contents.
-func (b *Block) WithBody(body *Body) *Block {
+func (b *Block) WithBody(body Body) *Block {
 	block := &Block{
 		header:       b.header,
 		transactions: make([]*Transaction, len(body.Transactions)),
