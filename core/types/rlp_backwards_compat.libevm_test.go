@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/kr/pretty"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -175,17 +176,7 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 				require.NoErrorf(t, err, "rlp.DecodeBytes(rlp.EncodeToBytes(%T), %T) resulted in %s",
 					(*withoutMethods)(body), got, pretty.Sprint(got))
 
-				// Note we do not specify field names to enforce all fields are set.
-				gotWithoutExtra := testBodyWithoutExtra{
-					got.Transactions,
-					got.Uncles,
-					got.Withdrawals,
-				}
-				want := testBodyWithoutExtra{
-					body.Transactions,
-					body.Uncles,
-					body.Withdrawals,
-				}
+				want := body
 				// Regular RLP decoding will never leave these non-optional
 				// fields nil.
 				if want.Transactions == nil {
@@ -198,8 +189,9 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 				opts := cmp.Options{
 					cmpeth.CompareHeadersByHash(),
 					cmpeth.CompareTransactionsByBinary(t),
+					cmpopts.IgnoreUnexported(Body{}),
 				}
-				if diff := cmp.Diff(want, gotWithoutExtra, opts); diff != "" {
+				if diff := cmp.Diff(want, got, opts); diff != "" {
 					t.Errorf("rlp.DecodeBytes(rlp.EncodeToBytes(%T)) diff (-want +got):\n%s", (*withoutMethods)(body), diff)
 				}
 			})
@@ -345,60 +337,15 @@ func TestBodyRLPCChainCompat(t *testing.T) {
 				require.NoErrorf(t, err, "rlp.DecodeBytes(%#x, %T)", wantRLP, got)
 				assert.Equal(t, tt.extra, &extra, "rlp.DecodeBytes(%#x, [%T as registered extra in %T carrier])", wantRLP, &extra, got)
 
-				// Note we do not specify field names to enforce all fields are set.
-				wantWithoutExtra := testBodyWithoutExtra{
-					body.Transactions,
-					body.Uncles,
-					body.Withdrawals,
-				}
-				gotWithoutExtra := testBodyWithoutExtra{
-					got.Transactions,
-					got.Uncles,
-					got.Withdrawals,
-				}
-
 				opts := cmp.Options{
 					cmpeth.CompareHeadersByHash(),
 					cmpeth.CompareTransactionsByBinary(t),
+					cmpopts.IgnoreUnexported(Body{}),
 				}
-				if diff := cmp.Diff(wantWithoutExtra, gotWithoutExtra, opts); diff != "" {
-					t.Errorf("rlp.DecodeBytes(%#x, [%T while carrying registered %T extra payload]) diff (-want +got):\n%s", wantRLP, gotWithoutExtra, &extra, diff)
+				if diff := cmp.Diff(body, got, opts); diff != "" {
+					t.Errorf("rlp.DecodeBytes(%#x, [%T while carrying registered %T extra payload]) diff (-want +got):\n%s", wantRLP, got, &extra, diff)
 				}
 			})
 		})
 	}
-}
-
-type testBodyWithoutExtra struct {
-	Transactions []*Transaction
-	Uncles       []*Header
-	Withdrawals  []*Withdrawal
-}
-
-// Test_testBodyWithoutExtra enforces the [bodyWithoutExtra] has its fields the same,
-// in terms of name and type, as all the exported fields of [Body], using [reflect].
-func Test_testBodyWithoutExtra(t *testing.T) {
-	t.Parallel()
-
-	refTyp := reflect.TypeOf(Body{})
-	refFieldNameToType := make(map[string]reflect.Type, refTyp.NumField())
-	for i := 0; i < refTyp.NumField(); i++ {
-		f := refTyp.Field(i)
-		if !f.IsExported() {
-			continue
-		}
-		refFieldNameToType[f.Name] = f.Type
-	}
-
-	testTyp := reflect.TypeOf(testBodyWithoutExtra{})
-	testFieldNameToType := make(map[string]reflect.Type, testTyp.NumField())
-	for i := 0; i < testTyp.NumField(); i++ {
-		f := testTyp.Field(i)
-		if !f.IsExported() {
-			t.Fatalf("field %s is not exported", f.Name)
-		}
-		testFieldNameToType[f.Name] = f.Type
-	}
-
-	assert.Equal(t, refFieldNameToType, testFieldNameToType)
 }
