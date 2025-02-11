@@ -18,6 +18,7 @@ package types_test
 
 import (
 	"encoding/hex"
+	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -44,7 +45,11 @@ func TestHeaderRLPBackwardsCompatibility(t *testing.T) {
 		{
 			name: "no-op header hooks",
 			register: func() {
-				RegisterExtras[NOOPHeaderHooks, *NOOPHeaderHooks, struct{}]()
+				RegisterExtras[
+					NOOPHeaderHooks, *NOOPHeaderHooks,
+					NOOPBodyHooks, *NOOPBodyHooks,
+					struct{},
+				]()
 			},
 		},
 	}
@@ -138,7 +143,7 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 	for _, tx := range txMatrix {
 		for _, u := range uncleMatrix {
 			for _, w := range withdrawMatrix {
-				bodies = append(bodies, &Body{tx, u, w})
+				bodies = append(bodies, makeBody(tx, u, w))
 			}
 		}
 	}
@@ -165,7 +170,17 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 				err := rlp.DecodeBytes(wantRLP, got)
 				require.NoErrorf(t, err, "rlp.DecodeBytes(%v, %T)", wantRLP, got)
 
-				want := body
+				// Note we do not specify field names to enforce all fields are set.
+				gotWithoutExtra := testBodyWithoutExtra{
+					got.Transactions,
+					got.Uncles,
+					got.Withdrawals,
+				}
+				want := testBodyWithoutExtra{
+					body.Transactions,
+					body.Uncles,
+					body.Withdrawals,
+				}
 				// Regular RLP decoding will never leave these non-optional
 				// fields nil.
 				if want.Transactions == nil {
@@ -179,11 +194,43 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 					cmpeth.CompareHeadersByHash(),
 					cmpeth.CompareTransactionsByBinary(t),
 				}
-				if diff := cmp.Diff(body, got, opts); diff != "" {
-					t.Errorf("rlp.DecodeBytes(rlp.EncodeToBytes(%#v)) diff (-want +got):\n%s", body, diff)
+				if diff := cmp.Diff(want, gotWithoutExtra, opts); diff != "" {
+					t.Errorf("rlp.DecodeBytes(rlp.EncodeToBytes(%#v)) diff (-want +got):\n%s", want, diff)
 				}
 			})
 		})
+	}
+}
+
+// makeBody creates a [*Body] with the given arguments and ensures all exported
+// fields are set through the test [TestmakeBody].
+func makeBody(txs []*Transaction, uncles []*Header, withdrawals []*Withdrawal) *Body {
+	return &Body{
+		Transactions: txs,
+		Uncles:       uncles,
+		Withdrawals:  withdrawals,
+	}
+}
+
+func Test_makeBody(t *testing.T) {
+	t.Parallel()
+
+	txs := []*Transaction{}
+	uncles := []*Header{}
+	withdrawals := []*Withdrawal{}
+
+	body := makeBody(txs, uncles, withdrawals)
+
+	bodyType := reflect.TypeOf(*body)
+	for i := 0; i < bodyType.NumField(); i++ {
+		field := bodyType.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		if reflect.ValueOf(*body).Field(i).IsZero() {
+			t.Errorf("body created with makeBody has its exported field %q not set. "+
+				"Please update makeBody to set all exported fields of Body.", field.Name)
+		}
 	}
 }
 
@@ -230,10 +277,13 @@ func TestBodyRLPCChainCompat(t *testing.T) {
 	// The inputs to this test were used to generate the expected RLP with
 	// ava-labs/coreth. This serves as both an example of how to use [BodyHooks]
 	// and a test of compatibility.
-
-	t.Cleanup(func() {
-		TestOnlyRegisterBodyHooks(NOOPBodyHooks{})
-	})
+	TestOnlyClearRegisteredExtras()
+	t.Cleanup(TestOnlyClearRegisteredExtras)
+	extras := RegisterExtras[
+		NOOPHeaderHooks, *NOOPHeaderHooks,
+		cChainBodyExtras, *cChainBodyExtras,
+		struct{},
+	]()
 
 	body := &Body{
 		Transactions: []*Transaction{
@@ -276,7 +326,7 @@ func TestBodyRLPCChainCompat(t *testing.T) {
 			require.NoErrorf(t, err, "hex.DecodeString(%q)", tt.wantRLPHex)
 
 			t.Run("Encode", func(t *testing.T) {
-				TestOnlyRegisterBodyHooks(tt.extra)
+				extras.Body.Set(body, tt.extra)
 				got, err := rlp.EncodeToBytes(body)
 				require.NoErrorf(t, err, "rlp.EncodeToBytes(%+v)", body)
 				assert.Equalf(t, wantRLP, got, "rlp.EncodeToBytes(%+v)", body)
@@ -284,21 +334,66 @@ func TestBodyRLPCChainCompat(t *testing.T) {
 
 			t.Run("Decode", func(t *testing.T) {
 				var extra cChainBodyExtras
-				TestOnlyRegisterBodyHooks(&extra)
-
 				got := new(Body)
+				extras.Body.Set(got, &extra)
 				err := rlp.DecodeBytes(wantRLP, got)
 				require.NoErrorf(t, err, "rlp.DecodeBytes(%#x, %T)", wantRLP, got)
 				assert.Equal(t, tt.extra, &extra, "rlp.DecodeBytes(%#x, [%T as registered extra in %T carrier])", wantRLP, &extra, got)
+
+				// Note we do not specify field names to enforce all fields are set.
+				wantWithoutExtra := testBodyWithoutExtra{
+					body.Transactions,
+					body.Uncles,
+					body.Withdrawals,
+				}
+				gotWithoutExtra := testBodyWithoutExtra{
+					got.Transactions,
+					got.Uncles,
+					got.Withdrawals,
+				}
 
 				opts := cmp.Options{
 					cmpeth.CompareHeadersByHash(),
 					cmpeth.CompareTransactionsByBinary(t),
 				}
-				if diff := cmp.Diff(body, got, opts); diff != "" {
-					t.Errorf("rlp.DecodeBytes(%#x, [%T while carrying registered %T extra payload]) diff (-want +got):\n%s", wantRLP, got, &extra, diff)
+				if diff := cmp.Diff(wantWithoutExtra, gotWithoutExtra, opts); diff != "" {
+					t.Errorf("rlp.DecodeBytes(%#x, [%T while carrying registered %T extra payload]) diff (-want +got):\n%s", wantRLP, gotWithoutExtra, &extra, diff)
 				}
 			})
 		})
 	}
+}
+
+type testBodyWithoutExtra struct {
+	Transactions []*Transaction
+	Uncles       []*Header
+	Withdrawals  []*Withdrawal
+}
+
+// Test_testBodyWithoutExtra enforces the [bodyWithoutExtra] has its fields the same,
+// in terms of name and type, as all the exported fields of [Body], using [reflect].
+func Test_testBodyWithoutExtra(t *testing.T) {
+	t.Parallel()
+
+	refTyp := reflect.TypeOf(Body{})
+	refFieldNameToType := make(map[string]reflect.Type, refTyp.NumField())
+	for i := 0; i < refTyp.NumField(); i++ {
+		f := refTyp.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+		refFieldNameToType[f.Name] = f.Type
+	}
+
+	testTyp := reflect.TypeOf(testBodyWithoutExtra{})
+	testFieldNameToType := make(map[string]reflect.Type, testTyp.NumField())
+	for i := 0; i < testTyp.NumField(); i++ {
+		f := testTyp.Field(i)
+		if !f.IsExported() {
+			t.Fatalf("field %s is not exported", f.Name)
+		}
+		testFieldNameToType[f.Name] = f.Type
+	}
+
+	assert.Equal(t, refFieldNameToType, testFieldNameToType)
 }
