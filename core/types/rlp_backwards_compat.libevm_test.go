@@ -150,7 +150,11 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 
 	for _, body := range bodies {
 		t.Run("", func(t *testing.T) {
-			t.Logf("\n%s", pretty.Sprint(body))
+			t.Cleanup(func() {
+				if t.Failed() {
+					t.Logf("\n%s", pretty.Sprint(body))
+				}
+			})
 
 			// The original [Body] doesn't implement [rlp.Encoder] nor
 			// [rlp.Decoder] so we can use a methodless equivalent as the gold
@@ -161,14 +165,15 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 
 			t.Run("Encode", func(t *testing.T) {
 				got, err := rlp.EncodeToBytes(body)
-				require.NoErrorf(t, err, "rlp.EncodeToBytes(%#v)", body)
-				assert.Equalf(t, wantRLP, got, "rlp.EncodeToBytes(%#v)", body)
+				require.NoErrorf(t, err, "rlp.EncodeToBytes(%T)", body)
+				assert.Equalf(t, wantRLP, got, "rlp.EncodeToBytes(%T)", body)
 			})
 
 			t.Run("Decode", func(t *testing.T) {
 				got := new(Body)
 				err := rlp.DecodeBytes(wantRLP, got)
-				require.NoErrorf(t, err, "rlp.DecodeBytes(%v, %T)", wantRLP, got)
+				require.NoErrorf(t, err, "rlp.DecodeBytes(rlp.EncodeToBytes(%T), %T) resulted in %s",
+					(*withoutMethods)(body), got, pretty.Sprint(got))
 
 				// Note we do not specify field names to enforce all fields are set.
 				gotWithoutExtra := testBodyWithoutExtra{
@@ -195,7 +200,7 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 					cmpeth.CompareTransactionsByBinary(t),
 				}
 				if diff := cmp.Diff(want, gotWithoutExtra, opts); diff != "" {
-					t.Errorf("rlp.DecodeBytes(rlp.EncodeToBytes(%#v)) diff (-want +got):\n%s", want, diff)
+					t.Errorf("rlp.DecodeBytes(rlp.EncodeToBytes(%T)) diff (-want +got):\n%s", (*withoutMethods)(body), diff)
 				}
 			})
 		})
