@@ -195,8 +195,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		types.Body{
 			Transactions: txs,
 			Uncles:       uncles,
-			Withdrawals:  body.Withdrawals,
-		}), nil
+		}).WithWithdrawals(body.Withdrawals), nil
 }
 
 // HeaderByHash returns the block header with the given hash.
