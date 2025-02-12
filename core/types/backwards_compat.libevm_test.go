@@ -86,8 +86,10 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 			t.Run("Decode", func(t *testing.T) {
 				got := new(Body)
 				err := rlp.DecodeBytes(wantRLP, got)
-				require.NoErrorf(t, err, "rlp.DecodeBytes(rlp.EncodeToBytes(%T), %T) resulted in %s",
-					(*withoutMethods)(body), got, pretty.Sprint(got))
+				require.NoErrorf(
+					t, err, "rlp.DecodeBytes(rlp.EncodeToBytes(%T), %T) resulted in %s",
+					(*withoutMethods)(body), got, pretty.Sprint(got),
+				)
 
 				want := body
 				// Regular RLP decoding will never leave these non-optional
