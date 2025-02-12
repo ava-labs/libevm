@@ -75,7 +75,7 @@ func RegisterExtras[
 		// [H,B,SA] so our constructors MUST match that. This guarantees that calls to
 		// the [HeaderHooks] and [BodyHooks] methods will never be performed on a nil pointer.
 		newHeader:         pseudo.NewConstructor[H]().NewPointer, // i.e. non-nil HPtr
-		newBody:           pseudo.NewConstructor[B]().NewPointer, // i.e. non-nil B
+		newBody:           pseudo.NewConstructor[B]().NewPointer, // i.e. non-nil BPtr
 		newStateAccount:   pseudo.NewConstructor[SA]().Zero,
 		cloneStateAccount: extra.cloneStateAccount,
 		hooks:             extra,
