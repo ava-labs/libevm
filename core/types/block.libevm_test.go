@@ -88,7 +88,7 @@ func TestHeaderHooks(t *testing.T) {
 
 	extras := RegisterExtras[
 		stubHeaderHooks, *stubHeaderHooks,
-		NOOPBodyHooks, *NOOPBodyHooks,
+		NOOPBlockBodyHooks, *NOOPBlockBodyHooks,
 		struct{},
 	]()
 	rng := ethtest.NewPseudoRand(13579)
