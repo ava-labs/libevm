@@ -48,7 +48,8 @@ func TestGetSetExtra(t *testing.T) {
 	payloads := types.RegisterExtras[
 		types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
 		types.NOOPBodyHooks, *types.NOOPBodyHooks,
-		*accountExtra]().StateAccount
+		*accountExtra,
+	]().StateAccount
 
 	rng := ethtest.NewPseudoRand(42)
 	addr := rng.Address()

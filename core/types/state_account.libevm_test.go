@@ -49,7 +49,8 @@ func TestStateAccountRLP(t *testing.T) {
 			RegisterExtras[
 				NOOPHeaderHooks, *NOOPHeaderHooks,
 				NOOPBodyHooks, *NOOPBodyHooks,
-				bool]()
+				bool,
+			]()
 		},
 		acc: &StateAccount{
 			Nonce:    0x444444,
@@ -82,7 +83,8 @@ func TestStateAccountRLP(t *testing.T) {
 				RegisterExtras[
 					NOOPHeaderHooks, *NOOPHeaderHooks,
 					NOOPBodyHooks, *NOOPBodyHooks,
-					bool]()
+					bool,
+				]()
 			},
 			acc: &StateAccount{
 				Nonce:    0x444444,
