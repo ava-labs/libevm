@@ -137,7 +137,7 @@ func (b *Body) hooks() BodyHooks {
 	if r := registeredExtras; r.Registered() {
 		return r.Get().hooks.hooksFromBody(b)
 	}
-	return new(NOOPBodyHooks)
+	return NOOPBodyHooks{}
 }
 
 // NOOPBodyHooks implements [BodyHooks] such that they are equivalent to no type
