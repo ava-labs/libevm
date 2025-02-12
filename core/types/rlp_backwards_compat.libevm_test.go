@@ -210,21 +210,15 @@ func makeBody(txs []*Transaction, uncles []*Header, withdrawals []*Withdrawal) *
 }
 
 func Test_makeBody(t *testing.T) {
-	t.Parallel()
+	body := *makeBody([]*Transaction{}, []*Header{}, []*Withdrawal{})
 
-	txs := []*Transaction{}
-	uncles := []*Header{}
-	withdrawals := []*Withdrawal{}
-
-	body := makeBody(txs, uncles, withdrawals)
-
-	bodyType := reflect.TypeOf(*body)
+	bodyType := reflect.TypeOf(body)
 	for i := 0; i < bodyType.NumField(); i++ {
 		field := bodyType.Field(i)
 		if !field.IsExported() {
 			continue
 		}
-		if reflect.ValueOf(*body).Field(i).IsZero() {
+		if reflect.ValueOf(body).Field(i).IsZero() {
 			t.Errorf("body created with makeBody has its exported field %q not set. "+
 				"Please update makeBody to set all exported fields of Body.", field.Name)
 		}
