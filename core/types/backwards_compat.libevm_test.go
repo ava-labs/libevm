@@ -193,6 +193,10 @@ func TestBlockRLPBackwardsCompatibility(t *testing.T) {
 // cChainBodyExtras carries the same additional fields as the Avalanche C-Chain
 // (ava-labs/coreth) [Body] and implements [BlockBodyHooks] to achieve
 // equivalent RLP {en,de}coding.
+//
+// It is not intended as a full test of ava-labs/coreth existing functionality,
+// which should be implemented when that module consumes libevm, but as proof of
+// equivalence of the [rlp.Fields] approach.
 type cChainBodyExtras struct {
 	Version uint32
 	ExtData *[]byte
