@@ -18,10 +18,8 @@ package types
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 
-	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/rlp"
 )
 
@@ -60,18 +58,6 @@ func (h *Header) EncodeRLP(w io.Writer) error {
 // DecodeRLP implements the [rlp.Decoder] interface.
 func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	return h.hooks().DecodeRLP(h, s)
-}
-
-func (h *Header) extraPayload() *pseudo.Type {
-	r := registeredExtras
-	if !r.Registered() {
-		// See params.ChainConfig.extraPayload() for panic rationale.
-		panic(fmt.Sprintf("%T.extraPayload() called before RegisterExtras()", r))
-	}
-	if h.extra == nil {
-		h.extra = r.Get().newHeader()
-	}
-	return h.extra
 }
 
 // NOOPHeaderHooks implements [HeaderHooks] such that they are equivalent to
@@ -142,16 +128,4 @@ func (NOOPBodyHooks) RLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 		Required: []any{&b.Transactions, &b.Uncles},
 		Optional: []any{&b.Withdrawals},
 	}
-}
-
-func (b *Body) extraPayload() *pseudo.Type {
-	r := registeredExtras
-	if !r.Registered() {
-		// See params.ChainConfig.extraPayload() for panic rationale.
-		panic(fmt.Sprintf("%T.extraPayload() called before RegisterExtras()", r))
-	}
-	if b.extra == nil {
-		b.extra = r.Get().newBody()
-	}
-	return b.extra
 }
