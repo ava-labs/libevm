@@ -17,6 +17,7 @@
 package release
 
 import (
+	"errors"
 	"regexp"
 	"strings"
 	"testing"
@@ -39,7 +40,7 @@ func TestCherryPicksFormat(t *testing.T) {
 	var commits []string
 
 	for i, line := range strings.Split(cherryPicks, "\n") {
-		if strings.HasPrefix(line, "#") {
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
@@ -62,7 +63,9 @@ func TestCherryPicksFormat(t *testing.T) {
 		RemoteURL: "https://github.com/ethereum/go-ethereum.git",
 	}
 	err = repo.Fetch(fetch)
-	require.NoErrorf(t, err, "%T.Fetch(%+v)", repo, fetch)
+	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
+		t.Fatalf("%T.Fetch(%+v) error %v", repo, fetch, err)
+	}
 
 	var (
 		lastHash string
