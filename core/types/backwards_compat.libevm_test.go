@@ -31,7 +31,7 @@ import (
 )
 
 func newTx(nonce uint64) *Transaction    { return NewTx(&LegacyTx{Nonce: nonce}) }
-func newHdr(hashLow byte) *Header        { return &Header{ParentHash: common.Hash{hashLow}} }
+func newHdr(parentHashHigh byte) *Header { return &Header{ParentHash: common.Hash{parentHashHigh}} }
 func newWithdraw(idx uint64) *Withdrawal { return &Withdrawal{Index: idx} }
 
 func blockBodyRLPTestInputs() []*Body {

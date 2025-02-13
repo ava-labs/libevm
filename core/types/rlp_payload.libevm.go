@@ -206,7 +206,7 @@ func (ExtraPayloads[HPtr, BPtr, SA]) cloneStateAccount(s *StateAccountExtra) *St
 // blockOrBody is an interface for use as a method argument as they can't
 // introduce new generic type parameters.
 type blockOrBody interface {
-	isBlockOrBody() // noop purely for tagging
+	isBlockOrBody() // noop to restrict type as [Header.extraPayload] otherwise matches
 	extraPayload() *pseudo.Type
 }
 
