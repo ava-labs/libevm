@@ -44,10 +44,6 @@ func (h *Header) hooks() HeaderHooks {
 	return new(NOOPHeaderHooks)
 }
 
-func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromHeader(h *Header) HeaderHooks {
-	return e.Header.Get(h)
-}
-
 var _ interface {
 	rlp.Encoder
 	rlp.Decoder
@@ -162,10 +158,6 @@ func (NOOPBodyHooks) RLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 		Required: []any{&b.Transactions, &b.Uncles},
 		Optional: []any{&b.Withdrawals},
 	}
-}
-
-func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromBody(b *Body) BodyHooks {
-	return e.Body.Get(b)
 }
 
 func (b *Body) extraPayload() *pseudo.Type {

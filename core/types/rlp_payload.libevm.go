@@ -125,6 +125,9 @@ type ExtraPayloads[HPtr HeaderHooks, BPtr BodyHooks, SA any] struct {
 	StateAccount pseudo.Accessor[StateOrSlimAccount, SA] // Also provides [SlimAccount] access.
 }
 
+func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromHeader(h *Header) HeaderHooks { return e.Header.Get(h) }
+func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromBody(b *Body) BodyHooks       { return e.Body.Get(b) }
+
 func (ExtraPayloads[HPtr, BPtr, SA]) cloneStateAccount(s *StateAccountExtra) *StateAccountExtra {
 	v := pseudo.MustNewValue[SA](s.t)
 	return &StateAccountExtra{
