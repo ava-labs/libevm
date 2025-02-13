@@ -209,7 +209,7 @@ type blockPayload struct {
 	copied bool
 }
 
-func (p *blockPayload) DeepCopy() *blockPayload {
+func (p *blockPayload) Copy() *blockPayload {
 	p.copied = true
 	return &blockPayload{x: p.x}
 }

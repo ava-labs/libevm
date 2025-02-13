@@ -146,7 +146,7 @@ type NOOPBlockBodyHooks struct{}
 
 var _ BlockBodyPayload[*NOOPBlockBodyHooks] = NOOPBlockBodyHooks{}
 
-func (NOOPBlockBodyHooks) DeepCopy() *NOOPBlockBodyHooks { return &NOOPBlockBodyHooks{} }
+func (NOOPBlockBodyHooks) Copy() *NOOPBlockBodyHooks { return &NOOPBlockBodyHooks{} }
 
 // The RLP-related methods of [NOOPBlockBodyHooks] make assumptions about the
 // struct fields and their order, which we lock in here as a change detector. If

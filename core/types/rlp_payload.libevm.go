@@ -89,10 +89,10 @@ func RegisterExtras[
 
 // A BlockBodyPayload is an implementation of [BlockBodyHooks] that is also able
 // to clone itself. Both [Block.Body] and [Block.WithBody] require this
-// functionality to clone the payload between the types.
+// functionality to copy the payload between the types.
 type BlockBodyPayload[BPtr any] interface {
 	BlockBodyHooks
-	DeepCopy() BPtr
+	Copy() BPtr
 }
 
 // TestOnlyClearRegisteredExtras clears the [Extras] previously passed to
@@ -221,7 +221,7 @@ func cloneBlockBodyPayload[
 	BPtr BlockBodyPayload[BPtr],
 ](b T) *pseudo.Type {
 	v := pseudo.MustNewValue[BPtr](b.extraPayload())
-	return pseudo.From(v.Get().DeepCopy()).Type
+	return pseudo.From(v.Get().Copy()).Type
 }
 
 // StateOrSlimAccount is implemented by both [StateAccount] and [SlimAccount],
