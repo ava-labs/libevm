@@ -108,27 +108,27 @@ type extraConstructors struct {
 }
 
 func (h *Header) extraPayload() *pseudo.Type {
-	r := registeredExtras
-	if !r.Registered() {
-		// See params.ChainConfig.extraPayload() for panic rationale.
-		panic(fmt.Sprintf("%T.extraPayload() called before RegisterExtras()", r))
-	}
-	if h.extra == nil {
-		h.extra = r.Get().newHeader()
-	}
-	return h.extra
+	return extraPayloadOrSetDefault(&h.extra, func(c *extraConstructors) *pseudo.Type {
+		return c.newHeader()
+	})
 }
 
 func (b *Body) extraPayload() *pseudo.Type {
+	return extraPayloadOrSetDefault(&b.extra, func(c *extraConstructors) *pseudo.Type {
+		return c.newBody()
+	})
+}
+
+func extraPayloadOrSetDefault(field **pseudo.Type, construct func(*extraConstructors) *pseudo.Type) *pseudo.Type {
 	r := registeredExtras
 	if !r.Registered() {
 		// See params.ChainConfig.extraPayload() for panic rationale.
-		panic(fmt.Sprintf("%T.extraPayload() called before RegisterExtras()", r))
+		panic("<T>.extraPayload() called before RegisterExtras()")
 	}
-	if b.extra == nil {
-		b.extra = r.Get().newBody()
+	if *field == nil {
+		*field = construct(r.Get())
 	}
-	return b.extra
+	return *field
 }
 
 // hooks returns the [Header]'s registered [HeaderHooks], if any, otherwise a
