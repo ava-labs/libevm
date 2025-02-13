@@ -258,7 +258,7 @@ func TestBlockWithX(t *testing.T) {
 			// This specifically uses `require` instead of `assert` because a
 			// failure here invalidates the next test, which demonstrates a deep
 			// copy.
-			require.Equalf(t, initialPayload+1, extras.Block.Get(block).x, "%T payload %T after modification via pointer")
+			require.Equalf(t, initialPayload+1, extras.Block.Get(block).x, "%T payload %T after modification via pointer", block, payload)
 
 			switch got := extras.Block.Get(newBlock); got.x {
 			case initialPayload: // expected
