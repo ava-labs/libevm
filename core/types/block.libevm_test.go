@@ -249,7 +249,7 @@ func TestBlockWithX(t *testing.T) {
 			case "WithWithdrawals":
 				newBlock = block.WithWithdrawals(nil)
 			default:
-				t.Fatal("method call not implemented")
+				t.Fatalf("method call not implemented: %s", method)
 			}
 
 			payload.x++

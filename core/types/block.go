@@ -212,7 +212,7 @@ type Block struct {
 	ReceivedAt   time.Time
 	ReceivedFrom interface{}
 
-	extra *pseudo.Type // See RegisterExtras()
+	extra *pseudo.Type // See [RegisterExtras]
 }
 
 // "external" block encoding. used for eth protocol, etc.
