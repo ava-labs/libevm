@@ -107,6 +107,24 @@ type extraConstructors struct {
 	}
 }
 
+// hooks returns the [Header]'s registered [HeaderHooks], if any, otherwise a
+// [NOOPHeaderHooks] suitable for running default behaviour.
+func (h *Header) hooks() HeaderHooks {
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.hooksFromHeader(h)
+	}
+	return new(NOOPHeaderHooks)
+}
+
+// hooks returns the [Body]'s registered [BodyHooks], if any, otherwise a
+// [NOOPBodyHooks] suitable for running default behaviour.
+func (b *Body) hooks() BodyHooks {
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.hooksFromBody(b)
+	}
+	return NOOPBodyHooks{}
+}
+
 func (e *StateAccountExtra) clone() *StateAccountExtra {
 	switch r := registeredExtras; {
 	case !r.Registered(), e == nil:

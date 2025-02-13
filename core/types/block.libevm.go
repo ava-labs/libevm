@@ -35,15 +35,6 @@ type HeaderHooks interface {
 	PostCopy(dst *Header)
 }
 
-// hooks returns the Header's registered HeaderHooks, if any, otherwise a
-// [NOOPHeaderHooks] suitable for running default behaviour.
-func (h *Header) hooks() HeaderHooks {
-	if r := registeredExtras; r.Registered() {
-		return r.Get().hooks.hooksFromHeader(h)
-	}
-	return new(NOOPHeaderHooks)
-}
-
 var _ interface {
 	rlp.Encoder
 	rlp.Decoder
@@ -127,13 +118,6 @@ func (b *Body) DecodeRLP(s *rlp.Stream) error {
 type BodyHooks interface {
 	RLPFieldsForEncoding(*Body) *rlp.Fields
 	RLPFieldPointersForDecoding(*Body) *rlp.Fields
-}
-
-func (b *Body) hooks() BodyHooks {
-	if r := registeredExtras; r.Registered() {
-		return r.Get().hooks.hooksFromBody(b)
-	}
-	return NOOPBodyHooks{}
 }
 
 // NOOPBodyHooks implements [BodyHooks] such that they are equivalent to no type
