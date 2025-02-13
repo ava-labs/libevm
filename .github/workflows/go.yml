@@ -40,7 +40,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: "go.mod"
+          go-version-file: "./libevm/tooling/go.mod"
       - run: go test ./...
 
   go_generate:
