@@ -1,0 +1,5 @@
+# Lines starting with # are ignored as comments.
+# All other lines MUST have the format [<commit> # <comment>].
+2bd6bd01d2e8561dd7fc21b631f4a34ac16627a1 # libevm branch point, known to be in history, tests cherry-pick skipping
+69f815f6f5791e0e48160bdad284773d0ffb1ba9 # print ConfigCompatError time
+159fb1a1db551c544978dc16a5568a4730b4abf3 # S256.IsOnCurve() check
