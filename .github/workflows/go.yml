@@ -30,6 +30,19 @@ jobs:
         run: |
           go test -short $(go list ./... | grep -Pv "${FLAKY_REGEX}");
 
+  go_test_tooling:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./libevm/tooling
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+      - run: go test ./...
+
   go_generate:
     env:
       EXCLUDE_REGEX: "ava-labs/libevm/(accounts/usbwallet/trezor)$"
