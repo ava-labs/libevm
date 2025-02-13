@@ -3,6 +3,8 @@
 # Commits MUST be in chronological order.
 # A test in release_test.go will enforce this / provide the correct lines to copy and paste.
 #
+# The very first commit is where libevm branched off geth and is included to confirm that it is skipped.
+#
 2bd6bd01d2e8561dd7fc21b631f4a34ac16627a1 # Merge branch 'master' into release/1.13
 99bbbc0277e34fc3a31512a345ba20874ae98e18 # internal/build, rpc: add missing HTTP response body Close() calls (#29223)
 1e9bf2a09ed3d82ac1aa69750a556f3ce127721d # core/state: fix bug in statedb.Copy and remove unnecessary preallocation (#29563)
