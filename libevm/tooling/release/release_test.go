@@ -18,13 +18,16 @@ package release
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
 	_ "embed"
@@ -33,11 +36,17 @@ import (
 var (
 	//go:embed cherrypicks
 	cherryPicks  string
-	lineFormatRE = regexp.MustCompile(`^([a-fA-F0-9]{40}) #.+$`)
+	lineFormatRE = regexp.MustCompile(`^([a-fA-F0-9]{40}) # (.*)$`)
 )
 
 func TestCherryPicksFormat(t *testing.T) {
-	var commits []string
+	type parsedLine struct {
+		hash, commitMsg string
+	}
+	var (
+		rawLines []string
+		lines    []parsedLine
+	)
 
 	for i, line := range strings.Split(cherryPicks, "\n") {
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -45,8 +54,13 @@ func TestCherryPicksFormat(t *testing.T) {
 		}
 
 		switch matches := lineFormatRE.FindStringSubmatch(line); len(matches) {
-		case 2:
-			commits = append(commits, matches[1])
+		case 3:
+			rawLines = append(rawLines, line)
+			lines = append(lines, parsedLine{
+				hash:      matches[1],
+				commitMsg: matches[2],
+			})
+
 		default:
 			t.Errorf("Line %d is improperly formatted: %s", i, line)
 		}
@@ -67,19 +81,33 @@ func TestCherryPicksFormat(t *testing.T) {
 		t.Fatalf("%T.Fetch(%+v) error %v", repo, fetch, err)
 	}
 
-	var (
-		lastHash string
-		lastAt   time.Time
-	)
-	for _, hash := range commits {
-		obj, err := repo.CommitObject(plumbing.NewHash(hash))
-		require.NoErrorf(t, err, "%T.CommitObject(%q)", repo, hash)
+	commits := make([]struct {
+		obj  *object.Commit
+		line parsedLine
+	}, len(lines))
 
-		at := obj.Committer.When
-		if !at.After(lastAt) {
-			t.Errorf("Commit %s (%s) is not after %s (%s)", hash, at, lastHash, lastAt)
-		}
-		lastHash = hash
-		lastAt = at
+	for i, line := range lines {
+		obj, err := repo.CommitObject(plumbing.NewHash(line.hash))
+		require.NoErrorf(t, err, "%T.CommitObject(%q)", repo, line.hash)
+
+		commits[i].obj = obj
+		commits[i].line = line
+	}
+	sort.Slice(commits, func(i, j int) bool {
+		ci, cj := commits[i].obj, commits[j].obj
+		return ci.Committer.When.Before(cj.Committer.When)
+	})
+
+	var want []string
+	for _, c := range commits {
+		msg := strings.Split(c.obj.Message, "\n")[0]
+		want = append(
+			want,
+			fmt.Sprintf("%s # %s", c.line.hash, msg),
+		)
+	}
+	if diff := cmp.Diff(want, rawLines); diff != "" {
+		t.Errorf("Commits in `cherrypicks` file out of order or have incorrect commit message(s);\n(-want +got):\n%s", diff)
+		t.Logf("To fix, copy:\n%s", strings.Join(want, "\n"))
 	}
 }
