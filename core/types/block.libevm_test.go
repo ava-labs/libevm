@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -199,4 +201,74 @@ func TestHeaderHooks(t *testing.T) {
 			assert.Equal(t, errDecode, err, "via rlp.DecodeBytes()")
 		}
 	})
+}
+
+type blockPayload struct {
+	NOOPBlockBodyHooks
+	x      int
+	copied bool
+}
+
+func (p *blockPayload) DeepCopy() *blockPayload {
+	p.copied = true
+	return &blockPayload{x: p.x}
+}
+
+func TestBlockWithX(t *testing.T) {
+	TestOnlyClearRegisteredExtras()
+	t.Cleanup(TestOnlyClearRegisteredExtras)
+
+	extras := RegisterExtras[
+		NOOPHeaderHooks, *NOOPHeaderHooks,
+		blockPayload, *blockPayload,
+		struct{},
+	]()
+
+	typ := reflect.TypeOf(&Block{})
+	for i := 0; i < typ.NumMethod(); i++ {
+		method := typ.Method(i).Name
+		if method == "Withdrawals" || !strings.HasPrefix(method, "With") {
+			continue
+		}
+
+		block := NewBlockWithHeader(&Header{})
+		const initialPayload = int(42)
+		payload := &blockPayload{
+			x: initialPayload,
+		}
+		extras.Block.Set(block, payload)
+
+		t.Run(method, func(t *testing.T) {
+			var newBlock *Block
+
+			switch method {
+			case "WithBody":
+				var body Body
+				extras.Body.Set(&body, payload)
+				newBlock = block.WithBody(body)
+			case "WithSeal":
+				newBlock = block.WithSeal(&Header{})
+			case "WithWithdrawals":
+				newBlock = block.WithWithdrawals(nil)
+			default:
+				t.Fatal("method call not implemented")
+			}
+
+			payload.x++
+			// This specifically uses `require` instead of `assert` because a
+			// failure here invalidates the next test, which demonstrates a deep
+			// copy.
+			require.Equalf(t, initialPayload+1, extras.Block.Get(block).x, "%T payload %T after modification via pointer")
+
+			switch got := extras.Block.Get(newBlock); got.x {
+			case initialPayload: // expected
+			case 0:
+				t.Errorf("%T payload %T got zero value; the payload was probably not copied, resulting in a default being created", newBlock, got)
+			case initialPayload + 1:
+				t.Errorf("%T payload %T got same value as modified original; the payload was probably shallow copied", newBlock, got)
+			default:
+				t.Errorf("%T payload %T got %d, want %d; this is unexpected even as an error so you're on your own here", newBlock, got, got.x, initialPayload)
+			}
+		})
+	}
 }

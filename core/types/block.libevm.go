@@ -86,11 +86,17 @@ func (*NOOPHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
 func (*NOOPHeaderHooks) PostCopy(dst *Header) {}
 
 func (b *Body) cloneExtra() *pseudo.Type {
-	return b.extra // TODO(arr4n) implement this // DO NOT MERGE
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.cloneBodyPayload(b)
+	}
+	return nil
 }
 
 func (b *Block) cloneExtra() *pseudo.Type {
-	return b.extra // TODO(arr4n) implement this // DO NOT MERGE
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.cloneBlockPayload(b)
+	}
+	return nil
 }
 
 var _ = []interface {
@@ -137,6 +143,10 @@ type BlockBodyHooks interface {
 // NOOPBlockBodyHooks implements [BlockBodyHooks] such that they are equivalent
 // to no type having been registered.
 type NOOPBlockBodyHooks struct{}
+
+var _ BlockBodyPayload[*NOOPBlockBodyHooks] = NOOPBlockBodyHooks{}
+
+func (NOOPBlockBodyHooks) DeepCopy() *NOOPBlockBodyHooks { return &NOOPBlockBodyHooks{} }
 
 // The RLP-related methods of [NOOPBlockBodyHooks] make assumptions about the
 // struct fields and their order, which we lock in here as a change detector. If

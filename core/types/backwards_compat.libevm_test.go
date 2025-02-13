@@ -200,6 +200,8 @@ type cChainBodyExtras struct {
 
 var _ BlockBodyHooks = (*cChainBodyExtras)(nil)
 
+func (e *cChainBodyExtras) DeepCopy() *cChainBodyExtras { return e }
+
 func (e *cChainBodyExtras) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
 	// The Avalanche C-Chain uses all of the geth required fields (but none of
 	// the optional ones) so there's no need to explicitly list them. This

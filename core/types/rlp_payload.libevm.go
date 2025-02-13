@@ -27,9 +27,9 @@ import (
 )
 
 // RegisterExtras registers the type `HPtr` to be carried as an extra payload in
-// [Header] structs and the type `SA` in [StateAccount] and [SlimAccount]
-// structs. It is expected to be called in an `init()` function and MUST NOT be
-// called more than once.
+// [Header] structs, the type `BPtr` in [Block] and [Body] structs, and the type
+// `SA` in [StateAccount] and [SlimAccount] structs. It is expected to be called
+// in an `init()` function and MUST NOT be called more than once.
 //
 // The `SA` payload will be treated as an extra struct field for the purposes of
 // RLP encoding and decoding. RLP handling is plumbed through to the `SA` via
@@ -39,15 +39,15 @@ import (
 // The payloads can be accessed via the [pseudo.Accessor] methods of the
 // [ExtraPayloads] returned by RegisterExtras. The default `SA` value accessed
 // in this manner will be a zero-value `SA` while the default value from a
-// [Header] is a non-nil `HPtr`. The latter guarantee ensures that hooks won't
-// be called on nil-pointer receivers.
+// [Header] or [Block] / [Body] is a non-nil `HPtr` or `BPtr` respectively. The
+// latter guarantee ensures that hooks won't be called on nil-pointer receivers.
 func RegisterExtras[
 	H any, HPtr interface {
 		HeaderHooks
 		*H
 	},
 	B any, BPtr interface {
-		BlockBodyHooks
+		BlockBodyPayload[BPtr]
 		*B
 	},
 	SA any,
@@ -87,6 +87,14 @@ func RegisterExtras[
 	return extra
 }
 
+// A BlockBodyPayload is an implementation of [BlockBodyHooks] that is also able
+// to clone itself. Both [Block.Body] and [Block.WithBody] require this
+// functionality to clone the payload between the types.
+type BlockBodyPayload[BPtr any] interface {
+	BlockBodyHooks
+	DeepCopy() BPtr
+}
+
 // TestOnlyClearRegisteredExtras clears the [Extras] previously passed to
 // [RegisterExtras]. It panics if called from a non-testing call stack.
 //
@@ -108,6 +116,8 @@ type extraConstructors struct {
 		hooksFromHeader(*Header) HeaderHooks
 		hooksFromBody(*Body) BlockBodyHooks
 		hooksFromBlock(*Block) BlockBodyHooks
+		cloneBlockPayload(*Block) *pseudo.Type
+		cloneBodyPayload(*Body) *pseudo.Type
 		cloneStateAccount(*StateAccountExtra) *StateAccountExtra
 	}
 }
@@ -175,7 +185,7 @@ func (e *StateAccountExtra) clone() *StateAccountExtra {
 // ExtraPayloads provides strongly typed access to the extra payload carried by
 // [Header], [Body], [StateAccount], and [SlimAccount] structs. The only valid way to
 // construct an instance is by a call to [RegisterExtras].
-type ExtraPayloads[HPtr HeaderHooks, BPtr BlockBodyHooks, SA any] struct {
+type ExtraPayloads[HPtr HeaderHooks, BPtr BlockBodyPayload[BPtr], SA any] struct {
 	Header       pseudo.Accessor[*Header, HPtr]
 	Block        pseudo.Accessor[*Block, BPtr]
 	Body         pseudo.Accessor[*Body, BPtr]
@@ -191,6 +201,27 @@ func (ExtraPayloads[HPtr, BPtr, SA]) cloneStateAccount(s *StateAccountExtra) *St
 	return &StateAccountExtra{
 		t: pseudo.From(v.Get()).Type,
 	}
+}
+
+func (ExtraPayloads[HPtr, BPtr, SA]) cloneBodyPayload(b *Body) *pseudo.Type {
+	return cloneBlockBodyPayload[*Body, BPtr](b)
+}
+
+func (ExtraPayloads[HPtr, BPtr, SA]) cloneBlockPayload(b *Block) *pseudo.Type {
+	return cloneBlockBodyPayload[*Block, BPtr](b)
+}
+
+// cloneBlockBodyPayload MUST NOT be used directly. Instead call
+// [ExtraPayloads.cloneBodyPayload] or its Block equivalent.
+func cloneBlockBodyPayload[
+	T interface {
+		extraPayload() *pseudo.Type
+		*Body | *Block
+	},
+	BPtr BlockBodyPayload[BPtr],
+](b T) *pseudo.Type {
+	v := pseudo.MustNewValue[BPtr](b.extraPayload())
+	return pseudo.From(v.Get().DeepCopy()).Type
 }
 
 // StateOrSlimAccount is implemented by both [StateAccount] and [SlimAccount],
