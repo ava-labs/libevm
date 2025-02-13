@@ -204,8 +204,6 @@ type cChainBodyExtras struct {
 
 var _ BlockBodyHooks = (*cChainBodyExtras)(nil)
 
-func (e *cChainBodyExtras) Copy() *cChainBodyExtras { return e }
-
 func (e *cChainBodyExtras) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
 	// The Avalanche C-Chain uses all of the geth required fields (but none of
 	// the optional ones) so there's no need to explicitly list them. This
@@ -233,6 +231,12 @@ func (e *cChainBodyExtras) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields 
 			rlp.Nillable(&e.ExtData), // equivalent to `rlp:"nil"`
 		},
 	}
+}
+
+// See [cChainBodyExtras] intent.
+
+func (e *cChainBodyExtras) Copy() *cChainBodyExtras {
+	panic("unimplemented")
 }
 
 func (e *cChainBodyExtras) BlockRLPFieldsForEncoding(b *BlockRLPProxy) *rlp.Fields {
