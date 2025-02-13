@@ -83,3 +83,6 @@ jobs:
     # Each matrix instance runs as a different name, which doesn't play nicely
     # with branch-protection rules. We instead require this job.
     needs: go_tidy_matrix
+    runs-on: ubuntu-latest
+    steps:
+     - run: echo "I'm a no-op"
