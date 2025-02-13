@@ -205,12 +205,10 @@ func TestHeaderHooks(t *testing.T) {
 
 type blockPayload struct {
 	NOOPBlockBodyHooks
-	x      int
-	copied bool
+	x int
 }
 
 func (p *blockPayload) Copy() *blockPayload {
-	p.copied = true
 	return &blockPayload{x: p.x}
 }
 

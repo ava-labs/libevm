@@ -203,6 +203,16 @@ func (ExtraPayloads[HPtr, BPtr, SA]) cloneStateAccount(s *StateAccountExtra) *St
 	}
 }
 
+// blockOrBody is an interface for use as a method argument as they can't
+// introduce new generic type parameters.
+type blockOrBody interface {
+	isBlockOrBody() // noop purely for tagging
+	extraPayload() *pseudo.Type
+}
+
+func (*Block) isBlockOrBody() {}
+func (*Body) isBlockOrBody()  {}
+
 func (e ExtraPayloads[HPtr, BPtr, SA]) cloneBodyPayload(b *Body) *pseudo.Type {
 	return e.cloneBlockOrBodyPayload(b)
 }
@@ -229,16 +239,6 @@ func (b *Block) cloneExtra() *pseudo.Type {
 	}
 	return nil
 }
-
-// blockOrBody is an interface for use as a method argument as they can't
-// introduce new generic type parameters.
-type blockOrBody interface {
-	isBlockOrBody() // noop purely for tagging
-	extraPayload() *pseudo.Type
-}
-
-func (*Block) isBlockOrBody() {}
-func (*Body) isBlockOrBody()  {}
 
 // StateOrSlimAccount is implemented by both [StateAccount] and [SlimAccount],
 // allowing for their [StateAccountExtra] payloads to be accessed in a type-safe
