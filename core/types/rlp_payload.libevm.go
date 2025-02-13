@@ -203,26 +203,42 @@ func (ExtraPayloads[HPtr, BPtr, SA]) cloneStateAccount(s *StateAccountExtra) *St
 	}
 }
 
-func (ExtraPayloads[HPtr, BPtr, SA]) cloneBodyPayload(b *Body) *pseudo.Type {
-	return cloneBlockBodyPayload[*Body, BPtr](b)
+func (e ExtraPayloads[HPtr, BPtr, SA]) cloneBodyPayload(b *Body) *pseudo.Type {
+	return e.cloneBlockOrBodyPayload(b)
 }
 
-func (ExtraPayloads[HPtr, BPtr, SA]) cloneBlockPayload(b *Block) *pseudo.Type {
-	return cloneBlockBodyPayload[*Block, BPtr](b)
+func (e ExtraPayloads[HPtr, BPtr, SA]) cloneBlockPayload(b *Block) *pseudo.Type {
+	return e.cloneBlockOrBodyPayload(b)
 }
 
-// cloneBlockBodyPayload MUST NOT be used directly. Instead call
-// [ExtraPayloads.cloneBodyPayload] or its Block equivalent.
-func cloneBlockBodyPayload[
-	T interface {
-		extraPayload() *pseudo.Type
-		*Body | *Block
-	},
-	BPtr BlockBodyPayload[BPtr],
-](b T) *pseudo.Type {
+func (ExtraPayloads[HPtr, BPtr, SA]) cloneBlockOrBodyPayload(b blockOrBody) *pseudo.Type {
 	v := pseudo.MustNewValue[BPtr](b.extraPayload())
 	return pseudo.From(v.Get().Copy()).Type
 }
+
+func (b *Body) cloneExtra() *pseudo.Type {
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.cloneBodyPayload(b)
+	}
+	return nil
+}
+
+func (b *Block) cloneExtra() *pseudo.Type {
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.cloneBlockPayload(b)
+	}
+	return nil
+}
+
+// blockOrBody is an interface for use as a method argument as they can't
+// introduce new generic type parameters.
+type blockOrBody interface {
+	isBlockOrBody() // noop purely for tagging
+	extraPayload() *pseudo.Type
+}
+
+func (*Block) isBlockOrBody() {}
+func (*Body) isBlockOrBody()  {}
 
 // StateOrSlimAccount is implemented by both [StateAccount] and [SlimAccount],
 // allowing for their [StateAccountExtra] payloads to be accessed in a type-safe

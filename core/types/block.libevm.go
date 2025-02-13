@@ -85,20 +85,6 @@ func (*NOOPHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
 }
 func (*NOOPHeaderHooks) PostCopy(dst *Header) {}
 
-func (b *Body) cloneExtra() *pseudo.Type {
-	if r := registeredExtras; r.Registered() {
-		return r.Get().hooks.cloneBodyPayload(b)
-	}
-	return nil
-}
-
-func (b *Block) cloneExtra() *pseudo.Type {
-	if r := registeredExtras; r.Registered() {
-		return r.Get().hooks.cloneBlockPayload(b)
-	}
-	return nil
-}
-
 var _ = []interface {
 	rlp.Encoder
 	rlp.Decoder
