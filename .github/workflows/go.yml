@@ -64,11 +64,17 @@ jobs:
 
   go_tidy:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: [".", "./libevm/tooling"]
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: "go.mod"
+          go-version-file: "${{ matrix.dir }}/go.mod"
       - run: go mod tidy
       - run: git diff --exit-code
