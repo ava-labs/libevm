@@ -58,6 +58,12 @@ func TestCherryPicksFormat(t *testing.T) {
 	repo, err := git.PlainOpenWithOptions("./", opts)
 	require.NoErrorf(t, err, "git.PlainOpenWithOptions(./, %+v", opts)
 
+	fetch := &git.FetchOptions{
+		RemoteURL: "https://github.com/ethereum/go-ethereum.git",
+	}
+	err = repo.Fetch(fetch)
+	require.NoErrorf(t, err, "%T.Fetch(%+v)", repo, fetch)
+
 	var (
 		lastHash string
 		lastAt   time.Time
