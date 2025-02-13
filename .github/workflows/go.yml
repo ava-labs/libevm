@@ -37,6 +37,8 @@ jobs:
         working-directory: ./libevm/tooling
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # everything
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
