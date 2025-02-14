@@ -25,9 +25,9 @@
 set -eu;
 set -o pipefail;
 
-SELF_DIR=$(dirname $0)
+SELF_DIR=$(dirname "${0}")
 # The format of the `cherrypicks` file is guaranteed by a test so we can use simple parsing here.
-CHERRY_PICKS=$(cat "${SELF_DIR}/cherrypicks" | grep -Pv "^#" | awk '{print $1}')
+CHERRY_PICKS=$(< "${SELF_DIR}/cherrypicks" grep -Pv "^#" | awk '{print $1}')
 
 commits=()
 for commit in ${CHERRY_PICKS}; do
@@ -39,7 +39,7 @@ for commit in ${CHERRY_PICKS}; do
     commits+=("${commit}");
 done
 
-if [[ -z "${commits[@]// }" ]]; then # $x// removes whitespace
+if [[ -z "${commits[*]// }" ]]; then # $x// removes whitespace
     echo "No commits to cherry-pick";
     exit 0;
 fi
