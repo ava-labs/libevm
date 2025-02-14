@@ -3,7 +3,7 @@ module github.com/ava-labs/libevm
 go 1.20
 
 retract (
-	// Vad semver formats resulting in incorrect precedence
+	// Bad semver formats resulting in incorrect precedence
 	v1.13.14-0.1.0-rc.1
 	v1.13.14-0.1.0.rc-2
 )
