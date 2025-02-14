@@ -85,3 +85,29 @@ jobs:
           commit_message: "[AUTO] rename Go module + update internal import paths\n\nWorkflow: ${{ steps.vars.outputs.WORKFLOW_HASH }} on branch ${{ github.ref_name }}"
           repo: ${{ github.repository }}
           branch: ${{ steps.vars.outputs.DEST_BRANCH }}
+
+  update-golangci:
+    runs-on: ubuntu-latest
+    needs: rename-module
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.rename-module.outputs.vars.DEST_BRANCH }}
+          depth: 1
+
+      - name: Update .golangci.yml new-from-rev
+        uses: fjogeleit/yaml-update-action@main
+        with:
+          valueFile: ".golangci.yml"
+          propertyPath: "issues.new-from-rev"
+          value: $(git rev-parse HEAD)
+          commitChange: false
+
+      - name: Signed commit to branch
+        uses: planetscale/ghcommit-action@d4176bfacef926cc2db351eab20398dfc2f593b5 # v0.2.0
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        with:
+          commit_message: "[AUTO] update .golangci.yml new-from-rev"
+          repo: ${{ github.repository }}
+          branch: ${{ needs.rename-module.outputs.vars.DEST_BRANCH }}

@@ -78,38 +78,8 @@ linters-settings:
         disabled: true
 
 issues:
+  new-from-rev: 0b56af5a01b8a0c6fc9d60247bb79ffd03d1bcfd
   exclude-dirs-use-default: false
-  exclude-rules:
-    - path-except: libevm
-      linters:
-        # If any issue is flagged in a non-libevm file, add the linter here
-        # because the problem isn't under our control.
-        - containedctx
-        - forcetypeassert
-        - errcheck
-        - gci
-        - gofmt
-        - goheader
-        - goimports
-        - gosec
-        - gosimple
-        - govet
-        - nakedret
-        - nestif
-        - nilerr
-        - nolintlint
-        - revive
-        - staticcheck
-        - tagliatelle
-        - testableexamples
-        - testifylint
-        - thelper
-        - tparallel
-        - typecheck
-        - usestdlibvars
-        - varnamelen
-        - wastedassign
-        - whitespace
   include:
     # Many of the default exclusions are because, verbatim "Annoying issue",
     # which defeats the point of a linter.
