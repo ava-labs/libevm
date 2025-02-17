@@ -1,6 +1,8 @@
 name: lint
 
 on:
+  push:
+    branches: [main, "release/**"]
   pull_request:
     branches: [main, "release/**"]
   workflow_dispatch:
@@ -32,6 +34,7 @@ jobs:
         with:
           go-version-file: "go.mod"
       - name: goheader
+        if: ${{ github.event_name == 'pull_request' }}
         # The goheader linter is only enabled in the CI so that it runs only on modified or new files
         # (see only-new-issues: true). It is disabled in .golangci.yml because
         # golangci-lint running locally is not aware of new/modified files compared to the base
