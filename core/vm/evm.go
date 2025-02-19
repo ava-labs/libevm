@@ -24,6 +24,7 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/libevm"
+	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 )
@@ -40,6 +41,7 @@ type (
 
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	if p, override := evm.chainRules.Hooks().PrecompileOverride(addr); override {
+		log.Debug("Overriding precompile", "Address", addr, "Implementation", log.TypeOf(p))
 		return p, p != nil
 	}
 	var precompiles map[common.Address]PrecompiledContract
