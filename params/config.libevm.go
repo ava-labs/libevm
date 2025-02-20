@@ -80,7 +80,7 @@ func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPaylo
 		newForRules:    e.newForRules,
 		payloads:       payloads,
 	})
-	log.Debug(
+	log.Info(
 		"Registered params extras",
 		"ChainConfig", log.TypeOf(pseudo.Zero[C]().Value.Get()),
 		"Rules", log.TypeOf(pseudo.Zero[R]().Value.Get()),

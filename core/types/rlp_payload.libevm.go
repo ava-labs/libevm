@@ -85,7 +85,7 @@ func RegisterExtras[
 		newStateAccount: pseudo.NewConstructor[SA]().Zero,
 		hooks:           extra,
 	})
-	log.Debug(
+	log.Info(
 		"Registered core/types extras",
 		"Header", log.TypeOf(pseudo.Zero[HPtr]().Value.Get()),
 		"Block/Body", log.TypeOf(pseudo.Zero[BPtr]().Value.Get()),
