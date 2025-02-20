@@ -49,8 +49,6 @@ jobs:
 
       - name: Set variables
         id: vars
-        # Including hashes of both the source and the workflow file makes this
-        # idempotent.
         env:
           RENAME_TO: ${{ steps.go.outputs.MODULE_SUFFIX == 'ava-labs/libevm' && 'ethereum/go-ethereum' || 'ava-labs/libevm' }}
         run: |
@@ -58,7 +56,7 @@ jobs:
           echo "RENAME_TO=${RENAME_TO}" >> "$GITHUB_OUTPUT";
           echo "WORKFLOW_HASH=${WORKFLOW_HASH}" >> "$GITHUB_OUTPUT";
           echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT";
-          echo "AUTO_BRANCH_NAME=auto/rename-module/to=${RENAME_TO}/src=$(git rev-parse HEAD)/workflow_sha=${{ github.workflow_sha }}" \
+          echo "AUTO_BRANCH_NAME=auto/rename-module/to=${RENAME_TO}/src=$(git rev-parse HEAD)/workflow_sha=${{ github.workflow_sha }}/run=${{ github.run_id }}" \
             >> "$GITHUB_OUTPUT";
 
       - name: Globally rename module from ${{ steps.vars.outputs.RENAME_FROM }} to ${{ steps.vars.outputs.RENAME_TO }}
@@ -91,7 +89,7 @@ jobs:
 
       - name: Set branch name
         id: branch
-        env: 
+        env:
           BRANCH: ${{ inputs.branch || steps.vars.outputs.AUTO_BRANCH_NAME }}
         run: echo "NAME=${BRANCH}" >> "$GITHUB_OUTPUT";
 
@@ -113,5 +111,6 @@ jobs:
 
             Source: ${{ steps.vars.outputs.SOURCE_COMMIT }} (${{ inputs.source }})
             Workflow: ${{ github.workflow_sha }} (${{ github.workflow_ref }})
+            Run ID: ${{ github.run_id }}
           repo: ${{ github.repository }}
           branch: ${{ steps.branch.outputs.NAME }}
