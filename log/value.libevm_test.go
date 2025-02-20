@@ -26,11 +26,12 @@ func TestTypeOf(t *testing.T) {
 	type foo struct{}
 
 	tests := map[any]string{
-		nil:     "<nil>",
-		int(0):  "int",
-		int(1):  "int",
-		uint(0): "uint",
-		foo{}:   "log.foo",
+		nil:         "<nil>",
+		int(0):      "int",
+		int(1):      "int",
+		uint(0):     "uint",
+		foo{}:       "log.foo",
+		(*foo)(nil): "*log.foo",
 	}
 
 	for in, want := range tests {
