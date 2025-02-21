@@ -20,13 +20,42 @@ import (
 	"fmt"
 	"math/big"
 
+	set "github.com/hashicorp/go-set/v3"
 	"github.com/holiman/uint256"
+	"golang.org/x/exp/slog"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/libevm"
+	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/params"
 )
+
+// ActivePrecompiles returns the precompiles enabled with the current configuration.
+func ActivePrecompiles(rules params.Rules) []common.Address {
+	orig := activePrecompiles(rules) // original, upstream implementation
+	active := rules.Hooks().ActivePrecompiles(append([]common.Address{}, orig...))
+
+	// As all set computation is done lazily and only when debugging, there is
+	// some duplication in favour of simplified code.
+	log.Debug(
+		"Overriding active precompiles",
+		"Added", log.Lazy(func() slog.Value {
+			diff := set.From(active).Difference(set.From(orig))
+			return slog.AnyValue(diff.Slice())
+		}),
+		"Removed", log.Lazy(func() slog.Value {
+			diff := set.From(orig).Difference(set.From(active))
+			return slog.AnyValue(diff.Slice())
+		}),
+		"Unchanged", log.Lazy(func() slog.Value {
+			both := set.From(active).Intersect(set.From(orig))
+			return slog.AnyValue(both.Slice())
+		}),
+	)
+
+	return active
+}
 
 // evmCallArgs mirrors the parameters of the [EVM] methods Call(), CallCode(),
 // DelegateCall() and StaticCall(). Its fields are identical to those of the
