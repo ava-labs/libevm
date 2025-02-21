@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -14,24 +14,32 @@
 // along with the go-ethereum library. If not, see
 // <http://www.gnu.org/licenses/>.
 
-package core
+package log
 
 import (
-	"github.com/ava-labs/libevm/log"
+	"fmt"
+
+	"golang.org/x/exp/slog"
 )
 
-// canExecuteTransaction is a convenience wrapper for calling the
-// [params.RulesHooks.CanExecuteTransaction] hook.
-func (st *StateTransition) canExecuteTransaction() error {
-	bCtx := st.evm.Context
-	rules := st.evm.ChainConfig().Rules(bCtx.BlockNumber, bCtx.Random != nil, bCtx.Time)
-	if err := rules.Hooks().CanExecuteTransaction(st.msg.From, st.msg.To, st.state); err != nil {
-		log.Debug(
-			"Transaction execution blocked by libevm hook",
-			"Hooks", log.TypeOf(rules.Hooks()),
-			"Reason", err,
-		)
-		return err
-	}
-	return nil
+// TypeOf returns a LogValuer that reports the concrete type of `v` as
+// determined with the `%T` [fmt] verb.
+func TypeOf(v any) slog.LogValuer {
+	return concreteTypeValue{v}
+}
+
+type concreteTypeValue struct{ v any }
+
+func (v concreteTypeValue) LogValue() slog.Value {
+	return slog.StringValue(fmt.Sprintf("%T", v.v))
+}
+
+// A Lazy function defers its execution until and if logging is performed.
+type Lazy func() slog.Value
+
+var _ slog.LogValuer = Lazy(nil)
+
+// LogValue implements the [slog.LogValuer] interface.
+func (l Lazy) LogValue() slog.Value {
+	return l()
 }
