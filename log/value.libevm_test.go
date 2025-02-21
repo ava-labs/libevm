@@ -62,6 +62,6 @@ func TestLazy(t *testing.T) {
 	log.Info("", key, fn)
 	log.Debug("", "not evaluated", fn)
 
-	assert.Contains(t, out.String(), wantLogged, "evaluation of lazy function is logged")
+	assert.Containsf(t, out.String(), wantLogged, "evaluation of %T function is logged", fn)
 	assert.Equalf(t, 1, gotNumEvaluations, "number of evaluations of %T function", fn)
 }
