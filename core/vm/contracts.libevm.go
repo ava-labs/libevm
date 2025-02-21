@@ -20,13 +20,13 @@ import (
 	"fmt"
 	"math/big"
 
-	set "github.com/hashicorp/go-set/v3"
 	"github.com/holiman/uint256"
 	"golang.org/x/exp/slog"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/libevm"
+	"github.com/ava-labs/libevm/libevm/set"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/params"
 )
@@ -41,15 +41,15 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 	log.Debug(
 		"Overriding active precompiles",
 		"Added", log.Lazy(func() slog.Value {
-			diff := set.From(active).Difference(set.From(orig))
+			diff := set.From(active...).Sub(set.From(orig...))
 			return slog.AnyValue(diff.Slice())
 		}),
 		"Removed", log.Lazy(func() slog.Value {
-			diff := set.From(orig).Difference(set.From(active))
+			diff := set.From(orig...).Sub(set.From(active...))
 			return slog.AnyValue(diff.Slice())
 		}),
 		"Unchanged", log.Lazy(func() slog.Value {
-			both := set.From(active).Intersect(set.From(orig))
+			both := set.From(active...).Intersect(set.From(orig...))
 			return slog.AnyValue(both.Slice())
 		}),
 	)
