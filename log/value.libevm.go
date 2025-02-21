@@ -33,3 +33,13 @@ type concreteTypeValue struct{ v any }
 func (v concreteTypeValue) LogValue() slog.Value {
 	return slog.StringValue(fmt.Sprintf("%T", v.v))
 }
+
+// A Lazy function defers its execution until and if logging is performed.
+type Lazy func() slog.Value
+
+var _ slog.LogValuer = Lazy(nil)
+
+// LogValue implements the [slog.LogValuer] interface.
+func (l Lazy) LogValue() slog.Value {
+	return l()
+}

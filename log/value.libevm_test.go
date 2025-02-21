@@ -17,9 +17,11 @@
 package log
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/exp/slog"
 )
 
 func TestTypeOf(t *testing.T) {
@@ -38,4 +40,28 @@ func TestTypeOf(t *testing.T) {
 		got := TypeOf(in).LogValue()
 		assert.Equalf(t, want, got.String(), "TypeOf(%T(%[1]v))", in, in)
 	}
+}
+
+func TestLazy(t *testing.T) {
+	const (
+		key        = "theKey"
+		val        = "theVal"
+		wantLogged = key + "=" + val
+	)
+
+	var gotNumEvaluations int
+	fn := Lazy(func() slog.Value {
+		gotNumEvaluations++
+		return slog.StringValue(val)
+	})
+
+	var out bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&out, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	log.Info("", key, fn)
+	log.Debug("", "not evaluated", fn)
+
+	assert.Contains(t, out.String(), wantLogged, "evaluation of lazy function is logged")
+	assert.Equalf(t, 1, gotNumEvaluations, "number of evaluations of %T function", fn)
 }
