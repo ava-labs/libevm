@@ -464,6 +464,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	addrs := &libevm.AddressContext{Origin: evm.Origin, Caller: caller.Address(), Self: address}
 	gas, err := evm.chainRules.Hooks().CanCreateContract(addrs, gas, evm.StateDB)
 	if err != nil {
+		log.Debug(
+			"Contract creation blocked by libevm hook",
+			"Hooks", log.TypeOf(evm.chainRules.Hooks()),
+			"Reason", err,
+		)
 		return nil, common.Address{}, gas, err
 	}
 	//libevm:end
