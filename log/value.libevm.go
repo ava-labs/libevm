@@ -22,18 +22,6 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-// TypeOf returns a LogValuer that reports the concrete type of `v` as
-// determined with the `%T` [fmt] verb.
-func TypeOf(v any) slog.LogValuer {
-	return concreteTypeValue{v}
-}
-
-type concreteTypeValue struct{ v any }
-
-func (v concreteTypeValue) LogValue() slog.Value {
-	return slog.StringValue(fmt.Sprintf("%T", v.v))
-}
-
 // A Lazy function defers its execution until and if logging is performed.
 type Lazy func() slog.Value
 
@@ -42,4 +30,12 @@ var _ slog.LogValuer = Lazy(nil)
 // LogValue implements the [slog.LogValuer] interface.
 func (l Lazy) LogValue() slog.Value {
 	return l()
+}
+
+// TypeOf returns a Lazy function that reports the concrete type of `v` as
+// determined with the `%T` [fmt] verb.
+func TypeOf(v any) Lazy {
+	return Lazy(func() slog.Value {
+		return slog.StringValue(fmt.Sprintf("%T", v))
+	})
 }
