@@ -22,7 +22,7 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-// A Lazy function defers its execution until and if logging is performed.
+// A Lazy function defers its execution until logging is performed.
 type Lazy func() slog.Value
 
 var _ slog.LogValuer = Lazy(nil)
