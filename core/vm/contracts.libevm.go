@@ -40,15 +40,15 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 	// some duplication in favour of simplified code.
 	log.Debug(
 		"Overriding active precompiles",
-		"Added", log.Lazy(func() slog.Value {
+		"added", log.Lazy(func() slog.Value {
 			diff := set.From(active...).Sub(set.From(orig...))
 			return slog.AnyValue(diff.Slice())
 		}),
-		"Removed", log.Lazy(func() slog.Value {
+		"removed", log.Lazy(func() slog.Value {
 			diff := set.From(orig...).Sub(set.From(active...))
 			return slog.AnyValue(diff.Slice())
 		}),
-		"Unchanged", log.Lazy(func() slog.Value {
+		"unchanged", log.Lazy(func() slog.Value {
 			both := set.From(active...).Intersect(set.From(orig...))
 			return slog.AnyValue(both.Slice())
 		}),

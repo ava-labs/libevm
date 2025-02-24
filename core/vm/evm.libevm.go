@@ -33,11 +33,11 @@ func (evm *EVM) canCreateContract(caller ContractRef, contractToCreate common.Ad
 	if err != nil {
 		log.Debug(
 			"Contract creation blocked by libevm hook",
-			"Origin", addrs.Origin,
-			"Caller", addrs.Caller,
-			"Contract", addrs.Self,
-			"Hooks", log.TypeOf(evm.chainRules.Hooks()),
-			"Reason", err,
+			"origin", addrs.Origin,
+			"caller", addrs.Caller,
+			"contract", addrs.Self,
+			"hooks", log.TypeOf(evm.chainRules.Hooks()),
+			"reason", err,
 		)
 	}
 
