@@ -28,6 +28,8 @@ func (st *StateTransition) canExecuteTransaction() error {
 	if err := rules.Hooks().CanExecuteTransaction(st.msg.From, st.msg.To, st.state); err != nil {
 		log.Debug(
 			"Transaction execution blocked by libevm hook",
+			"From", st.msg.From,
+			"To", st.msg.To,
 			"Hooks", log.TypeOf(rules.Hooks()),
 			"Reason", err,
 		)
