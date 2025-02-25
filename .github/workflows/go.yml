@@ -43,6 +43,8 @@ jobs:
     defaults:
       run:
         working-directory: ./libevm/tooling
+    env:
+      BRANCH_TO_ANALYSE: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,7 +53,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: "./libevm/tooling/go.mod"
-      - run: go test ./...
+      - run: go test -v ./... --analyse_branch="${{ env.BRANCH_TO_ANALYSE }}"
 
   go_generate:
     env:
