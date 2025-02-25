@@ -673,7 +673,7 @@ func (op sliceOp) genDecode(ctx *genContext) (string, string) {
 }
 
 func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstruct.Tags) (op, error) {
-	switch typ := typ.(type) {
+	switch typ := types.Unalias(typ).(type) {
 	case *types.Named:
 		if isBigInt(typ) {
 			return bigIntOp{}, nil
@@ -724,8 +724,6 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 			return bctx.makeByteArrayOp(name, typ), nil
 		}
 		return nil, fmt.Errorf("unhandled array type: %v", typ)
-	case *types.Alias:
-		return bctx.makeOp(name, types.Unalias(typ), tags)
 	default:
 		return nil, fmt.Errorf("unhandled type: %v", typ)
 	}
