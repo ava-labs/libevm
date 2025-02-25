@@ -724,6 +724,8 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 			return bctx.makeByteArrayOp(name, typ), nil
 		}
 		return nil, fmt.Errorf("unhandled array type: %v", typ)
+	case *types.Alias:
+		return bctx.makeOp(name, typ.Underlying(), tags)
 	default:
 		return nil, fmt.Errorf("unhandled type: %v", typ)
 	}
