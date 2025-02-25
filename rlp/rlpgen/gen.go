@@ -725,7 +725,7 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 		}
 		return nil, fmt.Errorf("unhandled array type: %v", typ)
 	case *types.Alias:
-		return bctx.makeOp(name, typ.Rhs(), tags)
+		return bctx.makeOp(name, types.Unalias(typ), tags)
 	default:
 		return nil, fmt.Errorf("unhandled type: %v", typ)
 	}
