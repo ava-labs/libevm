@@ -50,6 +50,7 @@ jobs:
       - name: Set variables
         id: vars
         env:
+          # `cond && ifTrue || ifFalse` is effectively a ternary operator, based on short-circuiting Boolean logic (assumes `ifTrue` is truthy)
           RENAME_TO: ${{ steps.go.outputs.MODULE_SUFFIX == 'ava-labs/libevm' && 'ethereum/go-ethereum' || 'ava-labs/libevm' }}
         run: |
           echo "RENAME_FROM=${{ steps.go.outputs.MODULE_SUFFIX}}" >> "$GITHUB_OUTPUT";
