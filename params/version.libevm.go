@@ -24,7 +24,7 @@ const (
 	LibEVMVersionPatch = 0
 
 	LibEVMReleaseType      ReleaseType = BetaRelease
-	libEVMReleaseCandidate uint        = 3 // ignored unless [libEVMReleaseType] == [releaseCandidate]
+	libEVMReleaseCandidate uint        = 3 // ignored unless [LibEVMReleaseType] == [ReleaseCandidate]
 )
 
 // LibEVMVersion holds the textual version string of `libevm` modifications.
@@ -68,16 +68,21 @@ func (t semverTriplet) String() string {
 	return fmt.Sprintf("%d.%d.%d", t.major, t.minor, t.patch)
 }
 
+// A ReleaseType is a suffix for [LibEVMVersion].
 type ReleaseType string
 
 const (
-	// BetaRelease MUST be used on `main` branch
+	// BetaRelease MUST be used on `main` branch.
 	BetaRelease = ReleaseType("beta")
-	// Reserved for `release/*` branches
+	// Reserved for `release/*` branches.
 	ReleaseCandidate  = ReleaseType("rc")
 	ProductionRelease = ReleaseType("release")
 )
 
+// ForReleaseBranch returns true i.f.f. `t` is suitable for use on a release
+// branch. The sets of [ReleaseType] values suitable for release vs default
+// branches is disjoint so the negation of the return value is equivalent to
+// "ForDefaultBranch".
 func (t ReleaseType) ForReleaseBranch() bool {
 	return t == ReleaseCandidate || t == ProductionRelease
 }
