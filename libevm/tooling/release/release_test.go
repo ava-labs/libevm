@@ -33,21 +33,12 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/params"
 
 	_ "embed"
-)
-
-const defaultBranch = "main"
-
-var triggerOrPRTargetBranch = flag.String(
-	"analyse_branch",
-	defaultBranch,
-	"Target branch if triggered by a PR (github.base_ref), otherwise triggering branch (github.ref)",
 )
 
 func TestMain(m *testing.M) {
@@ -125,74 +116,120 @@ func TestCherryPicksFormat(t *testing.T) {
 	}
 }
 
+const (
+	defaultBranch       = "main"
+	releaseBranchPrefix = "release/"
+)
+
+var triggerOrPRTargetBranch = flag.String(
+	"analyse_branch",
+	defaultBranch,
+	"Target branch if triggered by a PR (github.base_ref), otherwise triggering branch (github.ref)",
+)
+
 func TestBranchProperties(t *testing.T) {
 	branch := strings.TrimPrefix(*triggerOrPRTargetBranch, "refs/heads/")
 
 	switch {
-	case strings.HasPrefix(branch, "release/"):
-		// Tests continue below
 	case branch == defaultBranch:
 		if rt := params.LibEVMReleaseType; rt.ForReleaseBranch() {
 			t.Errorf("On default branch; params.LibEVMReleaseType = %q, which is reserved for release branches", rt)
 		}
-		return
+
+	case strings.HasPrefix(branch, releaseBranchPrefix):
+		testReleaseBranch(t, branch)
+
 	default:
-		t.Skipf("Branch %q is neither default nor release branch", branch)
+		t.Logf("Branch %q is neither default nor release branch", branch)
 	}
+}
 
-	// Testing a release branch
+// testReleaseBranch asserts invariant properties of release branches:
+//
+//  1. They are named release/v${libevm-version};
+//  2. The libevm version's [params.ReleaseType] is appropriate for a release
+//     branch; and
+//  3. The commit history is a "linear fork" off the default branch, with only
+//     certain allowable commits.
+//
+// We define a "linear fork" as there being a single ancestral commit at which
+// the release branch diverged from the default branch, with no merge commits
+// after this divergence:
+//
+//	______________ main
+//	    \___       release/*
+//
+// The commits in the release branch that are not in the default branch MUST be:
+//
+//  1. The cherry-pick commits embedded as [cherryPicks], in order; then
+//  2. A single, final commit to change the libevm version.
+//
+// testReleaseBranch assumes that the git HEAD currently points at either
+// `targetBranch` itself, or at a candidate (i.e. PR source) for said branch.
+func testReleaseBranch(t *testing.T, targetBranch string) {
+	t.Run("branch_name", func(t *testing.T) {
+		want := fmt.Sprintf("%s/v%s", releaseBranchPrefix, params.LibEVMVersion)
+		assert.Equal(t, want, targetBranch)
 
-	want := fmt.Sprintf("release/v%s", params.LibEVMVersion)
-	assert.Equal(t, want, branch)
-	if rt := params.LibEVMReleaseType; !rt.ForReleaseBranch() {
-		t.Errorf("On release branch; params.LibEVMReleaseType = %q, which is unsuitable for release branches", rt)
-	}
-
-	repo := openGitRepo(t)
-	headRef, err := repo.Head()
-	require.NoError(t, err)
-
-	head := commitFromRef(t, repo, headRef)
-	main := branchTipCommit(t, repo, "main")
-
-	forks, err := head.MergeBase(main)
-	require.NoError(t, err)
-	require.Len(t, forks, 1)
-	fork := forks[0]
-	t.Logf("Forked from default branch at commit %s (%s)", fork.Hash, commitMsgFirstLine(fork))
-
-	history, err := repo.Log(&git.LogOptions{
-		Order: git.LogOrderDFS,
+		if rt := params.LibEVMReleaseType; !rt.ForReleaseBranch() {
+			t.Errorf("On release branch; params.LibEVMReleaseType = %q, which is unsuitable for release branches", rt)
+		}
 	})
-	require.NoError(t, err)
-	newCommits := commitsSince(t, history, fork)
-	logCommits(t, "History since fork", newCommits)
 
-	_, cherryPick := parseCherryPicks(t)
-	wantCommits := commitsFromHashes(t, repo, cherryPick, fork)
-	logCommits(t, "Expected cherry-picks", wantCommits)
-	require.Len(t, newCommits, len(wantCommits)+1)
+	t.Run("commit_history", func(t *testing.T) {
+		repo := openGitRepo(t)
+		headRef, err := repo.Head()
+		require.NoErrorf(t, err, "%T.Head()", repo)
 
-	opt := cmp.Transformer("gitCommit", pertinentCommitProperties)
-	if diff := cmp.Diff(wantCommits, newCommits[:len(wantCommits)], opt); diff != "" {
-		t.Error(diff)
-	}
+		head := commitFromRef(t, repo, headRef)
+		main := commitFromBranchName(t, repo, defaultBranch)
 
-	n := len(newCommits)
-	lastDiffs, err := object.DiffTree(
-		treeFromCommit(t, newCommits[n-1]),
-		treeFromCommit(t, newCommits[n-2]),
-	)
-	require.NoError(t, err)
+		closestCommonAncestors, err := head.MergeBase(main)
+		require.NoError(t, err)
+		require.Lenf(t, closestCommonAncestors, 1, `number of "best common ancestors" of HEAD (%v) and %q (%v)`, head.Hash, defaultBranch, main.Hash)
+		// Not to be confused with the GitHub concept of a (repo) fork.
+		fork := closestCommonAncestors[0]
+		t.Logf("Forked from %q at commit %v (%s)", defaultBranch, fork.Hash, commitMsgFirstLine(fork))
 
-	wantFilesModified := []string{
-		"version.libevm.go",
-		"version.libevm_test.go",
-	}
-	opt = cmpopts.SortSlices(func(a, b string) bool { return a < b })
-	if diff := cmp.Diff(wantFilesModified, changedFilesByName(t, lastDiffs), opt); diff != "" {
-		t.Error(diff)
-	}
+		history, err := repo.Log(&git.LogOptions{
+			Order: git.LogOrderDFS,
+		})
+		require.NoErrorf(t, err, "%T.Log()", repo)
+		newCommits := linearCommitsSince(t, history, fork)
+		logCommits(t, "History since fork from default branch", newCommits)
+
+		t.Run("cherry_picked_commits", func(t *testing.T) {
+			_, cherryPick := parseCherryPicks(t)
+			wantCommits := commitsFromHashes(t, repo, cherryPick, fork)
+			logCommits(t, "Expected cherry-picks", wantCommits)
+			require.Len(t, newCommits, len(wantCommits)+1, "Commits since fork from default branch MUST be number cherry-picked plus one")
+
+			opt := compareCherryPickedCommits()
+			if diff := cmp.Diff(wantCommits, newCommits[:len(wantCommits)], opt); diff != "" {
+				t.Fatalf("Cherry-picked commits for release branch (-want +got):\n%s", diff)
+			}
+		})
+
+		t.Run("final_commit", func(t *testing.T) {
+			n := len(newCommits)
+			last, penultimate := newCommits[n-1], newCommits[n-2]
+			lastCommitDiffs, err := object.DiffTree(
+				treeFromCommit(t, last),
+				treeFromCommit(t, penultimate),
+			)
+			require.NoErrorf(t, err, "object.DiffTree(commits = [%v, %v])", last.Hash, penultimate.Hash)
+
+			allowedFileModifications := map[string]struct{}{
+				"version.libevm.go":      {},
+				"version.libevm_test.go": {},
+			}
+			for _, name := range changedFilesByName(t, lastCommitDiffs) {
+				if _, ok := allowedFileModifications[name]; !ok {
+					t.Errorf("Last commit on release branch modified disallowed file %q", name)
+				}
+			}
+		})
+	})
 }
 
 func openGitRepo(t *testing.T) *git.Repository {
@@ -213,24 +250,24 @@ func openGitRepo(t *testing.T) *git.Repository {
 	return repo
 }
 
-func branchTipCommit(t *testing.T, repo *git.Repository, name string) *object.Commit {
-	t.Helper()
-
-	branch, err := repo.Branch(name)
-	require.NoError(t, err)
-	ref, err := repo.Reference(branch.Merge, false)
-	require.NoError(t, err)
-	return commitFromRef(t, repo, ref)
-}
-
 func commitFromRef(t *testing.T, repo *git.Repository, ref *plumbing.Reference) *object.Commit {
 	t.Helper()
 	c, err := repo.CommitObject(ref.Hash())
-	require.NoError(t, err)
+	require.NoErrorf(t, err, "%T.CommitObject(%v)", repo, ref.Hash())
 	return c
 }
 
-func commitsSince(t *testing.T, iter object.CommitIter, since *object.Commit) []*object.Commit {
+func commitFromBranchName(t *testing.T, repo *git.Repository, name string) *object.Commit {
+	t.Helper()
+
+	branch, err := repo.Branch(name)
+	require.NoErrorf(t, err, "%T.Branch(%q)", repo, name)
+	ref, err := repo.Reference(branch.Merge, false)
+	require.NoErrorf(t, err, "%T.Reference(%v)", repo, branch.Merge)
+	return commitFromRef(t, repo, ref)
+}
+
+func linearCommitsSince(t *testing.T, iter object.CommitIter, since *object.Commit) []*object.Commit {
 	t.Helper()
 
 	var commits []*object.Commit
@@ -239,6 +276,9 @@ func commitsSince(t *testing.T, iter object.CommitIter, since *object.Commit) []
 	err := iter.ForEach(func(c *object.Commit) error {
 		if c.Hash == since.Hash {
 			return errReachedSince
+		}
+		if n := len(c.ParentHashes); n != 1 {
+			return fmt.Errorf("Non-linear history; commit %v has %d parents", c.Hash, n)
 		}
 		commits = append(commits, c)
 		return nil
@@ -279,23 +319,29 @@ func logCommits(t *testing.T, header string, commits []*object.Commit) {
 	}
 }
 
-type comparableCommit struct {
-	MessageFirstLine, Author string
-	Authored                 time.Time
-}
-
-func pertinentCommitProperties(c *object.Commit) comparableCommit {
-	return comparableCommit{
-		MessageFirstLine: commitMsgFirstLine(c),
-		Author:           c.Author.String(),
-		Authored:         c.Author.When,
+// compareCherryPickedCommits returns a [cmp.Transformer] that converts
+// [object.Commit] instances into structs carrying only the pertinent commit
+// properties that remain stable when cherry-picked. Note, however, that this
+// does not include the actual diffs induced by cherry-picking.
+func compareCherryPickedCommits() cmp.Option {
+	type comparableCommit struct {
+		MessageFirstLine, Author string
+		Authored                 time.Time
 	}
+
+	return cmp.Transformer("gitCommit", func(c *object.Commit) comparableCommit {
+		return comparableCommit{
+			MessageFirstLine: commitMsgFirstLine(c),
+			Author:           c.Author.String(),
+			Authored:         c.Author.When,
+		}
+	})
 }
 
-func treeFromCommit(t *testing.T, commit *object.Commit) *object.Tree {
+func treeFromCommit(t *testing.T, c *object.Commit) *object.Tree {
 	t.Helper()
-	tree, err := commit.Tree()
-	require.NoError(t, err)
+	tree, err := c.Tree()
+	require.NoErrorf(t, err, "%T.Tree()", c)
 	return tree
 }
 
@@ -305,7 +351,7 @@ func changedFilesByName(t *testing.T, changes object.Changes) []string {
 	var files []string
 	for _, c := range changes {
 		from, to, err := c.Files()
-		require.NoError(t, err)
+		require.NoErrorf(t, err, "%T.Files()", c)
 		require.NotNilf(t, from, "file %q inserted", to.Name)
 		require.NotNilf(t, to, "file %q deleted", from.Name)
 		require.Equalf(t, from.Name, to.Name, "file renamed; expect modified file's name to equal original")
