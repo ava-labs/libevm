@@ -122,7 +122,7 @@ const (
 )
 
 var triggerOrPRTargetBranch = flag.String(
-	"analyse_branch",
+	"target_branch",
 	defaultBranch,
 	"Target branch if triggered by a PR (github.base_ref), otherwise triggering branch (github.ref)",
 )
