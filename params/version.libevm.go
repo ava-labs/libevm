@@ -18,7 +18,7 @@ package params
 
 const (
 	LibEVMVersionMajor = 0
-	LibEVMVersionMinor = 1
+	LibEVMVersionMinor = 2
 	LibEVMVersionPatch = 0
 
 	LibEVMReleaseType      ReleaseType = BetaRelease
@@ -48,7 +48,7 @@ const (
 // triplet.
 //
 // [semver v2]: https://semver.org/
-const LibEVMVersion = "1.13.14-0.1.0.beta"
+const LibEVMVersion = "1.13.14-0.2.0.beta"
 
 // A ReleaseType is a suffix for [LibEVMVersion].
 type ReleaseType string
