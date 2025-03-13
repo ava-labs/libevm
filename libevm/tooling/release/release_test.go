@@ -168,7 +168,7 @@ func TestBranchProperties(t *testing.T) {
 // `targetBranch` itself, or at a candidate (i.e. PR source) for said branch.
 func testReleaseBranch(t *testing.T, targetBranch string) {
 	t.Run("branch_name", func(t *testing.T) {
-		want := fmt.Sprintf("%s/v%s", releaseBranchPrefix, params.LibEVMVersion)
+		want := fmt.Sprintf("%sv%s", releaseBranchPrefix, params.LibEVMVersion) // prefix already includes /
 		assert.Equal(t, want, targetBranch)
 
 		if rt := params.LibEVMReleaseType; !rt.ForReleaseBranch() {
