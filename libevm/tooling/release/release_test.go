@@ -219,15 +219,11 @@ func testReleaseBranch(t *testing.T, targetBranch string) {
 			)
 			require.NoErrorf(t, err, "object.DiffTree(commits = [%v, %v])", last.Hash, penultimate.Hash)
 
-			allowedFileModifications := map[string]struct{}{
-				"version.libevm.go":      {},
-				"version.libevm_test.go": {},
+			allowedFileModifications := map[string]bool{
+				"version.libevm.go":      true,
+				"version.libevm_test.go": true,
 			}
-			for _, name := range changedFilesByName(t, lastCommitDiffs) {
-				if _, ok := allowedFileModifications[name]; !ok {
-					t.Errorf("Last commit on release branch modified disallowed file %q", name)
-				}
-			}
+			testFinalCommitChanges(t, lastCommitDiffs, allowedFileModifications)
 		})
 	})
 }
@@ -345,22 +341,26 @@ func treeFromCommit(t *testing.T, c *object.Commit) *object.Tree {
 	return tree
 }
 
-func changedFilesByName(t *testing.T, changes object.Changes) []string {
-	t.Helper()
-
-	var files []string
+func testFinalCommitChanges(t *testing.T, changes object.Changes, allowed map[string]bool) {
 	for _, c := range changes {
 		from, to, err := c.Files()
 		require.NoErrorf(t, err, "%T.Files()", c)
-		require.NotNilf(t, from, "file %q inserted", to.Name)
-		require.NotNilf(t, to, "file %q deleted", from.Name)
-		require.Equalf(t, from.Name, to.Name, "file renamed; expect modified file's name to equal original")
-
-		// [object.File.Name] is documented as being either the name or a path,
-		// depending on how it was generated. We only need to protect against
-		// accidental changes to the wrong files, so it's sufficient to just
-		// check the names.
-		files = append(files, filepath.Base(from.Name))
+		// We have a guarantee that at most one of `from` or `to` is nil,
+		// but not both. Usage of `x.Name` MUST be guarded by the if
+		// statement to avoid a panic.
+		switch {
+		case from == nil:
+			t.Errorf("Created %q", to.Name)
+		case to == nil:
+			t.Errorf("Deleted %q", from.Name)
+		case from.Name != to.Name:
+			t.Errorf("Renamed %q to %q", from.Name, to.Name)
+		case !allowed[filepath.Base(from.Name)]:
+			// [object.File.Name] is documented as being either the name or a path,
+			// depending on how it was generated. We only need to protect against
+			// accidental changes to the wrong files, so it's sufficient to just
+			// check the names.
+			t.Errorf("Modified disallowed file %q", filepath.Base(from.Name))
+		}
 	}
-	return files
 }
