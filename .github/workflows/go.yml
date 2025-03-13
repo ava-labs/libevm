@@ -53,6 +53,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: "./libevm/tooling/go.mod"
+      - run: git branch main origin/main
       - run: go test -v ./... --target_branch="${{ env.TARGET_BRANCH }}"
 
   go_generate:
