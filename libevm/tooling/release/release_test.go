@@ -202,7 +202,9 @@ func testReleaseBranch(t *testing.T, targetBranch string) {
 			_, cherryPick := parseCherryPicks(t)
 			wantCommits := commitsFromHashes(t, repo, cherryPick, fork)
 			logCommits(t, "Expected cherry-picks", wantCommits)
-			require.Len(t, newCommits, len(wantCommits)+1, "Commits since fork from default branch MUST be number cherry-picked plus one")
+			if got, want := len(newCommits), len(wantCommits)+1; got != want {
+				t.Fatalf("Got %d commits since fork from default; want number to be cherry-picked plus one (%d)", got, want)
+			}
 
 			opt := compareCherryPickedCommits()
 			if diff := cmp.Diff(wantCommits, newCommits[:len(wantCommits)], opt); diff != "" {
