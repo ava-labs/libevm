@@ -271,7 +271,7 @@ func linearCommitsSince(t *testing.T, iter object.CommitIter, since *object.Comm
 	t.Helper()
 
 	var commits []*object.Commit
-	errReachedSince := fmt.Errorf("%T reached terminal commit %v", iter, since)
+	errReachedSince := fmt.Errorf("%T reached terminal commit %v", iter, since.Hash)
 
 	err := iter.ForEach(func(c *object.Commit) error {
 		if c.Hash == since.Hash {
