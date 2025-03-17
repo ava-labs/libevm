@@ -114,7 +114,7 @@ var (
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
 	errInvalidMixDigest = errors.New("non-zero mix digest")
 
-	// errInvalidUncleHash is returned if a block contains an non-empty uncle list.
+	// errInvalidUncleHash is returned if a block contains a non-empty uncle list.
 	errInvalidUncleHash = errors.New("non empty uncle hash")
 
 	// errInvalidDifficulty is returned if the difficulty of a block neither 1 or 2.
