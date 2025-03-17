@@ -186,7 +186,7 @@ func testReleaseBranch(t *testing.T, targetBranch string) {
 
 		closestCommonAncestors, err := head.MergeBase(main)
 		require.NoError(t, err)
-		require.Lenf(t, closestCommonAncestors, 1, `number of "best common ancestors" of HEAD (%v) and %q (%v)`, head.Hash, defaultBranch, main.Hash)
+		require.Lenf(t, closestCommonAncestors, 1, `number of "closest common ancestors" of HEAD (%v) and %q (%v)`, head.Hash, defaultBranch, main.Hash)
 		// Not to be confused with the GitHub concept of a (repo) fork.
 		fork := closestCommonAncestors[0]
 		t.Logf("Forked from %q at commit %v (%s)", defaultBranch, fork.Hash, commitMsgFirstLine(fork))
@@ -214,7 +214,12 @@ func testReleaseBranch(t *testing.T, targetBranch string) {
 
 		t.Run("final_commit", func(t *testing.T) {
 			n := len(newCommits)
-			last, penultimate := newCommits[n-1], newCommits[n-2]
+			last := newCommits[n-1]
+			penultimate := fork
+			if n >= 2 {
+				penultimate = newCommits[n-2]
+			}
+
 			lastCommitDiffs, err := object.DiffTree(
 				treeFromCommit(t, last),
 				treeFromCommit(t, penultimate),
