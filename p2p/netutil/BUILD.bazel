@@ -1,0 +1,30 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "netutil",
+    srcs = [
+        "addrutil.go",
+        "error.go",
+        "iptrack.go",
+        "net.go",
+        "toobig_notwindows.go",
+        "toobig_windows.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/p2p/netutil",
+    visibility = ["//visibility:public"],
+    deps = ["//common/mclock"],
+)
+
+go_test(
+    name = "netutil_test",
+    srcs = [
+        "error_test.go",
+        "iptrack_test.go",
+        "net_test.go",
+    ],
+    embed = [":netutil"],
+    deps = [
+        "//common/mclock",
+        "@com_github_davecgh_go_spew//spew",
+    ],
+)
