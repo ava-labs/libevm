@@ -216,3 +216,5 @@ func (r *Rules) extraPayload() *pseudo.Type {
 	}
 	return r.extra
 }
+
+var NewTimestampCompatError = newTimestampCompatError
