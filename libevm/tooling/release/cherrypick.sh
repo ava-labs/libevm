@@ -44,4 +44,4 @@ if [[ -z "${commits[*]// }" ]]; then # $x// removes whitespace
     exit 0;
 fi
 
-git cherry-pick "${commits[@]}";
+git cherry-pick -S "${commits[@]}";
