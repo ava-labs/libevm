@@ -17,32 +17,7 @@
 package trie
 
 import (
-	"testing"
-
-	"github.com/stretchr/testify/require"
-
-	"github.com/ava-labs/libevm/common"
+	"errors"
 )
 
-func TestRangeProofKeysWithDifferentLengths(t *testing.T) {
-	var (
-		root  = common.HexToHash("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-		start = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
-		keys  = [][]byte{
-			common.Hex2Bytes("1000000000000000000000000000000"),
-			common.Hex2Bytes("1000000000000000000000000000000000000000000000000000000000000000"),
-		}
-		values = [][]byte{
-			common.Hex2Bytes("02"),
-			common.Hex2Bytes("03"),
-		}
-	)
-	_, err := VerifyRangeProof(
-		root,
-		start,
-		keys,
-		values,
-		nil, // force it to use stacktrie
-	)
-	require.ErrorIs(t, err, errKeysHaveDifferentLengths)
-}
+var errKeysHaveDifferentLengths = errors.New("keys have different lengths")
