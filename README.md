@@ -1,6 +1,10 @@
 # libevm
 
-Please refer to [`libevm/README.md](libevm/README.md) for the libevm specific readme. Below is geth original readme.
+The Ethereum Virtual Machine (EVM) as a library, `libevm` is a fork of [`geth`](https://github.com/ethereum/go-ethereum) with injectable configuration directives.
+Although designed to support the Avalanche [C-Chain](https://github.com/ava-labs/coreth) and [EVM-L1s](https://github.com/ava-labs/subnet-evm) (formerly *subnets*), configuration is general-purpose and backwards-compatible with `geth`.
+We are immensely grateful for the hard work of the `geth` authors, and hope that our contribution can be of value to others too. Thank you!
+
+Please refer to [`libevm/README.md`](libevm/README.md) for the libevm specific readme. Below is geth original readme.
 
 ## Go Ethereum
 
