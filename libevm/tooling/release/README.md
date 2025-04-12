@@ -23,7 +23,7 @@ USERNAME=myusername
     - Change the `LibEVMReleaseType` to the correct release type, for example `ReleaseCandidate`
     - If planning a release candidate: set `libEVMReleaseCandidate` to the correct number; in this case `4`
     - If needed: change the `LibEVMVersionMajor`, `LibEVMVersionMinor` and `LibEVMVersionPatch` numbers
-    - Change the `LibEVMVersion` to the correct final version string `$VERSION` (`version.libevm_test.go` will ensure that this is correctly formatted)
+    - Change the `LibEVMVersion` to the correct final version string `$VERSION` (`version.libevm_test.go` will ensure that this is correctly formatted). See the [`LibEVMVersion` comment](https://pkg.go.dev/github.com/ava-labs/libevm/params#LibEVMVersion) for more details regarding its semantics.
 1. Commit your modifications to [params/version.libevm.go](/params/version.libevm.go) with a commit title `chore: release v1.13.14-0.2.0.rc.4`:
 
     ```bash
