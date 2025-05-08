@@ -1,0 +1,36 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "rlpx",
+    srcs = [
+        "buffer.go",
+        "rlpx.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/p2p/rlpx",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//crypto",
+        "//crypto/ecies",
+        "//rlp",
+        "@com_github_golang_snappy//:snappy",
+        "@org_golang_x_crypto//sha3",
+    ],
+)
+
+go_test(
+    name = "rlpx_test",
+    srcs = [
+        "buffer_test.go",
+        "rlpx_test.go",
+    ],
+    embed = [":rlpx"],
+    deps = [
+        "//common/hexutil",
+        "//crypto",
+        "//crypto/ecies",
+        "//p2p/simulations/pipes",
+        "//rlp",
+        "@com_github_davecgh_go_spew//spew",
+        "@com_github_stretchr_testify//assert",
+    ],
+)
