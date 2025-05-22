@@ -14,6 +14,8 @@ with `geth`.
 
 We are immensely grateful for the hard work of the `geth` authors, and hope that our contribution can be of value to others too. Thank you!
 
+To create a release, please refer to [libevm/tooling/release](libevm/tooling/release).
+
 ## Go Ethereum
 
 Golang execution layer implementation of the Ethereum protocol.
