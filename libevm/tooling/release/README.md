@@ -4,7 +4,7 @@ In the following, we create a release candidate version `v1.13.14-0.2.0.rc.4` an
 
 ```bash
 VERSION=v1.13.14-0.2.0.rc.4
-USERNAME=myusername
+GH_USER=myusername
 ```
 
 1. Create two branches, usually from the tip of the `main` branch, but the base commit MAY be from anywhere on `main`:
@@ -14,10 +14,10 @@ USERNAME=myusername
     git checkout main
     git checkout -b "release/$VERSION"
     git push -u origin "release/$VERSION"
-    git checkout -b "$USERNAME/release/$VERSION"
+    git checkout -b "$GH_USER/release/$VERSION"
     ```
 
-    The `$USERNAME/release/$VERSION` branch will be used to add "release modifications" and will target the branch `release/$VERSION` in a pull request.
+    The `$GH_USER/release/$VERSION` branch will be used to add "release modifications" and will target the branch `release/$VERSION` in a pull request.
 1. Run the script `./cherrypick.sh` which cherry picks all Geth commits listed in [cherrypicks](cherrypicks). You may have to resolve conflicts. If you encounter a CI error NOT from the `go_test_tooling` job, ideally [amend](https://git-scm.com/book/en/v2/Git-Tools-Rewriting-History) the cherry-picked commit(s) responsible for each issue.
 1. Modify [params/version.libevm.go](/params/version.libevm.go)
     - Change the `LibEVMReleaseType` to the correct release type, for example `ReleaseCandidate`
@@ -30,12 +30,12 @@ USERNAME=myusername
     git commit -m "chore: release $VERSION"
     ```
 
-1. Push your modified branch to the remote `git push -u origin $USERNAME/release/$VERSION`
-1. Open a pull request from your modified branch `$USERNAME/release/v1.13.14-0.2.0.rc.4` and targeting `release/v1.13.14-0.2.0.rc.4`:
+1. Push your modified branch to the remote `git push -u origin $GH_USER/release/$VERSION`
+1. Open a pull request from your modified branch `$GH_USER/release/v1.13.14-0.2.0.rc.4` and targeting `release/v1.13.14-0.2.0.rc.4`:
     1. You can create the pull request for example using
 
         ```bash
-        open -a "Google Chrome" https://github.com/ava-labs/libevm/compare/release/$VERSION...$USERNAME/release/$VERSION
+        open -a "Google Chrome" https://github.com/ava-labs/libevm/compare/release/$VERSION...$GH_USER/release/$VERSION
         ```
 
     1. Set the title of the pull request to
@@ -49,7 +49,7 @@ USERNAME=myusername
 
     ```bash
     git checkout "release/$VERSION"
-    git merge --ff-only "$USERNAME/release/$VERSION"
+    git merge --ff-only "$GH_USER/release/$VERSION"
     git push
     ```
 
@@ -64,6 +64,6 @@ USERNAME=myusername
 1. (optional) you can then cleanup with:
 
     ```bash
-    git branch -D "release/$VERSION" "$USERNAME/release/$VERSION"
-    git push -d origin "$USERNAME/release/$VERSION"
+    git branch -D "release/$VERSION" "$GH_USER/release/$VERSION"
+    git push -d origin "$GH_USER/release/$VERSION"
     ```
