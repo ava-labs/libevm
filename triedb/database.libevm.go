@@ -29,7 +29,7 @@ import (
 // BackendDB defines the intersection of methods shared by [hashdb.Database] and
 // [pathdb.Database]. It is defined to export an otherwise internal type used by
 // the non-libevm geth implementation.
-type BackendDB Backend
+type BackendDB backend
 
 // A ReaderProvider exposes its underlying Reader as an interface. Both
 // [hashdb.Database] and [pathdb.Database] return concrete types so Go's lack of
@@ -49,6 +49,11 @@ type DBConstructor func(ethdb.Database) DBOverride
 type DBOverride interface {
 	BackendDB
 	ReaderProvider
+}
+
+// Backend returns the underlying backend of the trie database.
+func (db *Database) Backend() BackendDB {
+	return db.backend
 }
 
 func (db *Database) overrideBackend(diskdb ethdb.Database, config *Config) bool {

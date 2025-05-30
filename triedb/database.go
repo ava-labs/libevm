@@ -47,9 +47,9 @@ var HashDefaults = &Config{
 	HashDB:    hashdb.Defaults,
 }
 
-// Backend defines the methods needed to access/update trie nodes in different
-// state schemes.
-type Backend interface {
+// backend defines the methods needed to access/update trie nodes in different
+// state scheme.
+type backend interface {
 	// Scheme returns the identifier of used storage scheme.
 	Scheme() string
 
@@ -87,7 +87,7 @@ type Database struct {
 	config    *Config        // Configuration for trie database
 	diskdb    ethdb.Database // Persistent database to store the snapshot
 	preimages *preimageStore // The store for caching preimages
-	backend   Backend        // The backend for managing trie nodes
+	backend   backend        // The backend for managing trie nodes
 }
 
 // NewDatabase initializes the trie database with default settings, note
@@ -342,10 +342,4 @@ func (db *Database) SetBufferSize(size int) error {
 // IsVerkle returns the indicator if the database is holding a verkle tree.
 func (db *Database) IsVerkle() bool {
 	return db.config.IsVerkle
-}
-
-// Backend returns the underlying backend of the trie database, which
-// implements the methods for accessing additional custom methods.
-func (db *Database) Backend() Backend {
-	return db.backend
 }
