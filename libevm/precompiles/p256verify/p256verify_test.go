@@ -22,15 +22,16 @@ import (
 	"crypto/rand"
 	"testing"
 
+	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/ethtest"
 	"github.com/ava-labs/libevm/libevm/hookstest"
 	"github.com/ava-labs/libevm/params"
-	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // ulerdoganTestCase is the test case from
@@ -113,7 +114,9 @@ func BenchmarkPrecompile(b *testing.B) {
 	var p Precompile
 
 	for range b.N {
-		p.Run(in) //nolint:errcheck // Always nil
+		// Explicitly drop return values to placate the linter. The error is
+		// always nil and the input is tested above.
+		_, _ = p.Run(in)
 	}
 }
 
