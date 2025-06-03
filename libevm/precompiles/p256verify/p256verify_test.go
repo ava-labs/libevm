@@ -113,7 +113,7 @@ func BenchmarkPrecompile(b *testing.B) {
 	var p Precompile
 
 	for range b.N {
-		p.Run(in)
+		p.Run(in) //nolint:errcheck // Always nil
 	}
 }
 
