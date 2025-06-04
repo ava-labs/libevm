@@ -24,6 +24,8 @@ import (
 	"crypto/rand"
 	"io"
 	"math/big"
+
+	"github.com/ava-labs/libevm/params"
 )
 
 // Precompile implements ECDSA verification on the P256 curve, as defined by
@@ -32,8 +34,10 @@ import (
 // [RIP-7212]: https://github.com/ethereum/RIPs/blob/1f55794f65caa4c4bb2b8d9bda7d713b8c734157/RIPS/rip-7212.md
 type Precompile struct{}
 
-// RequiredGas always returns 3450.
-func (Precompile) RequiredGas([]byte) uint64 { return 3450 }
+// RequiredGas returns [params.P256VerifyGas].
+func (Precompile) RequiredGas([]byte) uint64 {
+	return params.P256VerifyGas
+}
 
 const inputLen = 160
 
