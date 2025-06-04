@@ -24,7 +24,6 @@ import (
 	"encoding/asn1"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -258,21 +257,23 @@ func TestViaEVM(t *testing.T) {
 	assert.Equal(t, []byte{31: 1}, got)
 }
 
-type brokenReader struct {
-	err error
+// A badCurve will cause [ecdsa.Sign] to return an error due to a zero
+// parameter.
+type badCurve struct {
+	elliptic.Curve
 }
 
-func (r brokenReader) Read([]byte) (int, error) {
-	return 0, r.err
+func (badCurve) Params() *elliptic.CurveParams {
+	return &elliptic.CurveParams{
+		N: big.NewInt(0),
+	}
 }
 
-func TestSignPropagatesReaderError(t *testing.T) {
+func TestSignPropagatesError(t *testing.T) {
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err, "ecdsa.GenerateKey()")
+	priv.Curve = badCurve{}
 
-	r := brokenReader{
-		err: errors.New("uh oh"),
-	}
-	_, err = signWithRandReader(r, priv, [32]byte{})
-	require.Equal(t, r.err, err, "Propagate error from io.Reader entropy source")
+	_, err = Sign(priv, [32]byte{})
+	require.ErrorContains(t, err, "zero", "Sign([private key with zero-param curve])")
 }
