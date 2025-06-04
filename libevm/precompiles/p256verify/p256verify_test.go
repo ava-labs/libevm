@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"slices"
 	"testing"
 
 	"github.com/holiman/uint256"
@@ -51,22 +52,22 @@ func TestPrecompile(t *testing.T) {
 
 	tests := []testCase{
 		{
-			name: "empty input",
+			name: "empty_input",
 		},
 		{
-			name: "input too short",
+			name: "input_too_short",
 			in:   make([]byte, inputLen-1),
 		},
 		{
-			name: "input too long",
+			name: "input_too_long",
 			in:   make([]byte, inputLen+1),
 		},
 		{
-			name: "pub key at infinity",
+			name: "pub_key_at_infinity",
 			in:   make([]byte, inputLen),
 		},
 		{
-			name: "pub key not on curve",
+			name: "pub_key_not_on_curve",
 			in:   []byte{inputLen - 1: 1},
 		},
 		{
@@ -81,16 +82,22 @@ func TestPrecompile(t *testing.T) {
 		require.NoError(t, err, "ecdsa.GenerateKey(elliptic.P256(), crypto/rand.Reader)")
 
 		for range 50 {
-			var hash [32]byte
-			_, err := rand.Read(hash[:])
-			require.NoErrorf(t, err, "crypto/rand.Read(%T)", hash)
+			var toSign [32]byte
+			_, err := rand.Read(toSign[:])
+			require.NoErrorf(t, err, "crypto/rand.Read(%T)", toSign)
 
-			in, err := Sign(priv, hash)
-			require.NoErrorf(t, err, "Sign([P256 key], %#x)", hash)
+			in, err := Sign(priv, toSign)
+			require.NoErrorf(t, err, "Sign([P256 key], %#x)", toSign)
 			tests = append(tests, testCase{
-				name:        "fuzz",
+				name:        "fuzz_valid",
 				in:          in,
 				wantSuccess: true,
+			})
+			corrupt := slices.Clone(in)
+			corrupt[0]++ // different signed hash
+			tests = append(tests, testCase{
+				name: "fuzz_invalid",
+				in:   corrupt,
 			})
 		}
 	}
