@@ -38,9 +38,22 @@ func (Precompile) RequiredGas([]byte) uint64 {
 	return params.P256VerifyGas
 }
 
-const inputLen = 160
+const (
+	wordLen  = 32
+	inputLen = 5 * wordLen
+)
 
 type input [inputLen]byte
+
+type index int
+
+const (
+	hashPos index = iota * wordLen
+	rPos
+	sPos
+	xPos
+	yPos
+)
 
 // Run parses and verifies the signature. On success it returns a 32-byte
 // big-endian representation of the number 1, otherwise it returns an empty
@@ -57,12 +70,12 @@ func (in *input) verify() bool {
 	if !ok {
 		return false
 	}
-	return ecdsa.Verify(key, in.word(0), in.bigWord(1), in.bigWord(2))
+	return ecdsa.Verify(key, in.word(hashPos), in.bigWord(rPos), in.bigWord(sPos))
 }
 
 func (in *input) pubkey() (*ecdsa.PublicKey, bool) {
-	x := in.bigWord(3)
-	y := in.bigWord(4)
+	x := in.bigWord(xPos)
+	y := in.bigWord(yPos)
 	if x.Sign() == 0 && y.Sign() == 0 {
 		return nil, false
 	}
@@ -78,13 +91,12 @@ func (in *input) pubkey() (*ecdsa.PublicKey, bool) {
 	}, true
 }
 
-func (in *input) word(index int) []byte {
-	s := index * 32
-	return in[s : s+32]
+func (in *input) word(i index) []byte {
+	return in[i : i+wordLen]
 }
 
-func (in *input) bigWord(index int) *big.Int {
-	return new(big.Int).SetBytes(in.word(index))
+func (in *input) bigWord(i index) *big.Int {
+	return new(big.Int).SetBytes(in.word(i))
 }
 
 // Sign signs `hash` with the private key, using [rand.Reader] as the first
@@ -105,10 +117,14 @@ func Sign(priv *ecdsa.PrivateKey, hash [32]byte) ([]byte, error) {
 // generated with [elliptic.GenerateKey] and [ecdsa.Sign] are valid inputs.
 func Pack(hash [32]byte, r, s *big.Int, key *ecdsa.PublicKey) []byte {
 	var in input
-	copy(in.word(0), hash[:])
-	r.FillBytes(in.word(1))
-	s.FillBytes(in.word(2))
-	key.X.FillBytes(in.word(3))
-	key.Y.FillBytes(in.word(4))
+
+	copy(in.word(hashPos), hash[:])
+
+	r.FillBytes(in.word(rPos))
+	s.FillBytes(in.word(sPos))
+
+	key.X.FillBytes(in.word(xPos))
+	key.Y.FillBytes(in.word(yPos))
+
 	return in[:]
 }
