@@ -91,12 +91,15 @@ func Sign(priv *ecdsa.PrivateKey, hash [32]byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	return Pack(hash, r, s, &priv.PublicKey), nil
+}
 
+func Pack(hash [32]byte, r, s *big.Int, key *ecdsa.PublicKey) []byte {
 	var in input
 	copy(in.word(0), hash[:])
 	r.FillBytes(in.word(1))
 	s.FillBytes(in.word(2))
-	priv.X.FillBytes(in.word(3))
-	priv.Y.FillBytes(in.word(4))
-	return in[:], nil
+	key.X.FillBytes(in.word(3))
+	key.Y.FillBytes(in.word(4))
+	return in[:]
 }
