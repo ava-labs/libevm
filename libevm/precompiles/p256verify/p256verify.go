@@ -21,7 +21,6 @@ package p256verify
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/rand"
 	"math/big"
 
 	"github.com/ava-labs/libevm/params"
@@ -97,18 +96,6 @@ func (in *input) word(i index) []byte {
 
 func (in *input) bigWord(i index) *big.Int {
 	return new(big.Int).SetBytes(in.word(i))
-}
-
-// Sign signs `hash` with the private key, using [rand.Reader] as the first
-// argument to [ecdsa.Sign] and assuming that the private key is for the
-// [elliptic.P256] curve. The returned signature payload is constructed with
-// [Pack], which can therefore be passed directly to the precompile.
-func Sign(priv *ecdsa.PrivateKey, hash [32]byte) ([]byte, error) {
-	r, s, err := ecdsa.Sign(rand.Reader, priv, hash[:])
-	if err != nil {
-		return nil, err
-	}
-	return Pack(hash, r, s, &priv.PublicKey), nil
 }
 
 // Pack packs the arguments into a byte slice compatible with [Precompile.Run].

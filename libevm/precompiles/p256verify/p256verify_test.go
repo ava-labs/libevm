@@ -61,6 +61,13 @@ type testCase struct {
 	wantSuccess bool
 }
 
+func signAndPack(tb testing.TB, priv *ecdsa.PrivateKey, hash [32]byte) []byte {
+	tb.Helper()
+	r, s, err := ecdsa.Sign(rand.Reader, priv, hash[:])
+	require.NoError(tb, err, "ecdsa.Sign()")
+	return Pack(hash, r, s, &priv.PublicKey)
+}
+
 func TestPrecompile(t *testing.T) {
 	assert.Equal(t, params.P256VerifyGas, Precompile{}.RequiredGas(nil), "RequiredGas()")
 
@@ -100,8 +107,7 @@ func TestPrecompile(t *testing.T) {
 			_, err := rand.Read(toSign[:])
 			require.NoErrorf(t, err, "crypto/rand.Read(%T)", toSign)
 
-			in, err := Sign(priv, toSign)
-			require.NoErrorf(t, err, "Sign([P256 key], %#x)", toSign)
+			in := signAndPack(t, priv, toSign)
 			tests = append(tests, testCase{
 				name:        "fuzz_valid",
 				in:          in,
@@ -255,25 +261,4 @@ func TestViaEVM(t *testing.T) {
 	got, _, err := evm.Call(vm.AccountRef{}, addr, in, 25000, uint256.NewInt(0))
 	require.NoError(t, err)
 	assert.Equal(t, []byte{31: 1}, got)
-}
-
-// A badCurve will cause [ecdsa.Sign] to return an error due to a zero
-// parameter.
-type badCurve struct {
-	elliptic.Curve
-}
-
-func (badCurve) Params() *elliptic.CurveParams {
-	return &elliptic.CurveParams{
-		N: big.NewInt(0),
-	}
-}
-
-func TestSignPropagatesError(t *testing.T) {
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err, "ecdsa.GenerateKey()")
-	priv.Curve = badCurve{}
-
-	_, err = Sign(priv, [32]byte{})
-	require.ErrorContains(t, err, "zero", "Sign([private key with zero-param curve])")
 }
