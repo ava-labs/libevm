@@ -83,9 +83,9 @@ func (in *input) bigWord(index int) *big.Int {
 	return new(big.Int).SetBytes(in.word(index))
 }
 
-// Sign signs `hash` with the private key, returning a byte slice compatible
-// with [Precompile.Run]. It uses [rand.Reader] as the first argument to
-// [ecdsa.Sign].
+// Sign signs `hash` with the private key, using [rand.Reader] as the first
+// argument to [ecdsa.Sign]. It returns a signature payload constructed with
+// [Pack], which can therefore be passed directly to the precompile.
 func Sign(priv *ecdsa.PrivateKey, hash [32]byte) ([]byte, error) {
 	r, s, err := ecdsa.Sign(rand.Reader, priv, hash[:])
 	if err != nil {
@@ -94,6 +94,10 @@ func Sign(priv *ecdsa.PrivateKey, hash [32]byte) ([]byte, error) {
 	return Pack(hash, r, s, &priv.PublicKey), nil
 }
 
+// Pack packs the arguments into a byte slice compatible with [Precompile.Run].
+// It does NOT perform any validation on its inputs and therefore may panic if,
+// for example, a [big.Int] with >256 bits is received. Keys and signatures
+// generated with [elliptic.GenerateKey] and [ecdsa.Sign] are valid inputs.
 func Pack(hash [32]byte, r, s *big.Int, key *ecdsa.PublicKey) []byte {
 	var in input
 	copy(in.word(0), hash[:])
