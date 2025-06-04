@@ -24,6 +24,7 @@ import (
 	"encoding/asn1"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -43,6 +44,8 @@ import (
 
 	_ "embed"
 )
+
+var _ vm.PrecompiledContract = Precompile{}
 
 // ulerdoganTestCase is the test case from
 // https://github.com/ulerdogan/go-ethereum/blob/cec0b058115282168c5afc5197de3f6b5479dc4a/core/vm/testdata/precompiles/p256Verify.json,
@@ -253,4 +256,23 @@ func TestViaEVM(t *testing.T) {
 	got, _, err := evm.Call(vm.AccountRef{}, addr, in, 25000, uint256.NewInt(0))
 	require.NoError(t, err)
 	assert.Equal(t, []byte{31: 1}, got)
+}
+
+type brokenReader struct {
+	err error
+}
+
+func (r brokenReader) Read([]byte) (int, error) {
+	return 0, r.err
+}
+
+func TestSignPropagatesReaderError(t *testing.T) {
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err, "ecdsa.GenerateKey()")
+
+	r := brokenReader{
+		err: errors.New("uh oh"),
+	}
+	_, err = signWithRandReader(r, priv, [32]byte{})
+	require.Equal(t, r.err, err, "Propagate error from io.Reader entropy source")
 }

@@ -22,6 +22,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"io"
 	"math/big"
 )
 
@@ -87,7 +88,13 @@ func (in *input) bigWord(index int) *big.Int {
 // argument to [ecdsa.Sign]. It returns a signature payload constructed with
 // [Pack], which can therefore be passed directly to the precompile.
 func Sign(priv *ecdsa.PrivateKey, hash [32]byte) ([]byte, error) {
-	r, s, err := ecdsa.Sign(rand.Reader, priv, hash[:])
+	return signWithRandReader(rand.Reader, priv, hash)
+}
+
+// signWithRandReader is abstracted for testing purposes only and MUST NOT be
+// used directly. Always use [Sign].
+func signWithRandReader(rand io.Reader, priv *ecdsa.PrivateKey, hash [32]byte) ([]byte, error) {
+	r, s, err := ecdsa.Sign(rand, priv, hash[:])
 	if err != nil {
 		return nil, err
 	}
