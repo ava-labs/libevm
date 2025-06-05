@@ -20,13 +20,13 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/ethtest"
@@ -140,17 +140,34 @@ func TestMinimumGasConsumption(t *testing.T) {
 			stateDB.SetNonce(msg.From, 0)
 			stateDB.SetBalance(msg.From, uint256.NewInt(startingBalance))
 
-			gotPool := core.GasPool(1e9) // modified when passed as pointer
+			var (
+				// Both variables are passed as pointers to
+				// [core.ApplyTransaction], which will modify them.
+				gotUsed uint64
+				gotPool = core.GasPool(1e9) // modified when passed as pointer
+			)
 			wantPool := gotPool - core.GasPool(tt.wantUsed)
 
-			got, err := core.ApplyMessage(evm, msg, &gotPool)
-			require.NoError(t, err, "core.ApplyMessage()")
+			receipt, err := core.ApplyTransaction(
+				evm.ChainConfig(), nil, &common.Address{}, &gotPool, stateDB,
+				&types.Header{
+					BaseFee: big.NewInt(gasPrice),
+					// Required but irrelevant fields
+					Number:     big.NewInt(0),
+					Difficulty: big.NewInt(0),
+				},
+				tx, &gotUsed, vm.Config{},
+			)
+			require.NoError(t, err, "core.ApplyTransaction(...)")
 
-			want := &core.ExecutionResult{
-				UsedGas: tt.wantUsed,
-			}
-			if diff := cmp.Diff(want, got); diff != "" {
-				t.Errorf("core.ApplyMessage(...) diff (-want +got):\n%s", diff)
+			for desc, got := range map[string]uint64{
+				"receipt.GasUsed":                                  receipt.GasUsed,
+				"receipt.CumulativeGasUsed":                        receipt.CumulativeGasUsed,
+				"core.ApplyTransaction(..., usedGas *uint64, ...)": gotUsed,
+			} {
+				if got != tt.wantUsed {
+					t.Errorf("%s got %d; want %d", desc, got, tt.wantUsed)
+				}
 			}
 			if gotPool != wantPool {
 				t.Errorf("After core.ApplyMessage(..., *%T); got %[1]T = %[1]d; want %d", gotPool, wantPool)
