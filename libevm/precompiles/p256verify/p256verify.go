@@ -61,7 +61,11 @@ func (Precompile) Run(sig []byte) ([]byte, error) {
 	if len(sig) != inputLen || !(*input)(sig).verify() {
 		return nil, nil
 	}
-	return []byte{31: 1}, nil
+	return bigEndianOne(), nil
+}
+
+func bigEndianOne() []byte {
+	return []byte{wordLen - 1: 1}
 }
 
 func (in *input) verify() bool {
