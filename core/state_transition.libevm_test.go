@@ -107,7 +107,10 @@ func TestMinimumGasConsumption(t *testing.T) {
 		},
 	}
 
-	const gasPrice = params.Wei
+	// Very low gas price so we can calculate the expected balance in a uint64,
+	// but not 1 otherwise tests would pass without multiplying extra
+	// consumption by the price.
+	const gasPrice = 3
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
