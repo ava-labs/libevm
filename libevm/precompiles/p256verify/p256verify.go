@@ -79,10 +79,11 @@ func (in *input) verify() bool {
 func (in *input) pubkey() (*ecdsa.PublicKey, bool) {
 	x := in.bigWord(xPos)
 	y := in.bigWord(yPos)
-	if x.Sign() == 0 && y.Sign() == 0 {
-		return nil, false
-	}
 
+	// There is no need to explicitly check for the point at infinity because
+	// [elliptic.Curve] documentation states that it's not on the curve and the
+	// check would therefore be performed twice.
+	// See https://cs.opensource.google/go/go/+/refs/tags/go1.24.3:src/crypto/elliptic/nistec.go;l=132
 	curve := elliptic.P256()
 	if !curve.IsOnCurve(x, y) {
 		return nil, false
