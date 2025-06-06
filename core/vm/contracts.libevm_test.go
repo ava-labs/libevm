@@ -702,7 +702,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 func TestPrecompileCallWithTracer(t *testing.T) {
 	// The native pre-state tracer, when logging storage, assumes an invariant
 	// that is broken by a precompile calling another contract. This is a test
-	// of the fix, ensuring that an SLOADed value is properly handled by the
+	// of the fix, ensuring that a SLOADed value is properly handled by the
 	// tracer.
 
 	rng := ethtest.NewPseudoRand(42 * 142857)
