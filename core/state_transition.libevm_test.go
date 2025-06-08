@@ -65,9 +65,10 @@ func TestMinimumGasConsumption(t *testing.T) {
 	// All transactions will be basic transfers so consume [params.TxGas] by
 	// default.
 	tests := []struct {
-		name                     string
-		gasLimit, minConsumption uint64
-		wantUsed                 uint64
+		name             string
+		gasLimit, refund uint64
+		minConsumption   uint64
+		wantUsed         uint64
 	}{
 		{
 			name:           "consume_extra",
@@ -105,6 +106,21 @@ func TestMinimumGasConsumption(t *testing.T) {
 			minConsumption: 2e6,
 			wantUsed:       1e6,
 		},
+		{
+			// Although this doesn't test minimum consumption, it demonstrates
+			// the expected outcome for comparison with the next test.
+			name:     "refund_without_min_consumption",
+			gasLimit: 1e6,
+			refund:   1,
+			wantUsed: params.TxGas - 1,
+		},
+		{
+			name:           "refund_with_min_consumption",
+			gasLimit:       1e6,
+			refund:         1,
+			minConsumption: params.TxGas,
+			wantUsed:       params.TxGas,
+		},
 	}
 
 	// Very low gas price so we can calculate the expected balance in a uint64,
@@ -136,18 +152,18 @@ func TestMinimumGasConsumption(t *testing.T) {
 					Value:    big.NewInt(0),
 				},
 			)
-			msg, err := core.TransactionToMessage(tx, signer, big.NewInt(gasPrice))
-			require.NoError(t, err, "core.TransactionToMessage(types.MustSignNewTx(...))")
 
 			const startingBalance = 10 * params.Ether
-			stateDB.SetNonce(msg.From, 0)
-			stateDB.SetBalance(msg.From, uint256.NewInt(startingBalance))
+			from := crypto.PubkeyToAddress(key.PublicKey)
+			stateDB.SetNonce(from, 0)
+			stateDB.SetBalance(from, uint256.NewInt(startingBalance))
+			stateDB.AddRefund(tt.refund)
 
 			var (
 				// Both variables are passed as pointers to
 				// [core.ApplyTransaction], which will modify them.
 				gotUsed uint64
-				gotPool = core.GasPool(1e9) // modified when passed as pointer
+				gotPool = core.GasPool(1e9)
 			)
 			wantPool := gotPool - core.GasPool(tt.wantUsed)
 
@@ -177,7 +193,7 @@ func TestMinimumGasConsumption(t *testing.T) {
 			}
 
 			wantBalance := startingBalance - tt.wantUsed*gasPrice
-			if got := stateDB.GetBalance(msg.From); !got.IsUint64() || got.Uint64() != wantBalance {
+			if got := stateDB.GetBalance(from); !got.IsUint64() || got.Uint64() != wantBalance {
 				t.Errorf("got remaining balance %s; want %d", got.String(), wantBalance)
 			}
 		})
