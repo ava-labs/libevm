@@ -55,9 +55,7 @@ func (st *StateTransition) canExecuteTransaction() error {
 func (st *StateTransition) consumeMinimumGas() {
 	limit := st.msg.GasLimit
 	minConsume := st.rulesHooks().MinimumGasConsumption(st.msg.GasLimit)
-	if minConsume > limit {
-		minConsume = limit // as documented in [params.RulesHooks]
-	}
+	minConsume = min(minConsume, limit) // as documented in [params.RulesHooks]
 
 	maxRemaining := limit - minConsume
 	if st.gasRemaining < maxRemaining {
