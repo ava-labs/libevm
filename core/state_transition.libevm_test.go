@@ -192,9 +192,9 @@ func TestMinimumGasConsumption(t *testing.T) {
 				t.Errorf("After core.ApplyMessage(..., *%T); got %[1]T = %[1]d; want %d", gotPool, wantPool)
 			}
 
-			wantBalance := startingBalance - tt.wantUsed*gasPrice
-			if got := stateDB.GetBalance(from); !got.IsUint64() || got.Uint64() != wantBalance {
-				t.Errorf("got remaining balance %s; want %d", got.String(), wantBalance)
+			wantBalance := uint256.NewInt(startingBalance - tt.wantUsed*gasPrice)
+			if got := stateDB.GetBalance(from); !got.Eq(wantBalance) {
+				t.Errorf("got remaining balance %d; want %d", got, wantBalance)
 			}
 		})
 	}
