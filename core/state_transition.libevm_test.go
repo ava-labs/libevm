@@ -132,7 +132,7 @@ func TestMinimumGasConsumption(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			hooks := &hookstest.Stub{
 				MinimumGasConsumptionFn: func(limit uint64) uint64 {
-					require.Equal(t, limit, tt.gasLimit)
+					require.Equal(t, tt.gasLimit, limit)
 					return tt.minConsumption
 				},
 			}
