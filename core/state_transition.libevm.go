@@ -17,10 +17,6 @@
 package core
 
 import (
-	"math/big"
-
-	"github.com/holiman/uint256"
-
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/params"
 )
@@ -50,39 +46,16 @@ func (st *StateTransition) canExecuteTransaction() error {
 
 // consumeMinimumGas updates the gas remaining to reflect the value returned by
 // [params.RulesHooks.MinimumGasConsumption]. It MUST be called after all code
-// that modifies gas consumption; i.e. `st.gasRemaining` MUST remain constant
-// after consumeMinimumGas returns.
+// that modifies gas consumption but before the balance is returned for
+// remaining gas.
 func (st *StateTransition) consumeMinimumGas() {
 	limit := st.msg.GasLimit
-	minConsume := st.rulesHooks().MinimumGasConsumption(st.msg.GasLimit)
-	minConsume = min(minConsume, limit) // as documented in [params.RulesHooks]
-
-	maxRemaining := limit - minConsume
-	if st.gasRemaining < maxRemaining {
-		return
-	}
-
-	diff := st.gasRemaining - maxRemaining
-	st.gasRemaining -= diff
-	if err := st.gp.SubGas(diff); err != nil {
-		// This would mean that the transaction wouldn't have been able to spend
-		// up to its limit.
-		log.Crit(
-			"Broken gas-charging invariant",
-			"tx limit", limit,
-			"min consume", minConsume,
-			"extra consume", diff,
-			"SubGas() error", err,
-		)
-	}
-
-	spend := new(big.Int).Mul(st.msg.GasPrice, new(big.Int).SetUint64(diff))
-	st.state.SubBalance(st.msg.From, uint256.MustFromBig(spend))
-
-	log.Debug(
-		"Consumed extra gas to enforce minimum",
-		"tx_limit", limit,
-		"min_consumption", minConsume,
-		"extra_consumption", diff,
+	minConsume := min(
+		limit, // as documented in [params.RulesHooks]
+		st.rulesHooks().MinimumGasConsumption(limit),
+	)
+	st.gasRemaining = min(
+		st.gasRemaining,
+		limit-minConsume,
 	)
 }
