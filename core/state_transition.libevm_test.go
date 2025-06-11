@@ -66,7 +66,8 @@ func TestMinimumGasConsumption(t *testing.T) {
 	// default.
 	tests := []struct {
 		name             string
-		gasLimit, refund uint64
+		gasLimit uint64
+		refund   uint64
 		minConsumption   uint64
 		wantUsed         uint64
 	}{
