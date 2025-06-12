@@ -1,0 +1,53 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "bn256",
+    srcs = [
+        "bn256_fast.go",
+        "bn256_slow.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/crypto/bn256",
+    visibility = ["//visibility:public"],
+    deps = select({
+        "@rules_go//go/platform:386": [
+            "//crypto/bn256/google",
+        ],
+        "@rules_go//go/platform:amd64": [
+            "//crypto/bn256/cloudflare",
+        ],
+        "@rules_go//go/platform:arm": [
+            "//crypto/bn256/google",
+        ],
+        "@rules_go//go/platform:arm64": [
+            "//crypto/bn256/cloudflare",
+        ],
+        "@rules_go//go/platform:mips": [
+            "//crypto/bn256/google",
+        ],
+        "@rules_go//go/platform:mips64": [
+            "//crypto/bn256/google",
+        ],
+        "@rules_go//go/platform:mips64le": [
+            "//crypto/bn256/google",
+        ],
+        "@rules_go//go/platform:mipsle": [
+            "//crypto/bn256/google",
+        ],
+        "@rules_go//go/platform:ppc64": [
+            "//crypto/bn256/google",
+        ],
+        "@rules_go//go/platform:ppc64le": [
+            "//crypto/bn256/google",
+        ],
+        "@rules_go//go/platform:riscv64": [
+            "//crypto/bn256/google",
+        ],
+        "@rules_go//go/platform:s390x": [
+            "//crypto/bn256/google",
+        ],
+        "@rules_go//go/platform:wasm": [
+            "//crypto/bn256/google",
+        ],
+        "//conditions:default": [],
+    }),
+)

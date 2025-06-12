@@ -1,0 +1,36 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "triedb",
+    srcs = [
+        "database.go",
+        "database.libevm.go",
+        "preimages.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/triedb",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//core/rawdb",
+        "//ethdb",
+        "//log",
+        "//trie",
+        "//trie/trienode",
+        "//trie/triestate",
+        "//triedb/database",
+        "//triedb/hashdb",
+        "//triedb/pathdb",
+    ],
+)
+
+go_test(
+    name = "triedb_test",
+    srcs = ["database.libevm_test.go"],
+    embed = [":triedb"],
+    deps = [
+        "//common",
+        "//ethdb",
+        "//triedb/database",
+        "@com_github_stretchr_testify//require",
+    ],
+)

@@ -1,0 +1,54 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "params",
+    srcs = [
+        "bootnodes.go",
+        "config.go",
+        "config.libevm.go",
+        "dao.go",
+        "denomination.go",
+        "hooks.libevm.go",
+        "json.libevm.go",
+        "network_params.go",
+        "protocol_params.go",
+        "version.go",
+        "version.libevm.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/params",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//libevm",
+        "//libevm/pseudo",
+        "//libevm/register",
+        "//log",
+        "//params/forks",
+    ],
+)
+
+go_test(
+    name = "params_test",
+    srcs = [
+        "config.libevm_test.go",
+        "config_test.go",
+        "example.libevm_test.go",
+        "hooks.libevm_test.go",
+        "json.libevm_test.go",
+        "version.libevm_test.go",
+    ],
+    embed = [":params"],
+    deps = [
+        "//common",
+        "//common/math",
+        "//core/vm",
+        "//libevm",
+        "//libevm/ethtest",
+        "//libevm/hookstest",
+        "//libevm/pseudo",
+        "//libevm/register",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+        "@org_golang_x_mod//semver",
+    ],
+)
