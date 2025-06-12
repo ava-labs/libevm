@@ -19,6 +19,7 @@
 package hookstest
 
 import (
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -136,3 +137,11 @@ var _ interface {
 	params.ChainConfigHooks
 	params.RulesHooks
 } = Stub{}
+
+// MarshalJSON implements [json.Marshaler], always returning the empty JSON
+// object.
+func (*Stub) MarshalJSON() ([]byte, error) {
+	return []byte(`{}`), nil
+}
+
+var _ json.Marshaler = (*Stub)(nil)
