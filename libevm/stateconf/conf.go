@@ -19,20 +19,20 @@ package stateconf
 
 import "github.com/ava-labs/libevm/libevm/options"
 
-// A SnapshotUpdateOption configures the behaviour of
+// A StateUpdateOption configures the behaviour of
 // state.SnapshotTree.Update() implementations. This will be removed along with
 // state.SnapshotTree.
-type SnapshotUpdateOption = options.Option[snapshotUpdateConfig]
+type StateUpdateOption = options.Option[stateUpdateOption]
 
-type snapshotUpdateConfig struct {
+type stateUpdateOption struct {
 	payload any
 }
 
 // WithUpdatePayload returns a SnapshotUpdateOption carrying an arbitrary
 // payload. It acts only as a carrier to exploit existing function plumbing and
 // the effect on behaviour is left to the implementation receiving it.
-func WithUpdatePayload(p any) SnapshotUpdateOption {
-	return options.Func[snapshotUpdateConfig](func(c *snapshotUpdateConfig) {
+func WithUpdatePayload(p any) StateUpdateOption {
+	return options.Func[stateUpdateOption](func(c *stateUpdateOption) {
 		c.payload = p
 	})
 }
@@ -40,6 +40,6 @@ func WithUpdatePayload(p any) SnapshotUpdateOption {
 // ExtractUpdatePayload returns the payload carried by a [WithUpdatePayload]
 // option. Only one such option can be used at once; behaviour is otherwise
 // undefined.
-func ExtractUpdatePayload(opts ...SnapshotUpdateOption) any {
+func ExtractUpdatePayload(opts ...StateUpdateOption) any {
 	return options.As(opts...).payload
 }

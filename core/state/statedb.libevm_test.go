@@ -57,7 +57,7 @@ func (*snapTreeRecorder) Cap(common.Hash, int) error {
 func (r *snapTreeRecorder) Update(
 	_, _ common.Hash,
 	_ map[common.Hash]struct{}, _ map[common.Hash][]byte, _ map[common.Hash]map[common.Hash][]byte,
-	opts ...stateconf.SnapshotUpdateOption,
+	opts ...stateconf.StateUpdateOption,
 ) error {
 	r.gotPayload = stateconf.ExtractUpdatePayload(opts...)
 	return nil

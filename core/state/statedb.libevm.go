@@ -37,7 +37,7 @@ type SnapshotTree interface {
 		destructs map[common.Hash]struct{},
 		accounts map[common.Hash][]byte,
 		storage map[common.Hash]map[common.Hash][]byte,
-		opts ...stateconf.SnapshotUpdateOption,
+		opts ...stateconf.StateUpdateOption,
 	) error
 }
 

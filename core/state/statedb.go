@@ -1152,7 +1152,7 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.A
 //
 // The associated block number of the state transition is also provided
 // for more chain context.
-func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, opts ...stateconf.SnapshotUpdateOption) (common.Hash, error) {
+func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, opts ...stateconf.StateUpdateOption) (common.Hash, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1268,7 +1268,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, opts ...statecon
 	if root != origin {
 		start := time.Now()
 		set := triestate.New(s.accountsOrigin, s.storagesOrigin, incomplete)
-		if err := s.db.TrieDB().Update(root, origin, block, nodes, set); err != nil {
+		if err := s.db.TrieDB().Update(root, origin, block, nodes, set, opts...); err != nil {
 			return common.Hash{}, err
 		}
 		s.originalRoot = root
