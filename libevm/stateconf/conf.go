@@ -17,29 +17,82 @@
 // Package stateconf configures state management.
 package stateconf
 
-import "github.com/ava-labs/libevm/libevm/options"
+import (
+	"github.com/ava-labs/libevm/libevm/options"
+)
 
-// A StateUpdateOption configures the behaviour of
+// A StateDBCommitOption configures the behaviour of all update calls within the
+// state.StateDB.Commit() implementations.
+type StateDBCommitOption = options.Option[stateDBCommitConfig]
+
+type stateDBCommitConfig struct {
+	snapshotOpts []SnapshotUpdateOption
+	triedbOpts   []TrieDBUpdateOption
+}
+
+// WithSnapshotUpdateOpts returns a StateDBCommitOption carrying a list of
+func WithSnapshotUpdateOpts(opts ...SnapshotUpdateOption) StateDBCommitOption {
+	return options.Func[stateDBCommitConfig](func(c *stateDBCommitConfig) {
+		// I don't like append() because there's no way to remove options, but that's a weakly held opinion
+		c.snapshotOpts = opts
+	})
+}
+
+func ExtractSnapshotUpdateOpts(opts ...StateDBCommitOption) []SnapshotUpdateOption {
+	return options.As(opts...).snapshotOpts
+}
+
+func WithTrieDBUpdateOpts(opts ...TrieDBUpdateOption) StateDBCommitOption {
+	return options.Func[stateDBCommitConfig](func(c *stateDBCommitConfig) {
+		// I don't like append() because there's no way to remove options, but that's a weakly held opinion
+		c.triedbOpts = opts
+	})
+}
+
+func ExtractTrieDBUpdateOpts(opts ...StateDBCommitOption) []TrieDBUpdateOption {
+	return options.As(opts...).triedbOpts
+}
+
+// A SnapshotUpdateOption configures the behaviour of
 // state.SnapshotTree.Update() implementations. This will be removed along with
 // state.SnapshotTree.
-type StateUpdateOption = options.Option[stateUpdateOption]
+type SnapshotUpdateOption = options.Option[snapshotUpdateConfig]
 
-type stateUpdateOption struct {
+type snapshotUpdateConfig struct {
 	payload any
 }
 
-// WithUpdatePayload returns a SnapshotUpdateOption carrying an arbitrary
+// WithSnapshotUpdatePayload returns a SnapshotUpdateOption carrying an arbitrary
 // payload. It acts only as a carrier to exploit existing function plumbing and
 // the effect on behaviour is left to the implementation receiving it.
-func WithUpdatePayload(p any) StateUpdateOption {
-	return options.Func[stateUpdateOption](func(c *stateUpdateOption) {
+func WithSnapshotUpdatePayload(p any) SnapshotUpdateOption {
+	return options.Func[snapshotUpdateConfig](func(c *snapshotUpdateConfig) {
 		c.payload = p
 	})
 }
 
-// ExtractUpdatePayload returns the payload carried by a [WithUpdatePayload]
+// ExtractSnapshotUpdatePayload returns the payload carried by a [WithSnapshotUpdatePayload]
 // option. Only one such option can be used at once; behaviour is otherwise
 // undefined.
-func ExtractUpdatePayload(opts ...StateUpdateOption) any {
+func ExtractSnapshotUpdatePayload(opts ...SnapshotUpdateOption) any {
+	return options.As(opts...).payload
+}
+
+type TrieDBUpdateOption = options.Option[triedbUpdateConfig]
+
+type triedbUpdateConfig struct {
+	payload any
+}
+
+func WithTrieDBUpdatePayload(p any) TrieDBUpdateOption {
+	return options.Func[triedbUpdateConfig](func(c *triedbUpdateConfig) {
+		c.payload = p
+	})
+}
+
+// ExtractTrieDBUpdatePayload returns the payload carried by a [WithSnapshotUpdatePayload]
+// option. Only one such option can be used at once; behaviour is otherwise
+// undefined.
+func ExtractTrieDBUpdatePayload(opts ...TrieDBUpdateOption) any {
 	return options.As(opts...).payload
 }
