@@ -38,15 +38,15 @@ import (
 
 func TestStateDBCommitPropagatesOptions(t *testing.T) {
 	memdb := rawdb.NewMemoryDatabase()
+	trieRec := &triedbRecorder{Database: hashdb.New(memdb, nil, &trie.MerkleResolver{})}
 	triedb := triedb.NewDatabase(
 		memdb,
 		&triedb.Config{
 			DBOverride: func(_ ethdb.Database) triedb.DBOverride {
-				return &triedbRecorder{Database: hashdb.New(memdb, nil, &trie.MerkleResolver{})}
+				return trieRec
 			},
 		},
 	)
-	trieRec, _ := triedb.Backend().(*triedbRecorder)
 	var snapRec snapTreeRecorder
 	sdb, err := New(types.EmptyRootHash, NewDatabaseWithNodeDB(memdb, triedb), &snapRec)
 	require.NoError(t, err, "New()")
