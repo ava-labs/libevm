@@ -18,13 +18,11 @@
 package stateconf
 
 import (
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/libevm/options"
 )
 
-// A StateDBCommitOption configures the behaviour of all update calls within the
-// state.StateDB.Commit() implementations.
-// This is provided in two distinct types to allow customizability to both
-// snapshot and trie database updates, but are ignored in libevm implementations.
+// A StateDBCommitOption configures the behaviour of state.StateDB.Commit()
 type StateDBCommitOption = options.Option[stateDBCommitConfig]
 
 type stateDBCommitConfig struct {
@@ -34,10 +32,9 @@ type stateDBCommitConfig struct {
 
 // WithSnapshotUpdateOpts returns a StateDBCommitOption carrying a list of
 // SnapshotUpdateOptions.
-// If the list is not of length 1, the last option in the list is used.
+// If multiple such options are used, only the last will be applied as they overwrite each other.
 func WithSnapshotUpdateOpts(opts ...SnapshotUpdateOption) StateDBCommitOption {
 	return options.Func[stateDBCommitConfig](func(c *stateDBCommitConfig) {
-		// I don't like append() because there's no way to remove options, but that's a weakly held opinion
 		c.snapshotOpts = opts
 	})
 }
@@ -49,11 +46,10 @@ func ExtractSnapshotUpdateOpts(opts ...StateDBCommitOption) []SnapshotUpdateOpti
 }
 
 // WithTrieDBUpdateOpts returns a StateDBCommitOption carrying a list of
-// TrieDBUpdateOptions. If the list is not of length 1, the last option in the
-// list is used.
+// TrieDBUpdateOptions. If multiple such options are used, only the last will be
+// applied as they overwrite each other.
 func WithTrieDBUpdateOpts(opts ...TrieDBUpdateOption) StateDBCommitOption {
 	return options.Func[stateDBCommitConfig](func(c *stateDBCommitConfig) {
-		// I don't like append() because there's no way to remove options, but that's a weakly held opinion
 		c.triedbOpts = opts
 	})
 }
@@ -93,21 +89,27 @@ func ExtractSnapshotUpdatePayload(opts ...SnapshotUpdateOption) any {
 type TrieDBUpdateOption = options.Option[triedbUpdateConfig]
 
 type triedbUpdateConfig struct {
-	payload any
+	parentBlockHash  *common.Hash
+	currentBlockHash *common.Hash
 }
 
-// WithTrieDBUpdatePayload returns a TrieDBUpdateOption carrying an arbitrary
-// payload. It acts only as a carrier to exploit existing function plumbing and
+// WithTrieDBUpdatePayload returns a TrieDBUpdateOption carrying two block hashes.
+// It acts only as a carrier to exploit existing function plumbing and
 // the effect on behaviour is left to the implementation receiving it.
-func WithTrieDBUpdatePayload(p any) TrieDBUpdateOption {
+func WithTrieDBUpdatePayload(parent common.Hash, current common.Hash) TrieDBUpdateOption {
 	return options.Func[triedbUpdateConfig](func(c *triedbUpdateConfig) {
-		c.payload = p
+		c.parentBlockHash = &parent
+		c.currentBlockHash = &current
 	})
 }
 
-// ExtractTrieDBUpdatePayload returns the payload carried by a [WithSnapshotUpdatePayload]
+// ExtractTrieDBUpdatePayload returns the payload carried by a [WithTrieDBUpdatePayload]
 // option. Only one such option can be used at once; behaviour is otherwise
 // undefined.
-func ExtractTrieDBUpdatePayload(opts ...TrieDBUpdateOption) any {
-	return options.As(opts...).payload
+func ExtractTrieDBUpdatePayload(opts ...TrieDBUpdateOption) (common.Hash, common.Hash, bool) {
+	conf := options.As(opts...)
+	if conf.parentBlockHash == nil && conf.currentBlockHash == nil {
+		return common.Hash{}, common.Hash{}, false
+	}
+	return *conf.parentBlockHash, *conf.currentBlockHash, true
 }

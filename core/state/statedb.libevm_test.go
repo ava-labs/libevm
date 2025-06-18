@@ -46,26 +46,28 @@ func TestStateDBCommitPropagatesOptions(t *testing.T) {
 			},
 		},
 	)
-	var rec snapTreeRecorder
-	sdb, err := New(types.EmptyRootHash, NewDatabaseWithNodeDB(memdb, triedb), &rec)
+	trieRec, _ := triedb.Backend().(*triedbRecorder)
+	var snapRec snapTreeRecorder
+	sdb, err := New(types.EmptyRootHash, NewDatabaseWithNodeDB(memdb, triedb), &snapRec)
 	require.NoError(t, err, "New()")
 
 	// Ensures that rec.Update() will be called.
 	sdb.SetNonce(common.Address{}, 42)
 
 	const snapshotPayload = "hello world"
-	const trieDBPayload = "goodbye world"
+	var (
+		parentHash  = common.HexToHash("0x0102030405060708090a0b0c0d0e0f1011121314151617181920212223242526")
+		currentHash = common.HexToHash("0x1234567890123456789012345678901234567890123456789012345678901234")
+	)
 	snapshotOpt := stateconf.WithSnapshotUpdatePayload(snapshotPayload)
-	triedbOpt := stateconf.WithTrieDBUpdatePayload(trieDBPayload)
+	triedbOpt := stateconf.WithTrieDBUpdatePayload(parentHash, currentHash)
 	_, err = sdb.Commit(0, false, stateconf.WithSnapshotUpdateOpts(snapshotOpt), stateconf.WithTrieDBUpdateOpts(triedbOpt))
-	require.NoErrorf(t, err, "%T.Commit(..., %T, %T)", sdb, snapshotOpt, triedbOpt)
 
-	assert.Equalf(t, snapshotPayload, rec.gotPayload, "%T payload propagated via %T.Commit() to %T.Update()", snapshotOpt, sdb, rec)
-	innerTrieDB, ok := triedb.Backend().(*triedbRecorder)
-	if !ok {
-		t.Fatalf("expected %T to be a *triedbRecorder", triedb.Backend())
-	}
-	assert.Equalf(t, trieDBPayload, innerTrieDB.gotPayload, "%T payload propagated via %T.Commit() to %T.Update()", triedbOpt, sdb, rec)
+	require.NoErrorf(t, err, "%T.Commit(..., %T, %T)", sdb, snapshotOpt, triedbOpt)
+	assert.Equalf(t, snapshotPayload, snapRec.gotPayload, "%T payload propagated via %T.Commit() to %T.Update()", snapshotOpt, sdb, snapRec)
+	assert.Truef(t, trieRec.exists, "%T exists propagated via %T.Commit() to %T.Update()", triedbOpt, sdb, trieRec)
+	assert.Equalf(t, parentHash, trieRec.parentBlockHash, "%T parentHash propagated via %T.Commit() to %T.Update()", triedbOpt, sdb, trieRec)
+	assert.Equalf(t, currentHash, trieRec.currentBlockHash, "%T currentHash propagated via %T.Commit() to %T.Update()", triedbOpt, sdb, trieRec)
 }
 
 type snapTreeRecorder struct {
@@ -104,7 +106,9 @@ func (snapshotStub) Root() common.Hash {
 
 type triedbRecorder struct {
 	*hashdb.Database
-	gotPayload any
+	parentBlockHash  common.Hash
+	currentBlockHash common.Hash
+	exists           bool
 }
 
 func (r *triedbRecorder) Update(
@@ -115,7 +119,7 @@ func (r *triedbRecorder) Update(
 	states *triestate.Set,
 	opts ...stateconf.TrieDBUpdateOption,
 ) error {
-	r.gotPayload = stateconf.ExtractTrieDBUpdatePayload(opts...)
+	r.parentBlockHash, r.currentBlockHash, r.exists = stateconf.ExtractTrieDBUpdatePayload(opts...)
 	return r.Database.Update(root, parent, block, nodes, states)
 }
 
