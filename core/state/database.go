@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/crate-crypto/go-ipa/banderwagon"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/lru"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -31,6 +30,7 @@ import (
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/trie/utils"
 	"github.com/ava-labs/libevm/triedb"
+	"github.com/crate-crypto/go-ipa/banderwagon"
 )
 
 const (
@@ -71,7 +71,7 @@ type Database interface {
 	TrieDB() *triedb.Database
 }
 
-// Trie is a Ethereum Merkle Patricia trie.
+// Trie is an Ethereum Merkle Patricia trie.
 type Trie interface {
 	// GetKey returns the sha3 preimage of a hashed key that was previously used
 	// to store a value.
