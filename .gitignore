@@ -50,3 +50,6 @@ profile.cov
 logs/
 
 tests/spec-tests/
+
+# Bazel scratch space
+bazel-*
