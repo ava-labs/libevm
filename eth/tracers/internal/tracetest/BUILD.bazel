@@ -1,0 +1,36 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "tracetest",
+    srcs = ["util.go"],
+    importpath = "github.com/ava-labs/libevm/eth/tracers/internal/tracetest",
+    visibility = ["//eth/tracers:__subpackages__"],
+    deps = [
+        "//eth/tracers/js",
+        "//eth/tracers/native",
+    ],
+)
+
+go_test(
+    name = "tracetest_test",
+    srcs = [
+        "calltrace_test.go",
+        "flat_calltrace_test.go",
+        "prestate_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":tracetest"],
+    deps = [
+        "//common",
+        "//common/hexutil",
+        "//common/math",
+        "//core",
+        "//core/rawdb",
+        "//core/types",
+        "//core/vm",
+        "//eth/tracers",
+        "//params",
+        "//rlp",
+        "//tests",
+    ],
+)

@@ -1,0 +1,33 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "common",
+    srcs = [
+        "big.go",
+        "bytes.go",
+        "debug.go",
+        "format.go",
+        "path.go",
+        "pointer.libevm.go",
+        "size.go",
+        "test_utils.go",
+        "types.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/common",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common/hexutil",
+        "@com_github_holiman_uint256//:uint256",
+        "@org_golang_x_crypto//sha3",
+    ],
+)
+
+go_test(
+    name = "common_test",
+    srcs = [
+        "bytes_test.go",
+        "size_test.go",
+        "types_test.go",
+    ],
+    embed = [":common"],
+)
