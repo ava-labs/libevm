@@ -63,6 +63,13 @@ jobs:
       EXCLUDE_REGEX: "ava-labs/libevm/(accounts/usbwallet/trezor)$"
     runs-on: ubuntu-latest
     steps:
+      - name: Install solc
+        run: |
+          sudo add-apt-repository ppa:ethereum/ethereum
+          sudo apt update
+          sudo apt list -a solc
+          sudo apt install solc=1:0.8.28-0ubuntu1~noble
+
       - uses: actions/checkout@v4
       - name: Set up Go
         uses: actions/setup-go@v5

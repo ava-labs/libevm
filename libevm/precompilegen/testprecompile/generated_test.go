@@ -1,0 +1,267 @@
+// Copyright 2024 the libevm authors.
+//
+// The libevm additions to go-ethereum are free software: you can redistribute
+// them and/or modify them under the terms of the GNU Lesser General Public License
+// as published by the Free Software Foundation, either version 3 of the License,
+// or (at your option) any later version.
+//
+// The libevm additions are distributed in the hope that they will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser
+// General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see
+// <http://www.gnu.org/licenses/>.
+
+package testprecompile
+
+import (
+	"context"
+	"math/big"
+	"testing"
+
+	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/libevm/accounts/abi/bind"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/eth/ethconfig"
+	"github.com/ava-labs/libevm/ethclient/simulated"
+	"github.com/ava-labs/libevm/libevm"
+	"github.com/ava-labs/libevm/libevm/ethtest"
+	"github.com/ava-labs/libevm/libevm/hookstest"
+	"github.com/ava-labs/libevm/node"
+	"github.com/ava-labs/libevm/params"
+)
+
+// Note that the .abi and .bin files are .gitignored as only the generated Go
+// files are necessary.
+//go:generate solc -o ./ --overwrite --abi --bin IPrecompile.sol TestSuite.sol
+//go:generate go run ../ -in IPrecompile.abi -out ./generated.go -package testprecompile
+//go:generate go run ../../../cmd/abigen --abi TestSuite.abi --bin TestSuite.bin --pkg testprecompile --out ./suite.abigen_test.go --type TestSuite
+
+func successfulTxReceipt(ctx context.Context, tb testing.TB, client bind.DeployBackend, tx *types.Transaction) *types.Receipt {
+	tb.Helper()
+	r, err := bind.WaitMined(ctx, client, tx)
+	require.NoErrorf(tb, err, "bind.WaitMined(tx %#x)", tx.Hash())
+	require.Equalf(tb, uint64(1), r.Status, "%T.Status", r)
+	return r
+}
+
+func TestGeneratedPrecompile(t *testing.T) {
+	ctx := context.Background()
+	rng := ethtest.NewPseudoRand(424242)
+	precompile := rng.Address()
+
+	hooks := &hookstest.Stub{
+		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+			precompile: New(contract{}),
+		},
+	}
+	extras := hookstest.Register(t, params.Extras[*hookstest.Stub, *hookstest.Stub]{
+		NewRules: func(_ *params.ChainConfig, r *params.Rules, _ *hookstest.Stub, blockNum *big.Int, isMerge bool, timestamp uint64) *hookstest.Stub {
+			r.IsCancun = true // enable PUSH0
+			return hooks
+		},
+	})
+
+	key := rng.UnsafePrivateKey(t)
+	eoa := crypto.PubkeyToAddress(key.PublicKey)
+
+	sim := simulated.NewBackend(
+		types.GenesisAlloc{
+			eoa: types.Account{
+				Balance: new(uint256.Int).Not(uint256.NewInt(0)).ToBig(),
+			},
+		},
+		func(nodeConf *node.Config, ethConf *ethconfig.Config) {
+			ethConf.Genesis.GasLimit = 30e6
+			extras.ChainConfig.Set(ethConf.Genesis.Config, hooks)
+		},
+	)
+	defer sim.Close()
+
+	txOpts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
+	require.NoError(t, err, "bind.NewKeyedTransactorWithChainID(..., 1337)")
+	txOpts.GasLimit = 30e6
+	txOpts.Value = big.NewInt(1e9)
+
+	client := sim.Client()
+	_, tx, test, err := DeployTestSuite(txOpts, client, precompile, revertBufferWhenNonPayableReceivesValue)
+	require.NoError(t, err, "DeployTestSuite(...)")
+	sim.Commit()
+	successfulTxReceipt(ctx, t, client, tx)
+
+	txOpts.Value = nil
+	suite := &TestSuiteSession{
+		Contract:     test,
+		TransactOpts: *txOpts,
+	}
+
+	tests := []struct {
+		transact        func() (*types.Transaction, error)
+		wantCalledEvent string
+	}{
+		{
+			transact: func() (*types.Transaction, error) {
+				return suite.Echo(rng.BigUint64())
+			},
+			wantCalledEvent: "Echo(uint256)",
+		},
+		{
+			transact: func() (*types.Transaction, error) {
+				return suite.Echo0("hello world")
+			},
+			wantCalledEvent: "Echo(string)",
+		},
+		{
+			transact: func() (*types.Transaction, error) {
+				return suite.Extract(IPrecompileWrapper{
+					Val: rng.BigUint64(),
+				})
+			},
+			wantCalledEvent: "Extract(...)",
+		},
+		{
+			transact: func() (*types.Transaction, error) {
+				return suite.HashPacked(rng.BigUint64(), [2]byte{42, 42}, rng.Address())
+			},
+			wantCalledEvent: "HashPacked(...)",
+		},
+		{
+			transact: func() (*types.Transaction, error) {
+				return suite.Self()
+			},
+			wantCalledEvent: "Self()",
+		},
+		{
+			transact: func() (*types.Transaction, error) {
+				return suite.RevertWith(rng.Bytes(8))
+			},
+			wantCalledEvent: "RevertWith(...)",
+		},
+		{
+			transact: func() (*types.Transaction, error) {
+				return suite.EchoingFallback(rng.Bytes(8))
+			},
+			wantCalledEvent: "EchoingFallback(...)",
+		},
+		{
+			transact: func() (*types.Transaction, error) {
+				return suite.View()
+			},
+			wantCalledEvent: "View()",
+		},
+		{
+			transact: func() (*types.Transaction, error) {
+				return suite.Pure()
+			},
+			wantCalledEvent: "Pure()",
+		},
+		{
+			transact: func() (*types.Transaction, error) {
+				return suite.NeitherViewNorPure()
+			},
+			wantCalledEvent: "NeitherViewNorPure()",
+		},
+		{
+			transact: func() (*types.Transaction, error) {
+				return suite.Transfer()
+			},
+			wantCalledEvent: "Transfer()",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.wantCalledEvent, func(t *testing.T) {
+			tx, err := tt.transact()
+			require.NoError(t, err, "send tx")
+			sim.Commit()
+
+			rcpt := successfulTxReceipt(ctx, t, client, tx)
+			require.Equalf(t, uint64(1), rcpt.Status, "%T.Status (i.e. transaction executed without error)", rcpt)
+
+			require.Lenf(t, rcpt.Logs, 1, "%T.Logs", rcpt)
+			called, err := test.ParseCalled(*rcpt.Logs[0])
+			require.NoErrorf(t, err, "%T.ParseCalled(...)", test)
+			assert.Equal(t, tt.wantCalledEvent, called.Arg0, "function name emitted with `Called` event")
+		})
+	}
+}
+
+type contract struct{}
+
+var _ Contract = contract{}
+
+func (contract) Fallback(env vm.PrecompileEnvironment, callData []byte) ([]byte, error) {
+	// Note the test-suite assumption of the fallback's behaviour:
+	var _ = (*TestSuite).EchoingFallback
+	return callData, nil
+}
+
+func (contract) Echo(env vm.PrecompileEnvironment, x *big.Int) (*big.Int, error) {
+	return x, nil
+}
+
+func (contract) Echo0(env vm.PrecompileEnvironment, x string) (string, error) {
+	return x, nil
+}
+
+func (contract) Extract(env vm.PrecompileEnvironment, x struct {
+	Val *big.Int "json:\"val\""
+}) (*big.Int, error) {
+	return x.Val, nil
+}
+
+func (contract) HashPacked(env vm.PrecompileEnvironment, x *big.Int, y [2]byte, z common.Address) (hash [32]byte, _ error) {
+	copy(
+		hash[:],
+		crypto.Keccak256(
+			uint256.MustFromBig(x).PaddedBytes(32),
+			y[:],
+			z.Bytes(),
+		),
+	)
+	return hash, nil
+}
+
+func (contract) RevertWith(env vm.PrecompileEnvironment, x []byte) error {
+	return vm.RevertError(x)
+}
+
+func (contract) Self(env vm.PrecompileEnvironment) (common.Address, error) {
+	return env.Addresses().Self, nil
+}
+
+func canReadState(env vm.PrecompileEnvironment) bool {
+	return env.ReadOnlyState() != nil
+}
+
+func canWriteState(env vm.PrecompileEnvironment) bool {
+	return env.StateDB() != nil
+}
+
+func (contract) View(env vm.PrecompileEnvironment) (bool, bool, error) {
+	return canReadState(env), canWriteState(env), nil
+}
+
+func (contract) Pure(env vm.PrecompileEnvironment) (bool, bool, error) {
+	return canReadState(env), canWriteState(env), nil
+}
+
+func (contract) NeitherViewNorPure(env vm.PrecompileEnvironment) (bool, bool, error) {
+	return canReadState(env), canWriteState(env), nil
+}
+
+func (contract) Payable(env vm.PrecompileEnvironment) (*big.Int, error) {
+	return env.Value().ToBig(), nil
+}
+
+func (contract) NonPayable(env vm.PrecompileEnvironment) error {
+	return nil
+}
