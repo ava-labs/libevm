@@ -21,6 +21,7 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/state/snapshot"
+	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/libevm/stateconf"
 )
 
@@ -51,4 +52,26 @@ func clearTypedNilPointer(snaps SnapshotTree) SnapshotTree {
 		return nil
 	}
 	return snaps
+}
+
+type StateDBHooks interface {
+	TransformStateKey(common.Address, common.Hash) common.Hash
+}
+
+func RegisterExtras(s StateDBHooks) {
+	registeredExtras.MustRegister(s)
+}
+
+func TestOnlyClearRegisteredExtras() {
+	registeredExtras.TestOnlyClear()
+}
+
+var registeredExtras register.AtMostOnce[StateDBHooks]
+
+func transformStateKey(addr common.Address, key common.Hash, opts ...stateconf.StateDBStateOption) common.Hash {
+	r := &registeredExtras
+	if !r.Registered() || !stateconf.ShouldTransformStateKey(opts...) {
+		return key
+	}
+	return r.Get().TransformStateKey(addr, key)
 }
