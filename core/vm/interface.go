@@ -21,6 +21,7 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 )
@@ -45,9 +46,9 @@ type StateDB interface {
 	SubRefund(uint64)
 	GetRefund() uint64
 
-	GetCommittedState(common.Address, common.Hash) common.Hash
-	GetState(common.Address, common.Hash) common.Hash
-	SetState(common.Address, common.Hash, common.Hash)
+	GetCommittedState(common.Address, common.Hash, ...stateconf.StateDBStateOption) common.Hash
+	GetState(common.Address, common.Hash, ...stateconf.StateDBStateOption) common.Hash
+	SetState(common.Address, common.Hash, common.Hash, ...stateconf.StateDBStateOption)
 
 	GetTransientState(addr common.Address, key common.Hash) common.Hash
 	SetTransientState(addr common.Address, key, value common.Hash)
