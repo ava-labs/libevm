@@ -75,3 +75,8 @@ func transformStateKey(addr common.Address, key common.Hash, opts ...stateconf.S
 	}
 	return r.Get().TransformStateKey(addr, key)
 }
+
+// GetTxHash returns the current tx hash on the StateDB set by SetTxContext.
+func (s *StateDB) GetTxHash() common.Hash {
+	return s.thash
+}
