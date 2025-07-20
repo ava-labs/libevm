@@ -113,3 +113,19 @@ func ExtractTrieDBUpdatePayload(opts ...TrieDBUpdateOption) (common.Hash, common
 	}
 	return *conf.parentBlockHash, *conf.currentBlockHash, true
 }
+
+type StateDBStateOption = options.Option[stateDBStateConfig]
+
+type stateDBStateConfig struct {
+	skipKeyTransformation bool
+}
+
+func SkipStateKeyTransformation() StateDBStateOption {
+	return options.Func[stateDBStateConfig](func(c *stateDBStateConfig) {
+		c.skipKeyTransformation = true
+	})
+}
+
+func ShouldTransformStateKey(opts ...StateDBStateOption) bool {
+	return !options.As(opts...).skipKeyTransformation
+}

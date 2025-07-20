@@ -341,18 +341,20 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 }
 
 // GetState retrieves a value from the given account's storage trie.
-func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
+func (s *StateDB) GetState(addr common.Address, hash common.Hash, opts ...stateconf.StateDBStateOption) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
+		hash = transformStateKey(addr, hash, opts...)
 		return stateObject.GetState(hash)
 	}
 	return common.Hash{}
 }
 
 // GetCommittedState retrieves a value from the given account's committed storage trie.
-func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
+func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash, opts ...stateconf.StateDBStateOption) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
+		hash = transformStateKey(addr, hash, opts...)
 		return stateObject.GetCommittedState(hash)
 	}
 	return common.Hash{}
@@ -412,9 +414,10 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 	}
 }
 
-func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
+func (s *StateDB) SetState(addr common.Address, key, value common.Hash, opts ...stateconf.StateDBStateOption) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
+		key = transformStateKey(addr, key, opts...)
 		stateObject.SetState(key, value)
 	}
 }
