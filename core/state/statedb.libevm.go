@@ -24,6 +24,11 @@ import (
 	"github.com/ava-labs/libevm/libevm/stateconf"
 )
 
+// GetTxHash returns the current tx hash on the StateDB set by SetTxContext.
+func (s *StateDB) GetTxHash() common.Hash {
+	return s.thash
+}
+
 // SnapshotTree mirrors the functionality of a [snapshot.Tree], allowing for
 // drop-in replacements. This is intended as a temporary feature as a workaround
 // until a standard Tree can be used.
