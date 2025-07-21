@@ -24,8 +24,8 @@ import (
 	"github.com/ava-labs/libevm/libevm/stateconf"
 )
 
-// GetTxHash returns the current tx hash on the StateDB set by SetTxContext.
-func (s *StateDB) GetTxHash() common.Hash {
+// TxHash returns the current transaction hash set by SetTxContext.
+func (s *StateDB) TxHash() common.Hash {
 	return s.thash
 }
 
