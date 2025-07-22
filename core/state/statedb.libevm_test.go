@@ -151,8 +151,10 @@ func (highByteFlipper) TransformStateKey(_ common.Address, key common.Hash) comm
 }
 
 func TestTransformStateKey(t *testing.T) {
-	cache := NewDatabase(rawdb.NewMemoryDatabase())
-	sdb, err := New(types.EmptyRootHash, cache, nil)
+	rawdb := rawdb.NewMemoryDatabase()
+	trie := triedb.NewDatabase(rawdb, nil)
+	db := NewDatabaseWithNodeDB(rawdb, trie)
+	sdb, err := New(types.EmptyRootHash, db, nil)
 	require.NoErrorf(t, err, "New()")
 
 	addr := common.Address{1}
@@ -172,6 +174,25 @@ func TestTransformStateKey(t *testing.T) {
 	assertEq(t, regularKey, regularVal)
 	assertEq(t, flippedKey, flippedVal)
 
+	root, err := sdb.Commit(0, false)
+	require.NoErrorf(t, err, "state.Commit()")
+
+	err = trie.Commit(root, false)
+	require.NoErrorf(t, err, "trie.Commit()")
+
+	sdb, err = New(root, db, nil)
+	require.NoErrorf(t, err, "New()")
+
+	assertCommittedEq := func(t *testing.T, key, want common.Hash, opts ...stateconf.StateDBStateOption) {
+		t.Helper()
+		assert.Equal(t, want, sdb.GetCommittedState(addr, key, opts...))
+	}
+
+	assertEq(t, regularKey, regularVal)
+	assertEq(t, flippedKey, flippedVal)
+	assertCommittedEq(t, regularKey, regularVal)
+	assertCommittedEq(t, flippedKey, flippedVal)
+
 	// Typically the hook would be registered before any state access or
 	// setting, but doing it here aids testing by showing the before-and-after
 	// effects.
@@ -183,9 +204,15 @@ func TestTransformStateKey(t *testing.T) {
 	assertEq(t, regularKey, regularVal, noTransform)
 	assertEq(t, flippedKey, regularVal)
 	assertEq(t, flippedKey, flippedVal, noTransform)
+	assertCommittedEq(t, regularKey, flippedVal)
+	assertCommittedEq(t, regularKey, regularVal, noTransform)
+	assertCommittedEq(t, flippedKey, regularVal)
+	assertCommittedEq(t, flippedKey, flippedVal, noTransform)
 
 	updatedVal := common.Hash{'u', 'p', 'd', 'a', 't', 'e', 'd'}
 	sdb.SetState(addr, regularKey, updatedVal)
 	assertEq(t, regularKey, updatedVal)
 	assertEq(t, flippedKey, updatedVal, noTransform)
+	assertCommittedEq(t, regularKey, flippedVal)
+	assertCommittedEq(t, flippedKey, flippedVal, noTransform)
 }
