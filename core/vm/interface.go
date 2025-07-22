@@ -21,9 +21,11 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
+
+	// libevm extra imports
+	"github.com/ava-labs/libevm/libevm/stateconf"
 )
 
 // StateDB is an EVM database for full state querying.
