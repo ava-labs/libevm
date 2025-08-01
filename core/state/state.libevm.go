@@ -42,7 +42,7 @@ func SetExtra[SA any](s *StateDB, a pseudo.Accessor[types.StateOrSlimAccount, SA
 	}
 }
 
-func setExtraOnObject[SA any](s *stateObject, a pseudo.Accessor[types.StateOrSlimAccount, SA], addr common.Address, extra SA) {
+func setExtraOnObject[SA any](s *StateObject, a pseudo.Accessor[types.StateOrSlimAccount, SA], addr common.Address, extra SA) {
 	s.db.journal.append(extraChange[SA]{
 		accessor: a,
 		account:  &addr,

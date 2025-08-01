@@ -90,7 +90,7 @@ type (
 	}
 	resetObjectChange struct {
 		account      *common.Address
-		prev         *stateObject
+		prev         *StateObject
 		prevdestruct bool
 		prevAccount  []byte
 		prevStorage  map[common.Hash][]byte

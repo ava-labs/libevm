@@ -83,7 +83,7 @@ type StateDB struct {
 
 	// This map holds 'live' objects, which will get modified while processing
 	// a state transition.
-	stateObjects         map[common.Address]*stateObject
+	stateObjects         map[common.Address]*StateObject
 	stateObjectsPending  map[common.Address]struct{}            // State objects finalized but not yet written to the trie
 	stateObjectsDirty    map[common.Address]struct{}            // State objects modified in the current execution
 	stateObjectsDestruct map[common.Address]*types.StateAccount // State objects destructed in the block along with its previous value
@@ -160,7 +160,7 @@ func New(root common.Hash, db Database, snaps SnapshotTree) (*StateDB, error) {
 		storages:             make(map[common.Hash]map[common.Hash][]byte),
 		accountsOrigin:       make(map[common.Address][]byte),
 		storagesOrigin:       make(map[common.Address]map[common.Hash][]byte),
-		stateObjects:         make(map[common.Address]*stateObject),
+		stateObjects:         make(map[common.Address]*StateObject),
 		stateObjectsPending:  make(map[common.Address]struct{}),
 		stateObjectsDirty:    make(map[common.Address]struct{}),
 		stateObjectsDestruct: make(map[common.Address]*types.StateAccount),
@@ -507,7 +507,7 @@ func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common
 //
 
 // updateStateObject writes the given object to the trie.
-func (s *StateDB) updateStateObject(obj *stateObject) {
+func (s *StateDB) updateStateObject(obj *StateObject) {
 	// Track the amount of time wasted on updating the account from the trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
@@ -539,7 +539,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 }
 
 // deleteStateObject removes the given object from the state trie.
-func (s *StateDB) deleteStateObject(obj *stateObject) {
+func (s *StateDB) deleteStateObject(obj *StateObject) {
 	// Track the amount of time wasted on deleting the account from the trie
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
@@ -554,7 +554,7 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 // getStateObject retrieves a state object given by the address, returning nil if
 // the object is not found or was deleted in this execution context. If you need
 // to differentiate between non-existent/just-deleted, use getDeletedStateObject.
-func (s *StateDB) getStateObject(addr common.Address) *stateObject {
+func (s *StateDB) getStateObject(addr common.Address) *StateObject {
 	if obj := s.getDeletedStateObject(addr); obj != nil && !obj.deleted {
 		return obj
 	}
@@ -565,7 +565,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 // nil for a deleted state object, it returns the actual object with the deleted
 // flag set. This is needed by the state journal to revert to the correct s-
 // destructed object instead of wiping all knowledge about the state object.
-func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
+func (s *StateDB) getDeletedStateObject(addr common.Address) *StateObject {
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
 		return obj
@@ -619,12 +619,12 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	return obj
 }
 
-func (s *StateDB) setStateObject(object *stateObject) {
+func (s *StateDB) setStateObject(object *StateObject) {
 	s.stateObjects[object.Address()] = object
 }
 
 // getOrNewStateObject retrieves a state object or create a new state object if nil.
-func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
+func (s *StateDB) getOrNewStateObject(addr common.Address) *StateObject {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		stateObject, _ = s.createObject(addr)
@@ -634,7 +634,7 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
-func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
+func (s *StateDB) createObject(addr common.Address) (newobj, prev *StateObject) {
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 	newobj = newObject(s, addr, nil)
 	if prev == nil {
@@ -703,7 +703,7 @@ func (s *StateDB) Copy() *StateDB {
 		storages:             copy2DSet(s.storages),
 		accountsOrigin:       copySet(s.accountsOrigin),
 		storagesOrigin:       copy2DSet(s.storagesOrigin),
-		stateObjects:         make(map[common.Address]*stateObject, len(s.journal.dirties)),
+		stateObjects:         make(map[common.Address]*StateObject, len(s.journal.dirties)),
 		stateObjectsPending:  make(map[common.Address]struct{}, len(s.stateObjectsPending)),
 		stateObjectsDirty:    make(map[common.Address]struct{}, len(s.journal.dirties)),
 		stateObjectsDestruct: maps.Clone(s.stateObjectsDestruct),
@@ -731,7 +731,7 @@ func (s *StateDB) Copy() *StateDB {
 			// Even though the original object is dirty, we are not copying the journal,
 			// so we need to make sure that any side-effect the journal would have caused
 			// during a commit (or similar op) is already applied to the copy.
-			state.stateObjects[addr] = object.deepCopy(state)
+			state.stateObjects[addr] = object.DeepCopy(state)
 
 			state.stateObjectsDirty[addr] = struct{}{}   // Mark the copy dirty to force internal (code/state) commits
 			state.stateObjectsPending[addr] = struct{}{} // Mark the copy pending to force external (account) commits
@@ -743,13 +743,13 @@ func (s *StateDB) Copy() *StateDB {
 	// of copies.
 	for addr := range s.stateObjectsPending {
 		if _, exist := state.stateObjects[addr]; !exist {
-			state.stateObjects[addr] = s.stateObjects[addr].deepCopy(state)
+			state.stateObjects[addr] = s.stateObjects[addr].DeepCopy(state)
 		}
 		state.stateObjectsPending[addr] = struct{}{}
 	}
 	for addr := range s.stateObjectsDirty {
 		if _, exist := state.stateObjects[addr]; !exist {
-			state.stateObjects[addr] = s.stateObjects[addr].deepCopy(state)
+			state.stateObjects[addr] = s.stateObjects[addr].DeepCopy(state)
 		}
 		state.stateObjectsDirty[addr] = struct{}{}
 	}
@@ -1403,4 +1403,29 @@ func copy2DSet[k comparable](set map[k]map[common.Hash][]byte) map[k]map[common.
 		}
 	}
 	return copied
+}
+
+// !
+func (s *StateDB) GetStateObject(addr common.Address) *StateObject {
+	return s.getStateObject(addr)
+}
+
+// !
+func (s *StateDB) GetOrNewStateObject(addr common.Address) *StateObject {
+	return s.getOrNewStateObject(addr)
+}
+
+// !
+func (s *StateDB) SetStateObject(object *StateObject) {
+	s.setStateObject(object)
+}
+
+// !
+func (s *StateDB) StateObjectFromMap(addr common.Address) *StateObject {
+	return s.stateObjects[addr]
+}
+
+// !
+func (s *StateDB) CreateObject(addr common.Address) (newobj, prev *StateObject) {
+	return s.createObject(addr)
 }
