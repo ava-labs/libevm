@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "txfetcher",
+    srcs = ["txfetcher_fuzzer.go"],
+    importpath = "github.com/ava-labs/libevm/tests/fuzzers/txfetcher",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//common/mclock",
+        "//core/types",
+        "//eth/fetcher",
+    ],
+)
+
+go_test(
+    name = "txfetcher_test",
+    srcs = ["txfetcher_test.go"],
+    embed = [":txfetcher"],
+)
