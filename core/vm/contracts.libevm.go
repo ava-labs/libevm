@@ -120,15 +120,28 @@ func (t CallType) OpCode() OpCode {
 // run runs the [PrecompiledContract], differentiating between stateful and
 // regular types, updating `args.gasRemaining` in the stateful case.
 func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, err error) {
-	switch p := p.(type) {
-	default:
+	sp, ok := p.(statefulPrecompile)
+	if !ok {
 		return p.Run(input)
-	case statefulPrecompile:
-		env := args.env()
-		ret, err := p(env, input)
-		args.gasRemaining = env.Gas()
-		return ret, err
 	}
+
+	env := args.env()
+	// Depth and read-only setting are handled by [EVMInterpreter.Run],
+	// which isn't used for precompiles, so we need to do it ourselves to
+	// maintain the expected invariants.
+	in := env.evm.interpreter
+
+	in.evm.depth++
+	defer func() { in.evm.depth-- }()
+
+	if env.callType == StaticCall && !in.readOnly {
+		in.readOnly = true
+		defer func() { in.readOnly = false }()
+	}
+
+	ret, err = sp(env, input)
+	args.gasRemaining = env.Gas()
+	return ret, err
 }
 
 // PrecompiledStatefulContract is the stateful equivalent of a
