@@ -120,6 +120,7 @@ type statefulPrecompileOutput struct {
 func (o statefulPrecompileOutput) String() string {
 	var lines []string
 	out := reflect.ValueOf(o)
+FieldLoop:
 	for i, n := 0, out.NumField(); i < n; i++ {
 		name := out.Type().Field(i).Name
 		fld := out.Field(i).Interface()
@@ -129,7 +130,12 @@ func (o statefulPrecompileOutput) String() string {
 		case []byte:
 			verb = "%#x"
 		case *libevm.AddressContext:
-			verb = "%+v"
+			lines = append(
+				lines,
+				fmt.Sprintf("EVMSemantic addresses: %+v", o.Addresses.EVMSemantic),
+				fmt.Sprintf("Raw addresses: %+v", o.Addresses.Raw),
+			)
+			continue FieldLoop
 		case vm.CallType:
 			verb = "%d (%[2]q)"
 		}
@@ -211,6 +217,13 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	state.SetBalance(caller, new(uint256.Int).Not(uint256.NewInt(0)))
 	evm.Origin = eoa
 
+	// By definition, the raw caller and self are the same, regardless of the
+	// incoming call type.
+	rawAddresses := &libevm.CallerAndSelf{
+		Caller: caller,
+		Self:   precompile,
+	}
+
 	tests := []struct {
 		name              string
 		call              func() ([]byte, uint64, error)
@@ -232,6 +245,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 					Caller: caller,
 					Self:   precompile,
 				},
+				Raw: rawAddresses,
 			},
 			wantReadOnly:      false,
 			wantTransferValue: transferValue,
@@ -248,6 +262,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 					Caller: caller,
 					Self:   caller,
 				},
+				Raw: rawAddresses,
 			},
 			wantReadOnly:      false,
 			wantTransferValue: transferValue,
@@ -264,6 +279,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 					Caller: eoa, // inherited from caller
 					Self:   caller,
 				},
+				Raw: rawAddresses,
 			},
 			wantReadOnly:      false,
 			wantTransferValue: uint256.NewInt(0),
@@ -280,6 +296,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 					Caller: caller,
 					Self:   precompile,
 				},
+				Raw: rawAddresses,
 			},
 			wantReadOnly:      true,
 			wantTransferValue: uint256.NewInt(0),
@@ -570,6 +587,7 @@ func TestCanCreateContract(t *testing.T) {
 						Caller: caller,
 						Self:   create,
 					},
+					// `Raw` is documented as always being nil.
 				},
 				value,
 			),
@@ -586,6 +604,7 @@ func TestCanCreateContract(t *testing.T) {
 						Caller: caller,
 						Self:   create2,
 					},
+					// As above re `Raw` always being nil.
 				},
 				value,
 			),
@@ -656,7 +675,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 				if bytes.Equal(input, unsafeCallerProxyOptSentinel) {
 					opts = append(opts, vm.WithUNSAFECallerAddressProxying())
 				}
-				// We are ultimately testing env.Call(), hence why this is the SUT.
+				// We are ultimately testing env.Call(), hence why this is the
+				// SUT. If this is ever extended to include DELEGATECALL or
+				// CALLCODE then the expected [libevm.AddressContext.Raw] values
+				// of the tests cases also need to change.
 				return env.Call(dest, precompileCallData, env.Gas(), uint256.NewInt(0), opts...)
 			}),
 			dest: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
@@ -802,6 +824,9 @@ func TestPrecompileMakeCall(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.incomingCallType.String(), func(t *testing.T) {
+			// From the perspective of `dest` after a CALL.
+			tt.want.Addresses.Raw = &tt.want.Addresses.EVMSemantic
+
 			t.Logf("calldata = %q", tt.eoaTxCallData)
 			state, evm := ethtest.NewZeroEVM(t)
 			evm.Origin = eoa
