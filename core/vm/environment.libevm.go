@@ -79,8 +79,10 @@ func (e *environment) ReadOnly() bool {
 func (e *environment) Addresses() *libevm.AddressContext {
 	return &libevm.AddressContext{
 		Origin: e.evm.Origin,
-		Caller: e.self.CallerAddress,
-		Self:   e.self.Address(),
+		EVMSemantic: libevm.CallerAndSelf{
+			Caller: e.self.CallerAddress,
+			Self:   e.self.Address(),
+		},
 	}
 }
 

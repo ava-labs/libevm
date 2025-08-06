@@ -228,8 +228,10 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			},
 			wantAddresses: &libevm.AddressContext{
 				Origin: eoa,
-				Caller: caller,
-				Self:   precompile,
+				EVMSemantic: libevm.CallerAndSelf{
+					Caller: caller,
+					Self:   precompile,
+				},
 			},
 			wantReadOnly:      false,
 			wantTransferValue: transferValue,
@@ -242,8 +244,10 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			},
 			wantAddresses: &libevm.AddressContext{
 				Origin: eoa,
-				Caller: caller,
-				Self:   caller,
+				EVMSemantic: libevm.CallerAndSelf{
+					Caller: caller,
+					Self:   caller,
+				},
 			},
 			wantReadOnly:      false,
 			wantTransferValue: transferValue,
@@ -256,8 +260,10 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			},
 			wantAddresses: &libevm.AddressContext{
 				Origin: eoa,
-				Caller: eoa, // inherited from caller
-				Self:   caller,
+				EVMSemantic: libevm.CallerAndSelf{
+					Caller: eoa, // inherited from caller
+					Self:   caller,
+				},
 			},
 			wantReadOnly:      false,
 			wantTransferValue: uint256.NewInt(0),
@@ -270,8 +276,10 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			},
 			wantAddresses: &libevm.AddressContext{
 				Origin: eoa,
-				Caller: caller,
-				Self:   precompile,
+				EVMSemantic: libevm.CallerAndSelf{
+					Caller: caller,
+					Self:   precompile,
+				},
 			},
 			wantReadOnly:      true,
 			wantTransferValue: uint256.NewInt(0),
@@ -527,7 +535,7 @@ func TestCanCreateContract(t *testing.T) {
 	gasUsage := rng.Uint64n(gasLimit)
 
 	makeErr := func(cc *libevm.AddressContext, stateVal common.Hash) error {
-		return fmt.Errorf("Origin: %v Caller: %v Contract: %v State: %v", cc.Origin, cc.Caller, cc.Self, stateVal)
+		return fmt.Errorf("Origin: %v Caller: %v Contract: %v State: %v", cc.Origin, cc.EVMSemantic.Caller, cc.EVMSemantic.Self, stateVal)
 	}
 	hooks := &hookstest.Stub{
 		CanCreateContractFn: func(cc *libevm.AddressContext, gas uint64, s libevm.StateReader) (uint64, error) {
@@ -555,14 +563,32 @@ func TestCanCreateContract(t *testing.T) {
 			create: func(evm *vm.EVM) ([]byte, common.Address, uint64, error) {
 				return evm.Create(vm.AccountRef(caller), code, gasLimit, uint256.NewInt(0))
 			},
-			wantErr: makeErr(&libevm.AddressContext{Origin: origin, Caller: caller, Self: create}, value),
+			wantErr: makeErr(
+				&libevm.AddressContext{
+					Origin: origin,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller,
+						Self:   create,
+					},
+				},
+				value,
+			),
 		},
 		{
 			name: "Create2",
 			create: func(evm *vm.EVM) ([]byte, common.Address, uint64, error) {
 				return evm.Create2(vm.AccountRef(caller), code, gasLimit, uint256.NewInt(0), new(uint256.Int).SetBytes(salt[:]))
 			},
-			wantErr: makeErr(&libevm.AddressContext{Origin: origin, Caller: caller, Self: create2}, value),
+			wantErr: makeErr(
+				&libevm.AddressContext{
+					Origin: origin,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller,
+						Self:   create2,
+					},
+				},
+				value,
+			),
 		},
 	}
 
@@ -663,8 +689,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: sut,
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: sut,
+						Self:   dest,
+					},
 				},
 				Input: precompileCallData,
 			},
@@ -675,8 +703,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: caller, // overridden by CallOption
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller, // overridden by CallOption
+						Self:   dest,
+					},
 				},
 				Input: precompileCallData,
 			},
@@ -686,8 +716,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: caller, // SUT runs as its own caller because of CALLCODE
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller, // SUT runs as its own caller because of CALLCODE
+						Self:   dest,
+					},
 				},
 				Input: precompileCallData,
 			},
@@ -698,8 +730,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: caller, // CallOption is a NOOP
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller, // CallOption is a NOOP
+						Self:   dest,
+					},
 				},
 				Input: precompileCallData,
 			},
@@ -709,8 +743,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: caller, // as with CALLCODE
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller, // as with CALLCODE
+						Self:   dest,
+					},
 				},
 				Input: precompileCallData,
 			},
@@ -721,8 +757,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: caller, // CallOption is a NOOP
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller, // CallOption is a NOOP
+						Self:   dest,
+					},
 				},
 				Input: precompileCallData,
 			},
@@ -732,8 +770,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: sut,
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: sut,
+						Self:   dest,
+					},
 				},
 				Input: precompileCallData,
 				// This demonstrates that even though the precompile makes a
@@ -749,8 +789,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: caller, // overridden by CallOption
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller, // overridden by CallOption
+						Self:   dest,
+					},
 				},
 				Input:    precompileCallData,
 				ReadOnly: true,
@@ -815,27 +857,4 @@ func TestPrecompileCallWithTracer(t *testing.T) {
 	var got map[common.Address]struct{ Storage map[common.Hash]common.Hash }
 	require.NoErrorf(t, json.Unmarshal(gotJSON, &got), "json.Unmarshal(%T.GetResult(), %T)", tracer, &got)
 	require.Equal(t, value, got[contract].Storage[zeroHash], "value loaded with SLOAD")
-}
-
-//nolint:testableexamples // Including output would only make the example more complicated and hide the true intent
-func ExamplePrecompileEnvironment() {
-	// To determine the actual caller of a precompile, as against the effective
-	// caller (under EVM rules, as exposed by `Addresses().Caller`):
-	actualCaller := func(env vm.PrecompileEnvironment) common.Address {
-		if env.IncomingCallType() == vm.DelegateCall {
-			// DelegateCall acts as if it were its own caller.
-			return env.Addresses().Self
-		}
-		// CallCode could return either `Self` or `Caller` as it acts as its
-		// caller but doesn't inherit the caller's caller as DelegateCall does.
-		// Having it handled here is arbitrary from a behavioural perspective
-		// and is done only to simplify the code.
-		//
-		// Call and StaticCall don't affect self/caller semantics in any way.
-		return env.Addresses().Caller
-	}
-
-	// actualCaller would typically be a top-level function. It's only a
-	// variable to include it in this example function.
-	_ = actualCaller
 }

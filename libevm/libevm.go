@@ -64,7 +64,12 @@ type StateReader interface {
 // With respect to contract creation, the Self address MAY be the predicted
 // address of the contract about to be deployed, which may not exist yet.
 type AddressContext struct {
-	Origin common.Address // equivalent to vm.ORIGIN op code
-	Caller common.Address // equivalent to vm.CALLER op code
-	Self   common.Address // equivalent to vm.ADDRESS op code
+	Origin      common.Address // always equivalent to vm.ORIGIN op code
+	EVMSemantic CallerAndSelf
+	Raw         *CallerAndSelf
+}
+
+type CallerAndSelf struct {
+	Caller common.Address
+	Self   common.Address
 }
