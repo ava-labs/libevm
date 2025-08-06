@@ -25,6 +25,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/options"
 	"github.com/ava-labs/libevm/params"
@@ -101,6 +102,21 @@ func (e *environment) BlockHeader() (types.Header, error) {
 		return types.Header{}, fmt.Errorf("nil %T in current %T", hdr, e.evm.Context)
 	}
 	return *hdr, nil
+}
+
+func reentrancyGuardSlot(key []byte) common.Hash {
+	return crypto.Keccak256Hash([]byte("libevm-reentrancy-guard"), key)
+}
+
+func (e *environment) ReentrancyGuard(key []byte) error {
+	self := e.Addresses().Self
+	slot := reentrancyGuardSlot(key)
+
+	if e.evm.StateDB.GetTransientState(self, slot) != (common.Hash{}) {
+		return ErrExecutionReverted
+	}
+	e.evm.StateDB.SetTransientState(e.Addresses().Self, slot, common.Hash{1})
+	return nil
 }
 
 func (e *environment) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {

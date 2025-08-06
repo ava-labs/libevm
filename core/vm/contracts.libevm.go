@@ -190,6 +190,9 @@ type PrecompileEnvironment interface {
 	// Invalidate invalidates the transaction calling this precompile.
 	InvalidateExecution(error)
 
+	// ReentrancyGuard ...
+	ReentrancyGuard(key []byte) error
+
 	// Call is equivalent to [EVM.Call] except that the `caller` argument is
 	// removed and automatically determined according to the type of call that
 	// invoked the precompile.
