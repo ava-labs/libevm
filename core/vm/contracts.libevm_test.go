@@ -217,9 +217,9 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	state.SetBalance(caller, new(uint256.Int).Not(uint256.NewInt(0)))
 	evm.Origin = eoa
 
-	// By definition, the raw caller and self are the same, regardless of the
-	// incoming call type.
-	rawAddresses := &libevm.CallerAndSelf{
+	// By definition, the raw caller and self are the same for every test case,
+	// regardless of the incoming call type.
+	rawAddresses := libevm.CallerAndSelf{
 		Caller: caller,
 		Self:   precompile,
 	}
@@ -240,12 +240,9 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				return evm.Call(callerContract, precompile, input, gasLimit, transferValue)
 			},
 			wantAddresses: &libevm.AddressContext{
-				Origin: eoa,
-				EVMSemantic: libevm.CallerAndSelf{
-					Caller: caller,
-					Self:   precompile,
-				},
-				Raw: rawAddresses,
+				Origin:      eoa,
+				EVMSemantic: rawAddresses,
+				Raw:         &rawAddresses,
 			},
 			wantReadOnly:      false,
 			wantTransferValue: transferValue,
@@ -262,7 +259,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 					Caller: caller,
 					Self:   caller,
 				},
-				Raw: rawAddresses,
+				Raw: &rawAddresses,
 			},
 			wantReadOnly:      false,
 			wantTransferValue: transferValue,
@@ -279,7 +276,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 					Caller: eoa, // inherited from caller
 					Self:   caller,
 				},
-				Raw: rawAddresses,
+				Raw: &rawAddresses,
 			},
 			wantReadOnly:      false,
 			wantTransferValue: uint256.NewInt(0),
@@ -291,12 +288,9 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				return evm.StaticCall(callerContract, precompile, input, gasLimit)
 			},
 			wantAddresses: &libevm.AddressContext{
-				Origin: eoa,
-				EVMSemantic: libevm.CallerAndSelf{
-					Caller: caller,
-					Self:   precompile,
-				},
-				Raw: rawAddresses,
+				Origin:      eoa,
+				EVMSemantic: rawAddresses,
+				Raw:         &rawAddresses,
 			},
 			wantReadOnly:      true,
 			wantTransferValue: uint256.NewInt(0),
@@ -824,7 +818,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.incomingCallType.String(), func(t *testing.T) {
-			// From the perspective of `dest` after a CALL.
+			// From the perspective of `dest` after a CALL from `sut`.
 			tt.want.Addresses.Raw = &tt.want.Addresses.EVMSemantic
 
 			t.Logf("calldata = %q", tt.eoaTxCallData)
