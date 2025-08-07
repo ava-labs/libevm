@@ -101,6 +101,12 @@ func (t CallType) isValid() bool {
 	}
 }
 
+// readOnly returns whether the CallType induces a read-only state if not
+// already in one.
+func (t CallType) readOnly() bool {
+	return t == StaticCall
+}
+
 // String returns a human-readable representation of the CallType.
 func (t CallType) String() string {
 	if t.isValid() {
@@ -134,7 +140,7 @@ func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, e
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
 
-	if env.callType == StaticCall && !in.readOnly {
+	if env.callType.readOnly() && !in.readOnly {
 		in.readOnly = true
 		defer func() { in.readOnly = false }()
 	}
