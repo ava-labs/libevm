@@ -37,6 +37,8 @@ type environment struct {
 	evm      *EVM
 	self     *Contract
 	callType CallType
+
+	rawSelf, rawCaller common.Address
 }
 
 func (e *environment) Gas() uint64            { return e.self.Gas }
@@ -80,8 +82,14 @@ func (e *environment) ReadOnly() bool {
 func (e *environment) Addresses() *libevm.AddressContext {
 	return &libevm.AddressContext{
 		Origin: e.evm.Origin,
-		Caller: e.self.CallerAddress,
-		Self:   e.self.Address(),
+		EVMSemantic: libevm.CallerAndSelf{
+			Caller: e.self.CallerAddress,
+			Self:   e.self.Address(),
+		},
+		Raw: &libevm.CallerAndSelf{
+			Caller: e.rawCaller,
+			Self:   e.rawSelf,
+		},
 	}
 }
 
@@ -109,13 +117,13 @@ func reentrancyGuardSlot(key []byte) common.Hash {
 }
 
 func (e *environment) ReentrancyGuard(key []byte) error {
-	self := e.Addresses().Self
+	self := e.Addresses().EVMSemantic.Self
 	slot := reentrancyGuardSlot(key)
 
 	if e.evm.StateDB.GetTransientState(self, slot) != (common.Hash{}) {
 		return ErrExecutionReverted
 	}
-	e.evm.StateDB.SetTransientState(e.Addresses().Self, slot, common.Hash{1})
+	e.evm.StateDB.SetTransientState(self, slot, common.Hash{1})
 	return nil
 }
 
