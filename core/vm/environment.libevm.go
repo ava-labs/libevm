@@ -36,6 +36,8 @@ type environment struct {
 	evm      *EVM
 	self     *Contract
 	callType CallType
+
+	rawSelf, rawCaller common.Address
 }
 
 func (e *environment) Gas() uint64            { return e.self.Gas }
@@ -67,8 +69,14 @@ func (e *environment) ReadOnly() bool {
 func (e *environment) Addresses() *libevm.AddressContext {
 	return &libevm.AddressContext{
 		Origin: e.evm.Origin,
-		Caller: e.self.CallerAddress,
-		Self:   e.self.Address(),
+		EVMSemantic: libevm.CallerAndSelf{
+			Caller: e.self.CallerAddress,
+			Self:   e.self.Address(),
+		},
+		Raw: &libevm.CallerAndSelf{
+			Caller: e.rawCaller,
+			Self:   e.rawSelf,
+		},
 	}
 }
 
