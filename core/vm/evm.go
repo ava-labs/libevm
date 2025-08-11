@@ -235,8 +235,17 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 
 	if isPrecompile {
-		args := &evmCallArgs{evm, Call, caller, addr, input, gas, value}
-		ret, gas, err = args.RunPrecompiledContract(p, input, gas)
+		addrCopy := addr
+		env := &environment{
+			evm:          evm,
+			callType:     Call,
+			rawSelf:      addrCopy,
+			rawCaller:    caller.Address(),
+			gasRemaining: gas,
+			self:         NewContract(caller, AccountRef(addrCopy), value, gas),
+			readOnlyArg:  false,
+		}
+		ret, gas, err = env.RunPrecompiledContract(p, input, gas)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
@@ -287,7 +296,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, ErrInsufficientBalance
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
@@ -299,8 +308,17 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		args := &evmCallArgs{evm, CallCode, caller, addr, input, gas, value}
-		ret, gas, err = args.RunPrecompiledContract(p, input, gas)
+		addrCopy := addr
+		env := &environment{
+			evm:          evm,
+			callType:     Call,
+			rawSelf:      addrCopy,
+			rawCaller:    caller.Address(),
+			gasRemaining: gas,
+			self:         NewContract(caller, AccountRef(addrCopy), value, gas),
+			readOnlyArg:  false,
+		}
+		ret, gas, err = env.RunPrecompiledContract(p, input, gas)
 	} else {
 		addrCopy := addr
 		// Initialise a new contract and set the code that is to be used by the EVM.
@@ -329,7 +347,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
@@ -345,8 +363,16 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		args := &evmCallArgs{evm, DelegateCall, caller, addr, input, gas, nil}
-		ret, gas, err = args.RunPrecompiledContract(p, input, gas)
+		env := &environment{
+			evm:          evm,
+			callType:     DelegateCall,
+			rawSelf:      addr,
+			rawCaller:    caller.Address(),
+			gasRemaining: gas,
+			self:         NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate(),
+			readOnlyArg:  false,
+		}
+		ret, gas, err = env.RunPrecompiledContract(p, input, gas)
 	} else {
 		addrCopy := addr
 		// Initialise a new contract and make initialise the delegate values
@@ -378,7 +404,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// after all empty accounts were deleted, so this is not required. However, if we omit this,
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
-	var snapshot = evm.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
@@ -395,8 +421,17 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	}
 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		args := &evmCallArgs{evm, StaticCall, caller, addr, input, gas, nil}
-		ret, gas, err = args.RunPrecompiledContract(p, input, gas)
+		addrCopy := addr
+		env := &environment{
+			evm:          evm,
+			callType:     StaticCall,
+			rawSelf:      addrCopy,
+			rawCaller:    caller.Address(),
+			gasRemaining: gas,
+			self:         NewContract(caller, AccountRef(addrCopy), new(uint256.Int), gas),
+			readOnlyArg:  true,
+		}
+		ret, gas, err = env.RunPrecompiledContract(p, input, gas)
 	} else {
 		// At this point, we use a copy of address. If we don't, the go compiler will
 		// leak the 'contract' to the outer scope, and make allocation for 'contract'
