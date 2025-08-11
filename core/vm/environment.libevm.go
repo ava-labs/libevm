@@ -33,9 +33,11 @@ import (
 var _ PrecompileEnvironment = (*environment)(nil)
 
 type environment struct {
-	evm      *EVM
-	self     *Contract
-	callType CallType
+	evm          *EVM
+	self         *Contract
+	callType     CallType
+	readOnlyArg  bool // readOnlyArg is different than interpreter.readOnly
+	gasRemaining uint64
 
 	rawSelf, rawCaller common.Address
 }
@@ -43,6 +45,7 @@ type environment struct {
 func (e *environment) Gas() uint64            { return e.self.Gas }
 func (e *environment) UseGas(gas uint64) bool { return e.self.UseGas(gas) }
 func (e *environment) Value() *uint256.Int    { return new(uint256.Int).Set(e.self.Value()) }
+func (e *environment) GasRemaining() uint64   { return e.gasRemaining }
 
 func (e *environment) ChainConfig() *params.ChainConfig  { return e.evm.chainConfig }
 func (e *environment) Rules() params.Rules               { return e.evm.chainRules }

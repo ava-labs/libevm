@@ -57,31 +57,6 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 	return active
 }
 
-// evmCallArgs mirrors the parameters of the [EVM] methods Call(), CallCode(),
-// DelegateCall() and StaticCall(). Its fields are identical to those of the
-// parameters, prepended with the receiver name and call type. As
-// {Delegate,Static}Call don't accept a value, they MAY set the respective field
-// to nil as it will be ignored.
-//
-// Instantiation can be achieved by merely copying the parameter names, in
-// order, which is trivially achieved with AST manipulation:
-//
-//	func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte, gas uint64) ... {
-//	    ...
-//	    args := &evmCallArgs{evm, staticCall, caller, addr, input, gas, nil /*value*/}
-type evmCallArgs struct {
-	evm      *EVM
-	callType CallType
-
-	// args:start
-	caller       ContractRef
-	addr         common.Address
-	input        []byte
-	gasRemaining uint64
-	value        *uint256.Int
-	// args:end
-}
-
 // A CallType refers to a *CALL* [OpCode] / respective method on [EVM].
 type CallType OpCode
 
@@ -125,13 +100,12 @@ func (t CallType) OpCode() OpCode {
 
 // run runs the [PrecompiledContract], differentiating between stateful and
 // regular types, updating `args.gasRemaining` in the stateful case.
-func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, err error) {
+func (env *environment) run(p PrecompiledContract, input []byte) (ret []byte, err error) {
 	sp, ok := p.(statefulPrecompile)
 	if !ok {
 		return p.Run(input)
 	}
 
-	env := args.env()
 	// Depth and read-only setting are handled by [EVMInterpreter.Run],
 	// which isn't used for precompiles, so we need to do it ourselves to
 	// maintain the expected invariants.
@@ -140,13 +114,13 @@ func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, e
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
 
-	if env.callType.readOnly() && !in.readOnly {
+	if env.readOnlyArg && !in.readOnly {
 		in.readOnly = true
 		defer func() { in.readOnly = false }()
 	}
 
 	ret, err = sp(env, input)
-	args.gasRemaining = env.Gas()
+	env.gasRemaining = env.Gas()
 	return ret, err
 }
 
@@ -213,41 +187,6 @@ type PrecompileEnvironment interface {
 	// removed and automatically determined according to the type of call that
 	// invoked the precompile.
 	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...CallOption) (ret []byte, _ error)
-}
-
-func (args *evmCallArgs) env() *environment {
-	var (
-		self  common.Address
-		value = args.value
-	)
-	switch args.callType {
-	case StaticCall:
-		value = new(uint256.Int)
-		fallthrough
-	case Call:
-		self = args.addr
-
-	case DelegateCall:
-		value = nil
-		fallthrough
-	case CallCode:
-		self = args.caller.Address()
-	}
-
-	// This is equivalent to the `contract` variables created by evm.*Call*()
-	// methods, for non precompiles, to pass to [EVMInterpreter.Run].
-	contract := NewContract(args.caller, AccountRef(self), value, args.gasRemaining)
-	if args.callType == DelegateCall {
-		contract = contract.AsDelegate()
-	}
-
-	return &environment{
-		evm:       args.evm,
-		self:      contract,
-		callType:  args.callType,
-		rawCaller: args.caller.Address(),
-		rawSelf:   args.addr,
-	}
 }
 
 var (
