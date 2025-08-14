@@ -1,0 +1,53 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "graphql",
+    srcs = [
+        "graphiql.go",
+        "graphql.go",
+        "schema.go",
+        "service.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/graphql",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//:libevm",
+        "//common",
+        "//common/hexutil",
+        "//common/math",
+        "//consensus/misc/eip1559",
+        "//core/state",
+        "//core/types",
+        "//eth/filters",
+        "//graphql/internal/graphiql",
+        "//internal/ethapi",
+        "//log",
+        "//node",
+        "//rlp",
+        "//rpc",
+        "@com_github_graph_gophers_graphql_go//:graphql-go",
+        "@com_github_graph_gophers_graphql_go//errors",
+    ],
+)
+
+go_test(
+    name = "graphql_test",
+    srcs = ["graphql_test.go"],
+    embed = [":graphql"],
+    deps = [
+        "//common",
+        "//consensus",
+        "//consensus/beacon",
+        "//consensus/ethash",
+        "//core",
+        "//core/types",
+        "//core/vm",
+        "//crypto",
+        "//eth",
+        "//eth/ethconfig",
+        "//eth/filters",
+        "//node",
+        "//params",
+        "@com_github_stretchr_testify//assert",
+    ],
+)
