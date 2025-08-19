@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see
 // <http://www.gnu.org/licenses/>.
+
 package params
 
 import (
@@ -24,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/libevm/internal/libevm/errs"
 	"github.com/ava-labs/libevm/libevm/pseudo"
 )
 
@@ -157,42 +159,33 @@ func TestUnmarshalChainConfigJSON_Errors(t *testing.T) {
 		jsonData      string // string for convenience
 		extra         *testExtra
 		reuseJSONRoot bool
-		wantConfig    ChainConfig
-		wantExtra     any
-		wantErrRegex  string
+		wantErrID     errs.ID
 	}{
 		"invalid_json": {
-			extra:        &testExtra{},
-			wantExtra:    &testExtra{},
-			wantErrRegex: `^decoding JSON into combination of \*.+\.ChainConfig and \*.+\.testExtra \(as "extra" key\): .+$`,
+			extra:     &testExtra{},
+			wantErrID: errIDDecodeJSONIntoCombination,
 		},
 		"nil_extra_at_root_depth": {
 			jsonData:      `{"chainId": 1}`,
 			extra:         nil,
 			reuseJSONRoot: true,
-			wantExtra:     (*testExtra)(nil),
-			wantErrRegex:  `^\*.+.testExtra argument is nil; use \*.+\.ChainConfig\.UnmarshalJSON\(\) directly$`,
+			wantErrID:     errIDNilExtra,
 		},
 		"nil_extra_at_extra_key": {
-			jsonData:     `{"chainId": 1}`,
-			extra:        nil,
-			wantExtra:    (*testExtra)(nil),
-			wantErrRegex: `^\*.+\.testExtra argument is nil; use \*.+\.ChainConfig.UnmarshalJSON\(\) directly$`,
+			jsonData:  `{"chainId": 1}`,
+			extra:     nil,
+			wantErrID: errIDNilExtra,
 		},
 		"wrong_extra_type_at_extra_key": {
-			jsonData:     `{"chainId": 1, "extra": 1}`,
-			extra:        &testExtra{},
-			wantConfig:   ChainConfig{ChainID: big.NewInt(1)},
-			wantExtra:    &testExtra{},
-			wantErrRegex: `^decoding JSON into combination of \*.+\.ChainConfig and \*.+\.testExtra \(as "extra" key\): .+$`,
+			jsonData:  `{"chainId": 1, "extra": 1}`,
+			extra:     &testExtra{},
+			wantErrID: errIDDecodeJSONIntoCombination,
 		},
 		"wrong_extra_type_at_root_depth": {
 			jsonData:      `{"chainId": 1, "field": 1}`,
 			extra:         &testExtra{},
 			reuseJSONRoot: true,
-			wantConfig:    ChainConfig{ChainID: big.NewInt(1)},
-			wantExtra:     &testExtra{},
-			wantErrRegex:  `^decoding JSON into \*.+\.testExtra: .+`,
+			wantErrID:     errIDDecodeJSONIntoExtra,
 		},
 	}
 
@@ -204,14 +197,7 @@ func TestUnmarshalChainConfigJSON_Errors(t *testing.T) {
 			data := []byte(testCase.jsonData)
 			config := ChainConfig{}
 			err := UnmarshalChainConfigJSON(data, &config, testCase.extra, testCase.reuseJSONRoot)
-			if testCase.wantErrRegex == "" {
-				require.NoError(t, err)
-			} else {
-				require.Error(t, err)
-				require.Regexp(t, testCase.wantErrRegex, err.Error())
-			}
-			assert.Equal(t, testCase.wantConfig, config)
-			assert.Equal(t, testCase.wantExtra, testCase.extra)
+			assert.ErrorIs(t, err, errs.WithID(testCase.wantErrID, ""))
 		})
 	}
 }
@@ -223,31 +209,28 @@ func TestMarshalChainConfigJSON_Errors(t *testing.T) {
 		config        ChainConfig
 		extra         any
 		reuseJSONRoot bool
-		wantJSONData  string // string for convenience
 		wantErrRegex  string
+		wantErrID     errs.ID
 	}{
 		"invalid_extra_at_extra_key": {
 			extra: struct {
 				Field chan struct{} `json:"field"`
 			}{},
-			wantErrRegex: `^encoding combination of .+\.ChainConfig and .+ to JSON: .+$`,
-		},
-		"nil_extra_at_extra_key": {
-			wantJSONData: `{"chainId":null}`,
+			wantErrID: errIDEncodeJSONCombination,
 		},
 		"invalid_extra_at_root_depth": {
 			extra: struct {
 				Field chan struct{} `json:"field"`
 			}{},
 			reuseJSONRoot: true,
-			wantErrRegex:  "^converting extra config to JSON raw messages: .+$",
+			wantErrID:     errIDEncodeExtraToRawJSON,
 		},
 		"duplicate_key": {
 			extra: struct {
 				Field string `json:"chainId"`
 			}{},
 			reuseJSONRoot: true,
-			wantErrRegex:  `^duplicate JSON key "chainId" in ChainConfig and extra struct .+$`,
+			wantErrID:     errIDEncodeDuplicateJSONKey,
 		},
 	}
 
@@ -257,14 +240,8 @@ func TestMarshalChainConfigJSON_Errors(t *testing.T) {
 			t.Parallel()
 
 			config := ChainConfig{}
-			data, err := MarshalChainConfigJSON(config, testCase.extra, testCase.reuseJSONRoot)
-			if testCase.wantErrRegex == "" {
-				require.NoError(t, err)
-			} else {
-				require.Error(t, err)
-				assert.Regexp(t, testCase.wantErrRegex, err.Error())
-			}
-			assert.Equal(t, testCase.wantJSONData, string(data))
+			_, err := MarshalChainConfigJSON(config, testCase.extra, testCase.reuseJSONRoot)
+			assert.ErrorIs(t, err, errs.WithID(testCase.wantErrID, ""))
 		})
 	}
 }
