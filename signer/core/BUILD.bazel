@@ -1,0 +1,62 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "core",
+    srcs = [
+        "api.go",
+        "auditlog.go",
+        "cliui.go",
+        "gnosis_safe.go",
+        "signed_data.go",
+        "stdioui.go",
+        "uiapi.go",
+        "validation.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/signer/core",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//accounts",
+        "//accounts/keystore",
+        "//accounts/scwallet",
+        "//accounts/usbwallet",
+        "//common",
+        "//common/hexutil",
+        "//common/math",
+        "//consensus/clique",
+        "//console/prompt",
+        "//core/types",
+        "//crypto",
+        "//internal/ethapi",
+        "//log",
+        "//rlp",
+        "//rpc",
+        "//signer/core/apitypes",
+        "//signer/storage",
+        "@org_golang_x_exp//slog",
+    ],
+)
+
+go_test(
+    name = "core_test",
+    srcs = [
+        "api_test.go",
+        "signed_data_test.go",
+        "validation_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":core"],
+    deps = [
+        "//accounts",
+        "//accounts/keystore",
+        "//common",
+        "//common/hexutil",
+        "//common/math",
+        "//core/types",
+        "//crypto",
+        "//internal/ethapi",
+        "//rlp",
+        "//signer/core/apitypes",
+        "//signer/fourbyte",
+        "//signer/storage",
+    ],
+)
