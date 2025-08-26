@@ -57,6 +57,13 @@ var (
 		{uint64(0x1122334455667788), "0x1122334455667788"},
 	}
 
+	encodeUint16Tests = []marshalTest{
+		{uint16(0), "0x0"},
+		{uint16(1), "0x1"},
+		{uint16(0xff), "0xff"},
+		{uint16(0x1122), "0x1122"},
+	}
+
 	encodeUintTests = []marshalTest{
 		{uint(0), "0x0"},
 		{uint(1), "0x1"},
@@ -183,6 +190,15 @@ func TestDecodeBig(t *testing.T) {
 func TestEncodeUint64(t *testing.T) {
 	for _, test := range encodeUint64Tests {
 		enc := EncodeUint64(test.input.(uint64))
+		if enc != test.want {
+			t.Errorf("input %x: wrong encoding %s", test.input, enc)
+		}
+	}
+}
+
+func TestEncodeUint16(t *testing.T) {
+	for _, test := range encodeUint16Tests {
+		enc := EncodeUint16(test.input.(uint16))
 		if enc != test.want {
 			t.Errorf("input %x: wrong encoding %s", test.input, enc)
 		}
