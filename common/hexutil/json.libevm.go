@@ -17,7 +17,6 @@
 package hexutil
 
 import (
-	"fmt"
 	"reflect"
 	"strconv"
 )
@@ -60,7 +59,7 @@ func (b *Uint16) UnmarshalText(input []byte) error {
 			return ErrSyntax
 		}
 		dec *= 16
-		dec += uint16(nib)
+		dec += uint16(nib) //nolint:gosec // G115 won't overflow uint16 as decodeNibble uses 4 bits
 	}
 
 	*b = Uint16(dec)
@@ -70,21 +69,4 @@ func (b *Uint16) UnmarshalText(input []byte) error {
 // String returns the hex encoding of b.
 func (b Uint16) String() string {
 	return EncodeUint16(uint16(b))
-}
-
-// ImplementsGraphQLType returns true if Uint16 implements the provided GraphQL type.
-func (b Uint16) ImplementsGraphQLType(name string) bool { return name == "Int" }
-
-// UnmarshalGraphQL unmarshals the provided GraphQL query data.
-func (b *Uint16) UnmarshalGraphQL(input interface{}) error {
-	var err error
-	switch input := input.(type) {
-	case string:
-		return b.UnmarshalText([]byte(input))
-	case int32:
-		*b = Uint16(input)
-	default:
-		err = fmt.Errorf("unexpected type %T for Int", input)
-	}
-	return err
 }

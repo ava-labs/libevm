@@ -47,7 +47,11 @@ var (
 
 func TestEncodeUint16(t *testing.T) {
 	for _, test := range encodeUint16Tests {
-		enc := EncodeUint16(test.input.(uint16))
+		input, ok := test.input.(uint16)
+		if !ok {
+			t.Errorf("input %v: not a uint16", test.input)
+		}
+		enc := EncodeUint16(input)
 		if enc != test.want {
 			t.Errorf("input %x: wrong encoding %s", test.input, enc)
 		}
@@ -60,8 +64,12 @@ func TestDecodeUint16(t *testing.T) {
 		if !checkError(t, test.input, err, test.wantErr) {
 			continue
 		}
-		if dec != test.want.(uint16) {
-			t.Errorf("input %s: value mismatch: got %x, want %x", test.input, dec, test.want)
+		want, ok := test.want.(uint16)
+		if !ok {
+			t.Errorf("want %v: not a uint16", test.want)
+		}
+		if dec != want {
+			t.Errorf("input %s: value mismatch: got %x, want %x", test.input, dec, want)
 			continue
 		}
 	}

@@ -51,8 +51,12 @@ func TestUnmarshalUint16(t *testing.T) {
 		if !checkError(t, test.input, err, test.wantErr) {
 			continue
 		}
-		if uint16(v) != test.want.(uint16) {
-			t.Errorf("input %s: value mismatch: got %d, want %d", test.input, v, test.want)
+		want, ok := test.want.(uint16)
+		if !ok {
+			t.Errorf("want %v: not a uint16", test.want)
+		}
+		if uint16(v) != want {
+			t.Errorf("input %s: value mismatch: got %d, want %d", test.input, v, want)
 			continue
 		}
 	}
@@ -62,7 +66,10 @@ func BenchmarkUnmarshalUint16(b *testing.B) {
 	input := []byte(`"0x1234"`)
 	for i := 0; i < b.N; i++ {
 		var v Uint16
-		v.UnmarshalJSON(input)
+		err := v.UnmarshalJSON(input)
+		if err != nil {
+			b.Errorf("error unmarshalling: %v", err)
+		}
 	}
 }
 

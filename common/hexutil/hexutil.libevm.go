@@ -33,7 +33,7 @@ func DecodeUint16(input string) (uint16, error) {
 			return 0, ErrUint16Range
 		}
 	}
-	return uint16(dec), err
+	return uint16(dec), err //nolint:gosec // G115 won't overflow uint16 as ParseUint uses 16 bits
 }
 
 // EncodeUint16 encodes i as a hex string with 0x prefix.
