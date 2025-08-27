@@ -57,13 +57,6 @@ var (
 		{uint64(0x1122334455667788), "0x1122334455667788"},
 	}
 
-	encodeUint16Tests = []marshalTest{
-		{uint16(0), "0x0"},
-		{uint16(1), "0x1"},
-		{uint16(0xff), "0xff"},
-		{uint16(0x1122), "0x1122"},
-	}
-
 	encodeUintTests = []marshalTest{
 		{uint(0), "0x0"},
 		{uint(1), "0x1"},
@@ -141,24 +134,6 @@ var (
 		{input: `0xbbb`, want: uint64(0xbbb)},
 		{input: `0xffffffffffffffff`, want: uint64(0xffffffffffffffff)},
 	}
-
-	decodeUint16Tests = []unmarshalTest{
-		// invalid
-		{input: `0`, wantErr: ErrMissingPrefix},
-		{input: `0x`, wantErr: ErrEmptyNumber},
-		{input: `0x01`, wantErr: ErrLeadingZero},
-		{input: `0xfffff`, wantErr: ErrUint16Range},
-		{input: `0xz1`, wantErr: ErrSyntax},
-		// valid
-		{input: `0x0`, want: uint16(0)},
-		{input: `0x2`, want: uint16(0x2)},
-		{input: `0x2F2`, want: uint16(0x2f2)},
-		{input: `0X2F2`, want: uint16(0x2f2)},
-		{input: `0xff`, want: uint16(0xff)},
-		{input: `0x12af`, want: uint16(0x12af)},
-		{input: `0xbbb`, want: uint16(0xbbb)},
-		{input: `0xffff`, want: uint16(0xffff)},
-	}
 )
 
 func TestEncode(t *testing.T) {
@@ -214,15 +189,6 @@ func TestEncodeUint64(t *testing.T) {
 	}
 }
 
-func TestEncodeUint16(t *testing.T) {
-	for _, test := range encodeUint16Tests {
-		enc := EncodeUint16(test.input.(uint16))
-		if enc != test.want {
-			t.Errorf("input %x: wrong encoding %s", test.input, enc)
-		}
-	}
-}
-
 func TestDecodeUint64(t *testing.T) {
 	for _, test := range decodeUint64Tests {
 		dec, err := DecodeUint64(test.input)
@@ -230,19 +196,6 @@ func TestDecodeUint64(t *testing.T) {
 			continue
 		}
 		if dec != test.want.(uint64) {
-			t.Errorf("input %s: value mismatch: got %x, want %x", test.input, dec, test.want)
-			continue
-		}
-	}
-}
-
-func TestDecodeUint16(t *testing.T) {
-	for _, test := range decodeUint16Tests {
-		dec, err := DecodeUint16(test.input)
-		if !checkError(t, test.input, err, test.wantErr) {
-			continue
-		}
-		if dec != test.want.(uint16) {
 			t.Errorf("input %s: value mismatch: got %x, want %x", test.input, dec, test.want)
 			continue
 		}

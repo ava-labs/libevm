@@ -47,7 +47,6 @@ var (
 	ErrOddLength     = &decError{"hex string of odd length"}
 	ErrEmptyNumber   = &decError{"hex string \"0x\""}
 	ErrLeadingZero   = &decError{"hex number with leading zero digits"}
-	ErrUint16Range   = &decError{"hex number > 16 bits"}
 	ErrUint64Range   = &decError{"hex number > 64 bits"}
 	ErrUintRange     = &decError{fmt.Sprintf("hex number > %d bits", uintBits)}
 	ErrBig256Range   = &decError{"hex number > 256 bits"}
@@ -112,35 +111,11 @@ func MustDecodeUint64(input string) uint64 {
 	return dec
 }
 
-// DecodeUint16 decodes a hex string with 0x prefix as a quantity.
-func DecodeUint16(input string) (uint16, error) {
-	raw, err := checkNumber(input)
-	if err != nil {
-		return 0, err
-	}
-	dec, err := strconv.ParseUint(raw, 16, 16)
-	if err != nil {
-		err = mapError(err)
-		if err == ErrUint64Range {
-			return 0, ErrUint16Range
-		}
-	}
-	return uint16(dec), err
-}
-
-// MustDecodeUint16 decodes a hex string with 0x prefix as a quantity.
 // EncodeUint64 encodes i as a hex string with 0x prefix.
 func EncodeUint64(i uint64) string {
 	enc := make([]byte, 2, 10)
 	copy(enc, "0x")
 	return string(strconv.AppendUint(enc, i, 16))
-}
-
-// EncodeUint16 encodes i as a hex string with 0x prefix.
-func EncodeUint16(i uint16) string {
-	enc := make([]byte, 2, 6)
-	copy(enc, "0x")
-	return string(strconv.AppendUint(enc, uint64(i), 16))
 }
 
 var bigWordNibbles int
