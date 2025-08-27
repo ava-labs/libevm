@@ -112,6 +112,23 @@ func MustDecodeUint64(input string) uint64 {
 	return dec
 }
 
+// DecodeUint16 decodes a hex string with 0x prefix as a quantity.
+func DecodeUint16(input string) (uint16, error) {
+	raw, err := checkNumber(input)
+	if err != nil {
+		return 0, err
+	}
+	dec, err := strconv.ParseUint(raw, 16, 16)
+	if err != nil {
+		err = mapError(err)
+		if err == ErrUint64Range {
+			return 0, ErrUint16Range
+		}
+	}
+	return uint16(dec), err
+}
+
+// MustDecodeUint16 decodes a hex string with 0x prefix as a quantity.
 // EncodeUint64 encodes i as a hex string with 0x prefix.
 func EncodeUint64(i uint64) string {
 	enc := make([]byte, 2, 10)

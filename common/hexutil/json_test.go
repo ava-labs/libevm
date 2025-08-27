@@ -408,7 +408,7 @@ var unmarshalUint16Tests = []unmarshalTest{
 	{input: `"0x01"`, wantErr: wrapTypeError(ErrLeadingZero, uint16T)},
 	{input: `"0x10000"`, wantErr: wrapTypeError(ErrUint16Range, uint16T)},
 	{input: `"0xx"`, wantErr: wrapTypeError(ErrSyntax, uint16T)},
-	{input: `"0x1zz01"`, wantErr: wrapTypeError(ErrSyntax, uint16T)},
+	{input: `"0xz1"`, wantErr: wrapTypeError(ErrSyntax, uint16T)},
 
 	// valid encoding
 	{input: `""`, want: uint16(0)},
