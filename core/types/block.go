@@ -97,6 +97,8 @@ type Header struct {
 	// ParentBeaconRoot was added by EIP-4788 and is ignored in legacy headers.
 	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
 
+	ExperimentalUint16 *uint16 `json:"experimentalUint16" rlp:"optional"`
+
 	extra *pseudo.Type // See RegisterExtras()
 }
 
