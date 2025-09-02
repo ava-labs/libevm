@@ -20,13 +20,28 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"testing"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/stretchr/testify/require"
+
 	// To ensure that all methods are available to importing packages, this test
 	// is defined in package `rawdb_test` instead of `rawdb`.
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
 )
+
+func TestSkipFreezers(t *testing.T) {
+	require := require.New(t)
+	db := rawdb.NewMemoryDatabase()
+
+	var (
+		keyPrefix []byte
+		keyStart  []byte
+	)
+
+	require.NoError(rawdb.InspectDatabase(db, keyPrefix, keyStart, rawdb.WithSkipFreezers()))
+}
 
 // ExampleDatabaseStat demonstrates the method signatures of DatabaseStat, which
 // exposes an otherwise unexported type that won't have its methods documented.
