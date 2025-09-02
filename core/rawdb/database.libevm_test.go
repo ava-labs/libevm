@@ -22,9 +22,9 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/libevm/common"
 	// To ensure that all methods are available to importing packages, this test
 	// is defined in package `rawdb_test` instead of `rawdb`.
 	"github.com/ava-labs/libevm/core/rawdb"
