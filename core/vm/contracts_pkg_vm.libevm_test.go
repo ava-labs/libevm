@@ -29,5 +29,5 @@ func TestExportedP256Verify(t *testing.T) {
 		delete(allPrecompiles, addr)
 	})
 
-	testJson("p256verify", addr.Hex(), t)
+	testJson("p256Verify", addr.Hex(), t)
 }
