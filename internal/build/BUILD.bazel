@@ -1,0 +1,21 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "build",
+    srcs = [
+        "archive.go",
+        "azure.go",
+        "download.go",
+        "env.go",
+        "gotool.go",
+        "pgp.go",
+        "util.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/internal/build",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@com_github_azure_azure_sdk_for_go_sdk_storage_azblob//:azblob",
+        "@com_github_azure_azure_sdk_for_go_sdk_storage_azblob//container",
+        "@org_golang_x_crypto//openpgp",
+    ],
+)
