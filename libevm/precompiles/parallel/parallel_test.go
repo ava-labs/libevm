@@ -248,7 +248,7 @@ func TestIntegration(t *testing.T) {
 		{'o', 't', 'h', 'e', 'r'},
 		handler.addr,
 	} {
-		ui := uint(i) //nolint:gosec // Known value that won't overflow
+		ui := uint(i)
 		data := []byte("hello, world")
 
 		// Having all arguments `false` is equivalent to what

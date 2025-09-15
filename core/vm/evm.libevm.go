@@ -17,10 +17,11 @@
 package vm
 
 import (
+	"github.com/holiman/uint256"
+
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/log"
-	"github.com/holiman/uint256"
 )
 
 // canCreateContract is a convenience wrapper for calling the
@@ -63,6 +64,16 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, err
 	}
 	return evm.call(caller, addr, input, gas, value)
+}
+
+// create wraps the original geth method of the same name, now name
+// [EVM.createCommon], first spending preprocessing gas.
+func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
+	gas, err := evm.spendPreprocessingGas(gas)
+	if err != nil {
+		return nil, common.Address{}, gas, err
+	}
+	return evm.createCommon(caller, codeAndHash, gas, value, address, typ)
 }
 
 func (evm *EVM) spendPreprocessingGas(gas uint64) (uint64, error) {

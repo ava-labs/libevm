@@ -46,7 +46,7 @@ type Hooks interface {
 
 // A Preprocessor performs computation on a transaction before the
 // [EVMInterpreter] is invoked and reports its gas charge for spending at the
-// beginning of [EVM.Call].
+// beginning of [EVM.Call] or [EVM.Create].
 type Preprocessor interface {
 	PreprocessingGasCharge(tx common.Hash) uint64
 }
