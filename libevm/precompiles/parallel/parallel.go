@@ -22,8 +22,10 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
 )
 
 // A Handler is responsible for processing [types.Transactions] in an
@@ -47,12 +49,18 @@ type Processor[R any] struct {
 	handler Handler[R]
 	workers sync.WaitGroup
 	work    chan *job
-	results [](chan *R)
+	results [](chan result[R])
+	txGas   map[common.Hash]uint64
 }
 
 type job struct {
 	index int
 	tx    *types.Transaction
+}
+
+type result[T any] struct {
+	tx  common.Hash
+	val *T
 }
 
 // New constructs a new [Processor] with the specified number of concurrent
@@ -62,6 +70,7 @@ func New[R any](h Handler[R], workers int) *Processor[R] {
 	p := &Processor[R]{
 		handler: h,
 		work:    make(chan *job),
+		txGas:   make(map[common.Hash]uint64),
 	}
 
 	workers = max(workers, 1)
@@ -81,7 +90,10 @@ func (p *Processor[R]) worker() {
 		}
 
 		r := p.handler.Process(w.index, w.tx)
-		p.results[w.index] <- &r
+		p.results[w.index] <- result[R]{
+			tx:  w.tx.Hash(),
+			val: &r,
+		}
 	}
 }
 
@@ -101,7 +113,7 @@ func (p *Processor[R]) StartBlock(b *types.Block) error {
 	// We can reuse the channels already in the results slice because they're
 	// emptied by [Processor.FinishBlock].
 	for i, n := len(p.results), len(txs); i < n; i++ {
-		p.results = append(p.results, make(chan *R, 1))
+		p.results = append(p.results, make(chan result[R], 1))
 	}
 
 	for i, tx := range txs {
@@ -116,7 +128,10 @@ func (p *Processor[R]) StartBlock(b *types.Block) error {
 			})
 
 		default:
-			p.results[i] <- nil
+			p.results[i] <- result[R]{
+				tx:  tx.Hash(),
+				val: nil,
+			}
 		}
 	}
 
@@ -138,7 +153,7 @@ func (p *Processor[R]) FinishBlock(b *types.Block) {
 		// Every result channel is guaranteed to have some value in its buffer
 		// because [Processor.BeforeBlock] either sends a nil *R or it
 		// dispatches a job that will send a non-nil *R.
-		<-p.results[i]
+		delete(p.txGas, (<-p.results[i]).tx)
 	}
 }
 
@@ -147,27 +162,38 @@ func (p *Processor[R]) FinishBlock(b *types.Block) {
 // [Handler]. The returned boolean will be false if no processing occurred,
 // either because the [Handler] indicated as such or because the transaction
 // supplied insufficient gas.
+//
+// Multiple calls to Result with the same argument are allowed. Callers MUST NOT
+// charge the gas price for preprocessing as this is handled by
+// [Processor.PreprocessingGasCharge] if registered as a [vm.Preprocessor].
+// The same value will be returned by each call with the same argument, such
+// that if R is a pointer then modifications will persist between calls.
 func (p *Processor[R]) Result(i int) (R, bool) {
 	ch := p.results[i]
-	r := <-ch
+	r := (<-ch)
 	defer func() {
 		ch <- r
 	}()
 
-	if r == nil {
+	if r.val == nil {
 		// TODO(arr4n) if we're here then the implementoor might have a bug in
 		// their [Handler], so logging a warning is probably a good idea.
 		var zero R
 		return zero, false
 	}
-	return *r, true
+	return *r.val, true
 }
 
-func (p *Processor[R]) shouldProcess(tx *types.Transaction) (bool, error) {
+func (p *Processor[R]) shouldProcess(tx *types.Transaction) (ok bool, err error) {
 	cost, ok := p.handler.Gas(tx)
 	if !ok {
 		return false, nil
 	}
+	defer func() {
+		if ok && err == nil {
+			p.txGas[tx.Hash()] = cost
+		}
+	}()
 
 	spent, err := core.IntrinsicGas(
 		tx.Data(),
@@ -185,4 +211,12 @@ func (p *Processor[R]) shouldProcess(tx *types.Transaction) (bool, error) {
 	// the intrinsic cost, which would have invalidated it for inclusion.
 	left := tx.Gas() - spent
 	return left >= cost, nil
+}
+
+var _ vm.Preprocessor = (*Processor[struct{}])(nil)
+
+// PreprocessingGasCharge implements the [vm.Preprocessor] interface and MUST be
+// registered via [vm.RegisterHooks] to ensure proper gas accounting.
+func (p *Processor[R]) PreprocessingGasCharge(tx common.Hash) uint64 {
+	return p.txGas[tx]
 }

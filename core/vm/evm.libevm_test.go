@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/params"
 )
 
@@ -45,6 +46,8 @@ func (o *evmArgOverrider) OverrideEVMResetArgs(r params.Rules, _ *EVMResetArgs) 
 		StateDB:   o.resetStateDBTo,
 	}
 }
+
+func (o *evmArgOverrider) PreprocessingGasCharge(common.Hash) uint64 { return 0 }
 
 func (o *evmArgOverrider) register(t *testing.T) {
 	t.Helper()

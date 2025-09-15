@@ -19,15 +19,26 @@ package parallel
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"math"
 	"math/rand/v2"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/consensus"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/libevm"
+	"github.com/ava-labs/libevm/libevm/ethtest"
+	"github.com/ava-labs/libevm/libevm/hookstest"
+	"github.com/ava-labs/libevm/params"
 	"github.com/ava-labs/libevm/trie"
 )
 
@@ -163,3 +174,152 @@ func TestProcessor(t *testing.T) {
 		}
 	}
 }
+
+type noopHooks struct{}
+
+func (noopHooks) OverrideNewEVMArgs(a *vm.NewEVMArgs) *vm.NewEVMArgs {
+	return a
+}
+
+func (noopHooks) OverrideEVMResetArgs(_ params.Rules, a *vm.EVMResetArgs) *vm.EVMResetArgs {
+	return a
+}
+
+type vmHooks struct {
+	vm.Preprocessor // the [Processor]
+	noopHooks
+}
+
+func TestIntegration(t *testing.T) {
+	const handlerGas = 500
+	handler := &shaHandler{
+		addr: common.Address{'s', 'h', 'a', 2, 5, 6},
+		gas:  handlerGas,
+	}
+	sut := New(handler, 8)
+	t.Cleanup(sut.Close)
+
+	vm.RegisterHooks(vmHooks{Preprocessor: sut})
+	t.Cleanup(vm.TestOnlyClearRegisteredHooks)
+
+	stub := &hookstest.Stub{
+		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+			handler.addr: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
+				sdb := env.StateDB()
+				txi, txh := sdb.TxIndex(), sdb.TxHash()
+
+				// Precompiles MUST NOT charge gas for the preprocessing as it
+				// would then be double-counted.
+				got, ok := sut.Result(txi)
+				if !ok {
+					t.Errorf("no result for tx[%d] %v", txi, txh)
+				}
+				env.StateDB().AddLog(&types.Log{
+					Data: got[:],
+				})
+				return nil, nil
+			}),
+		},
+	}
+	stub.Register(t)
+
+	state, evm := ethtest.NewZeroEVM(t)
+
+	key, err := crypto.GenerateKey()
+	require.NoErrorf(t, err, "crypto.GenerateKey()")
+	eoa := crypto.PubkeyToAddress(key.PublicKey)
+	state.CreateAccount(eoa)
+	state.AddBalance(eoa, uint256.NewInt(10*params.Ether))
+
+	var (
+		txs  types.Transactions
+		want []*types.Receipt
+	)
+	ignore := cmp.Options{
+		cmpopts.IgnoreFields(
+			types.Receipt{},
+			"PostState", "CumulativeGasUsed", "BlockNumber", "BlockHash", "Bloom",
+		),
+		cmpopts.IgnoreFields(types.Log{}, "BlockHash"),
+	}
+
+	signer := types.LatestSigner(evm.ChainConfig())
+	for i, addr := range []common.Address{
+		{'o', 't', 'h', 'e', 'r'},
+		handler.addr,
+	} {
+		ui := uint(i) //nolint:gosec // Known value that won't overflow
+		data := []byte("hello, world")
+
+		// Having all arguments `false` is equivalent to what
+		// [core.ApplyTransaction] will do.
+		gas, err := core.IntrinsicGas(data, types.AccessList{}, false, false, false, false)
+		require.NoError(t, err, "core.IntrinsicGas(%#x, nil, false, false, false, false)", data)
+		if addr == handler.addr {
+			gas += handlerGas
+		}
+
+		tx := types.MustSignNewTx(key, signer, &types.LegacyTx{
+			Nonce: uint64(ui),
+			To:    &addr,
+			Data:  data,
+			Gas:   gas,
+		})
+		txs = append(txs, tx)
+
+		wantR := &types.Receipt{
+			Status:           types.ReceiptStatusSuccessful,
+			TxHash:           tx.Hash(),
+			GasUsed:          gas,
+			TransactionIndex: ui,
+		}
+		if addr == handler.addr {
+			res := handler.Process(i, tx)
+			wantR.Logs = []*types.Log{{
+				TxHash:  tx.Hash(),
+				TxIndex: ui,
+				Data:    res[:],
+			}}
+		}
+		want = append(want, wantR)
+	}
+
+	block := types.NewBlock(&types.Header{}, txs, nil, nil, trie.NewStackTrie(nil))
+	require.NoError(t, sut.StartBlock(block), "StartBlock()")
+	defer sut.FinishBlock(block)
+
+	pool := core.GasPool(math.MaxUint64)
+	var got []*types.Receipt
+	for i, tx := range txs {
+		state.SetTxContext(tx.Hash(), i)
+
+		var usedGas uint64
+		receipt, err := core.ApplyTransaction(
+			evm.ChainConfig(),
+			chainContext{},
+			&block.Header().Coinbase,
+			&pool,
+			state,
+			block.Header(),
+			tx,
+			&usedGas,
+			vm.Config{},
+		)
+		require.NoError(t, err, "ApplyTransaction([%d])", i)
+		got = append(got, receipt)
+	}
+
+	if diff := cmp.Diff(want, got, ignore); diff != "" {
+		t.Errorf("%T diff (-want +got):\n%s", got, diff)
+	}
+}
+
+// Dummy implementations of interfaces required by [core.ApplyTransaction].
+type (
+	chainContext struct{}
+	engine       struct{ consensus.Engine }
+)
+
+func (chainContext) Engine() consensus.Engine                    { return engine{} }
+func (chainContext) GetHeader(common.Hash, uint64) *types.Header { panic("unimplemented") }
+func (engine) Author(h *types.Header) (common.Address, error)    { return common.Address{}, nil }

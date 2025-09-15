@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/params"
 )
@@ -40,6 +41,14 @@ var libevmHooks register.AtMostOnce[Hooks]
 type Hooks interface {
 	OverrideNewEVMArgs(*NewEVMArgs) *NewEVMArgs
 	OverrideEVMResetArgs(params.Rules, *EVMResetArgs) *EVMResetArgs
+	Preprocessor
+}
+
+// A Preprocessor performs computation on a transaction before the
+// [EVMInterpreter] is invoked and reports its gas charge for spending at the
+// beginning of [EVM.Call].
+type Preprocessor interface {
+	PreprocessingGasCharge(tx common.Hash) uint64
 }
 
 // NewEVMArgs are the arguments received by [NewEVM], available for override

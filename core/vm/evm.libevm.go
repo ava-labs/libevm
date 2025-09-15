@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/log"
+	"github.com/holiman/uint256"
 )
 
 // canCreateContract is a convenience wrapper for calling the
@@ -50,6 +51,29 @@ func (evm *EVM) canCreateContract(caller ContractRef, contractToCreate common.Ad
 	}
 
 	return gas, err
+}
+
+// Call executes the contract associated with the addr with the given input as
+// parameters. It also handles any necessary value transfer required and takes
+// the necessary steps to create accounts and reverses the state in case of an
+// execution error or failed value transfer.
+func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
+	gas, err = evm.spendPreprocessingGas(gas)
+	if err != nil {
+		return nil, gas, err
+	}
+	return evm.call(caller, addr, input, gas, value)
+}
+
+func (evm *EVM) spendPreprocessingGas(gas uint64) (uint64, error) {
+	if evm.depth > 0 || !libevmHooks.Registered() {
+		return gas, nil
+	}
+	c := libevmHooks.Get().PreprocessingGasCharge(evm.StateDB.TxHash())
+	if c > gas {
+		return 0, ErrOutOfGas
+	}
+	return gas - c, nil
 }
 
 // InvalidateExecution sets the error that will be returned by
