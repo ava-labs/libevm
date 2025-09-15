@@ -22,12 +22,13 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
+
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/trie"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/goleak"
 )
 
 func TestMain(m *testing.M) {
@@ -94,7 +95,7 @@ func TestProcessor(t *testing.T) {
 		},
 	}
 
-	rng := rand.New(rand.NewPCG(0, 0))
+	rng := rand.New(rand.NewPCG(0, 0)) //nolint:gosec // Reproducibility is useful for testing
 	for range 100 {
 		params = append(params, blockParams{
 			numTxs:             rng.IntN(1000),
