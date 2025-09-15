@@ -26,6 +26,7 @@ import (
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/params"
 )
 
 // A Handler is responsible for processing [types.Transactions] in an
@@ -106,7 +107,7 @@ func (p *Processor[R]) Close() {
 // StartBlock dispatches transactions to the [Handler] and returns immediately.
 // It MUST be paired with a call to [Processor.FinishBlock], without overlap of
 // blocks.
-func (p *Processor[R]) StartBlock(b *types.Block) error {
+func (p *Processor[R]) StartBlock(b *types.Block, rules params.Rules) error {
 	txs := b.Transactions()
 	jobs := make([]*job, 0, len(txs))
 
@@ -117,7 +118,7 @@ func (p *Processor[R]) StartBlock(b *types.Block) error {
 	}
 
 	for i, tx := range txs {
-		switch do, err := p.shouldProcess(tx); {
+		switch do, err := p.shouldProcess(tx, rules); {
 		case err != nil:
 			return err
 
@@ -184,7 +185,7 @@ func (p *Processor[R]) Result(i int) (R, bool) {
 	return *r.val, true
 }
 
-func (p *Processor[R]) shouldProcess(tx *types.Transaction) (ok bool, err error) {
+func (p *Processor[R]) shouldProcess(tx *types.Transaction, rules params.Rules) (ok bool, err error) {
 	cost, ok := p.handler.Gas(tx)
 	if !ok {
 		return false, nil
@@ -199,9 +200,9 @@ func (p *Processor[R]) shouldProcess(tx *types.Transaction) (ok bool, err error)
 		tx.Data(),
 		tx.AccessList(),
 		tx.To() == nil,
-		true, // Homestead
-		true, // EIP-2028 (Istanbul)
-		true, // EIP-3860 (Shanghai)
+		rules.IsHomestead,
+		rules.IsIstanbul, // EIP-2028
+		rules.IsShanghai, // EIP-3860
 	)
 	if err != nil {
 		return false, fmt.Errorf("calculating intrinsic gas of %v: %v", tx.Hash(), err)

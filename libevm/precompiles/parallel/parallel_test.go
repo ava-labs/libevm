@@ -77,7 +77,7 @@ func TestProcessor(t *testing.T) {
 
 	// Each set of params is effectively a test case, but they are all run on
 	// the same [Processor].
-	params := []blockParams{
+	tests := []blockParams{
 		{
 			numTxs: 0,
 		},
@@ -108,19 +108,20 @@ func TestProcessor(t *testing.T) {
 
 	rng := rand.New(rand.NewPCG(0, 0)) //nolint:gosec // Reproducibility is useful for testing
 	for range 100 {
-		params = append(params, blockParams{
+		tests = append(tests, blockParams{
 			numTxs:             rng.IntN(1000),
 			sendToAddrEvery:    1 + rng.IntN(30),
 			sufficientGasEvery: 1 + rng.IntN(30),
 		})
 	}
 
-	for _, tc := range params {
+	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
-			t.Logf("%+v", tc)
+			t.Logf("%+v", tt)
 
-			txs := make(types.Transactions, tc.numTxs)
-			wantProcessed := make([]bool, tc.numTxs)
+			var rules params.Rules
+			txs := make(types.Transactions, tt.numTxs)
+			wantProcessed := make([]bool, tt.numTxs)
 			for i := range len(txs) {
 				var (
 					to       common.Address
@@ -128,19 +129,19 @@ func TestProcessor(t *testing.T) {
 				)
 
 				wantProcessed[i] = true
-				if i%tc.sendToAddrEvery == 0 {
+				if i%tt.sendToAddrEvery == 0 {
 					to = handler.addr
 				} else {
 					wantProcessed[i] = false
 				}
-				if i%tc.sufficientGasEvery == 0 {
+				if i%tt.sufficientGasEvery == 0 {
 					extraGas = handler.gas
 				} else {
 					wantProcessed[i] = false
 				}
 
 				data := binary.BigEndian.AppendUint64(nil, uint64(i))
-				gas, err := core.IntrinsicGas(data, nil, false, true, true, true)
+				gas, err := core.IntrinsicGas(data, nil, false, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
 				require.NoError(t, err, "core.IntrinsicGas(%#x, nil, false, true, true, true)", data)
 
 				txs[i] = types.NewTx(&types.LegacyTx{
@@ -151,7 +152,7 @@ func TestProcessor(t *testing.T) {
 			}
 
 			block := types.NewBlock(&types.Header{}, txs, nil, nil, trie.NewStackTrie(nil))
-			require.NoError(t, p.StartBlock(block), "BeforeBlock()")
+			require.NoError(t, p.StartBlock(block, rules), "StartBlock()")
 			defer p.FinishBlock(block)
 
 			for i, tx := range txs {
@@ -285,7 +286,8 @@ func TestIntegration(t *testing.T) {
 	}
 
 	block := types.NewBlock(&types.Header{}, txs, nil, nil, trie.NewStackTrie(nil))
-	require.NoError(t, sut.StartBlock(block), "StartBlock()")
+	rules := evm.ChainConfig().Rules(block.Number(), true, block.Time())
+	require.NoError(t, sut.StartBlock(block, rules), "StartBlock()")
 	defer sut.FinishBlock(block)
 
 	pool := core.GasPool(math.MaxUint64)
