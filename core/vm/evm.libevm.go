@@ -80,7 +80,10 @@ func (evm *EVM) spendPreprocessingGas(gas uint64) (uint64, error) {
 	if evm.depth > 0 || !libevmHooks.Registered() {
 		return gas, nil
 	}
-	c := libevmHooks.Get().PreprocessingGasCharge(evm.StateDB.TxHash())
+	c, err := libevmHooks.Get().PreprocessingGasCharge(evm.StateDB.TxHash())
+	if err != nil {
+		return gas, err
+	}
 	if c > gas {
 		return 0, ErrOutOfGas
 	}

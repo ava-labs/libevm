@@ -48,7 +48,7 @@ type Hooks interface {
 // [EVMInterpreter] is invoked and reports its gas charge for spending at the
 // beginning of [EVM.Call] or [EVM.Create].
 type Preprocessor interface {
-	PreprocessingGasCharge(tx common.Hash) uint64
+	PreprocessingGasCharge(tx common.Hash) (uint64, error)
 }
 
 // NewEVMArgs are the arguments received by [NewEVM], available for override

@@ -19,6 +19,7 @@
 package parallel
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -154,7 +155,8 @@ func (p *Processor[R]) FinishBlock(b *types.Block) {
 		// Every result channel is guaranteed to have some value in its buffer
 		// because [Processor.BeforeBlock] either sends a nil *R or it
 		// dispatches a job that will send a non-nil *R.
-		delete(p.txGas, (<-p.results[i]).tx)
+		tx := (<-p.results[i]).tx
+		delete(p.txGas, tx)
 	}
 }
 
@@ -171,7 +173,7 @@ func (p *Processor[R]) FinishBlock(b *types.Block) {
 // that if R is a pointer then modifications will persist between calls.
 func (p *Processor[R]) Result(i int) (R, bool) {
 	ch := p.results[i]
-	r := (<-ch)
+	r := <-ch
 	defer func() {
 		ch <- r
 	}()
@@ -185,13 +187,17 @@ func (p *Processor[R]) Result(i int) (R, bool) {
 	return *r.val, true
 }
 
-func (p *Processor[R]) shouldProcess(tx *types.Transaction, rules params.Rules) (ok bool, err error) {
+func (p *Processor[R]) shouldProcess(tx *types.Transaction, rules params.Rules) (process bool, err error) {
+	// An explicit 0 is necessary to avoid [Processor.PreprocessingGasCharge]
+	// returning [ErrTxUnknown].
+	p.txGas[tx.Hash()] = 0
+
 	cost, ok := p.handler.Gas(tx)
 	if !ok {
 		return false, nil
 	}
 	defer func() {
-		if ok && err == nil {
+		if process && err == nil {
 			p.txGas[tx.Hash()] = cost
 		}
 	}()
@@ -214,10 +220,19 @@ func (p *Processor[R]) shouldProcess(tx *types.Transaction, rules params.Rules) 
 	return left >= cost, nil
 }
 
-var _ vm.Preprocessor = (*Processor[struct{}])(nil)
+// ErrTxUnknown is returned by [Processor.PreprocessingGasCharge] if it is
+// called with a transaction hash that wasn't in the last block passed to
+// [Processor.StartBlock].
+var ErrTxUnknown = errors.New("transaction unknown by parallel preprocessor")
 
 // PreprocessingGasCharge implements the [vm.Preprocessor] interface and MUST be
 // registered via [vm.RegisterHooks] to ensure proper gas accounting.
-func (p *Processor[R]) PreprocessingGasCharge(tx common.Hash) uint64 {
-	return p.txGas[tx]
+func (p *Processor[R]) PreprocessingGasCharge(tx common.Hash) (uint64, error) {
+	g, ok := p.txGas[tx]
+	if !ok {
+		return 0, fmt.Errorf("%w: %v", ErrTxUnknown, tx)
+	}
+	return g, nil
 }
+
+var _ vm.Preprocessor = (*Processor[struct{}])(nil)

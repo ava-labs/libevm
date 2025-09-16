@@ -47,7 +47,9 @@ func (o *evmArgOverrider) OverrideEVMResetArgs(r params.Rules, _ *EVMResetArgs) 
 	}
 }
 
-func (o *evmArgOverrider) PreprocessingGasCharge(common.Hash) uint64 { return 0 }
+func (o *evmArgOverrider) PreprocessingGasCharge(common.Hash) (uint64, error) {
+	return 0, nil
+}
 
 func (o *evmArgOverrider) register(t *testing.T) {
 	t.Helper()
