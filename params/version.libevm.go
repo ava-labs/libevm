@@ -21,7 +21,7 @@ const (
 	LibEVMVersionMinor = 3
 	LibEVMVersionPatch = 0
 
-	LibEVMReleaseType      ReleaseType = BetaRelease
+	LibEVMReleaseType      ReleaseType = ProductionRelease
 	libEVMReleaseCandidate uint        = 0 // ignored unless [LibEVMReleaseType] == [ReleaseCandidate]
 )
 
@@ -48,7 +48,7 @@ const (
 // triplet.
 //
 // [semver v2]: https://semver.org/
-const LibEVMVersion = "1.13.14-0.3.0.beta"
+const LibEVMVersion = "1.13.14-0.3.0.release"
 
 // A ReleaseType is a suffix for [LibEVMVersion].
 type ReleaseType string
