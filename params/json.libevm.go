@@ -19,6 +19,8 @@ package params
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/ava-labs/libevm/internal/libevm/errs"
 )
 
 var _ interface {
@@ -43,12 +45,22 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) (err error) {
 	return UnmarshalChainConfigJSON(data, c, c.extra, ec.reuseJSONRoot)
 }
 
+// Internal error identifiers for precise testing.
+const (
+	errIDDecodeJSONIntoCombination errs.ID = iota
+	errIDDecodeJSONIntoExtra
+	errIDEncodeJSONCombination
+	errIDEncodeExtraToRawJSON
+	errIDEncodeDuplicateJSONKey
+	errIDNilExtra
+)
+
 // UnmarshalChainConfigJSON is equivalent to [ChainConfig.UnmarshalJSON]
 // had [Extras] with `C` been registered, but without the need to call
 // [RegisterExtras]. The `extra` argument MUST NOT be nil.
 func UnmarshalChainConfigJSON[C any](data []byte, config *ChainConfig, extra *C, reuseJSONRoot bool) (err error) {
 	if extra == nil {
-		return fmt.Errorf("%T argument is nil; use %T.UnmarshalJSON() directly", extra, config)
+		return errs.WithIDf(errIDNilExtra, "%T argument is nil; use %T.UnmarshalJSON() directly", extra, config)
 	}
 
 	if reuseJSONRoot {
@@ -56,7 +68,7 @@ func UnmarshalChainConfigJSON[C any](data []byte, config *ChainConfig, extra *C,
 			return fmt.Errorf("decoding JSON into %T: %s", config, err)
 		}
 		if err := json.Unmarshal(data, extra); err != nil {
-			return fmt.Errorf("decoding JSON into %T: %s", extra, err)
+			return errs.WithIDf(errIDDecodeJSONIntoExtra, "decoding JSON into %T: %s", extra, err)
 		}
 		return nil
 	}
@@ -69,7 +81,7 @@ func UnmarshalChainConfigJSON[C any](data []byte, config *ChainConfig, extra *C,
 		extra,
 	}
 	if err := json.Unmarshal(data, &combined); err != nil {
-		return fmt.Errorf(`decoding JSON into combination of %T and %T (as "extra" key): %s`, config, extra, err)
+		return errs.WithIDf(errIDDecodeJSONIntoCombination, `decoding JSON into combination of %T and %T (as "extra" key): %s`, config, extra, err)
 	}
 	return nil
 }
@@ -100,7 +112,7 @@ func MarshalChainConfigJSON[C any](config ChainConfig, extra C, reuseJSONRoot bo
 		}
 		data, err = json.Marshal(jsonExtra)
 		if err != nil {
-			return nil, fmt.Errorf(`encoding combination of %T and %T (as "extra" key) to JSON: %s`, config, extra, err)
+			return nil, errs.WithIDf(errIDEncodeJSONCombination, `encoding combination of %T and %T (as "extra" key) to JSON: %s`, config, extra, err)
 		}
 		return data, nil
 	}
@@ -116,13 +128,13 @@ func MarshalChainConfigJSON[C any](config ChainConfig, extra C, reuseJSONRoot bo
 	}
 	extraJSONRaw, err := toJSONRawMessages(extra)
 	if err != nil {
-		return nil, fmt.Errorf("converting extra config to JSON raw messages: %s", err)
+		return nil, errs.WithIDf(errIDEncodeExtraToRawJSON, "converting extra config to JSON raw messages: %s", err)
 	}
 
 	for k, v := range extraJSONRaw {
 		_, ok := configJSONRaw[k]
 		if ok {
-			return nil, fmt.Errorf("duplicate JSON key %q in ChainConfig and extra %T", k, extra)
+			return nil, errs.WithIDf(errIDEncodeDuplicateJSONKey, "duplicate JSON key %q in ChainConfig and extra %T", k, extra)
 		}
 		configJSONRaw[k] = v
 	}
