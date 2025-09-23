@@ -17,10 +17,12 @@
 package parallel
 
 import (
-	"crypto/sha256"
+	"bytes"
 	"encoding/binary"
 	"math"
+	"math/big"
 	"math/rand/v2"
+	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -46,25 +48,36 @@ func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m, goleak.IgnoreCurrent())
 }
 
-type shaHandler struct {
-	addr common.Address
-	gas  uint64
+type reverser struct {
+	extra []byte
+	addr  common.Address
+	gas   uint64
 }
 
-func (h *shaHandler) Gas(tx *types.Transaction) (uint64, bool) {
-	if to := tx.To(); to == nil || *to != h.addr {
+func (r *reverser) BeforeBlock(h *types.Header) {
+	r.extra = h.Extra
+}
+
+func (r *reverser) Gas(tx *types.Transaction) (uint64, bool) {
+	if to := tx.To(); to == nil || *to != r.addr {
 		return 0, false
 	}
-	return h.gas, true
+	return r.gas, true
 }
 
-func (*shaHandler) Process(i int, tx *types.Transaction) [sha256.Size]byte {
-	return sha256.Sum256(tx.Data())
+func reverserOutput(data, extra []byte) []byte {
+	out := append(data, extra...)
+	slices.Reverse(out)
+	return out
+}
+
+func (r *reverser) Process(i int, tx *types.Transaction) []byte {
+	return reverserOutput(tx.Data(), r.extra)
 }
 
 func TestProcessor(t *testing.T) {
-	handler := &shaHandler{
-		addr: common.Address{'s', 'h', 'a', 2, 5, 6},
+	handler := &reverser{
+		addr: common.Address{'r', 'e', 'v', 'e', 'r', 's', 'e'},
 		gas:  1e6,
 	}
 	p := New(handler, 8)
@@ -141,7 +154,7 @@ func TestProcessor(t *testing.T) {
 				}
 
 				data := binary.BigEndian.AppendUint64(nil, uint64(i))
-				gas, err := core.IntrinsicGas(data, nil, false, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
+				gas, err := intrinsicGas(data, types.AccessList{}, &handler.addr, &rules)
 				require.NoError(t, err, "core.IntrinsicGas(%#x, nil, false, true, true, true)", data)
 
 				txs[i] = types.NewTx(&types.LegacyTx{
@@ -151,20 +164,21 @@ func TestProcessor(t *testing.T) {
 				})
 			}
 
-			block := types.NewBlock(&types.Header{}, txs, nil, nil, trie.NewStackTrie(nil))
+			extra := []byte("extra")
+			block := types.NewBlock(&types.Header{Extra: extra}, txs, nil, nil, trie.NewStackTrie(nil))
 			require.NoError(t, p.StartBlock(block, rules), "StartBlock()")
 			defer p.FinishBlock(block)
 
 			for i, tx := range txs {
 				wantOK := wantProcessed[i]
 
-				var want [sha256.Size]byte
+				var want []byte
 				if wantOK {
-					want = handler.Process(i, tx)
+					want = reverserOutput(tx.Data(), extra)
 				}
 
 				got, gotOK := p.Result(i)
-				if got != want || gotOK != wantOK {
+				if !bytes.Equal(got, want) || gotOK != wantOK {
 					t.Errorf("Result(%d) got (%#x, %t); want (%#x, %t)", i, got, gotOK, want, wantOK)
 				}
 			}
@@ -193,8 +207,8 @@ type vmHooks struct {
 
 func TestIntegration(t *testing.T) {
 	const handlerGas = 500
-	handler := &shaHandler{
-		addr: common.Address{'s', 'h', 'a', 2, 5, 6},
+	handler := &reverser{
+		addr: common.Address{'r', 'e', 'v', 'e', 'r', 's', 'e'},
 		gas:  handlerGas,
 	}
 	sut := New(handler, 8)
@@ -254,7 +268,8 @@ func TestIntegration(t *testing.T) {
 
 		// Having all arguments `false` is equivalent to what
 		// [core.ApplyTransaction] will do.
-		gas, err := core.IntrinsicGas(data, types.AccessList{}, false, false, false, false)
+		rules := evm.ChainConfig().Rules(big.NewInt(0), false, 0)
+		gas, err := intrinsicGas(data, types.AccessList{}, &addr, &rules)
 		require.NoError(t, err, "core.IntrinsicGas(%#x, nil, false, false, false, false)", data)
 		if addr == handler.addr {
 			gas += handlerGas

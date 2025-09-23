@@ -42,6 +42,7 @@ import (
 // Scenario (2) allows precompile access to be determined through inspection of
 // the [types.Transaction] alone, without the need for execution.
 type Handler[Result any] interface {
+	BeforeBlock(*types.Header)
 	Gas(*types.Transaction) (gas uint64, process bool)
 	Process(index int, tx *types.Transaction) Result
 }
@@ -109,6 +110,7 @@ func (p *Processor[R]) Close() {
 // It MUST be paired with a call to [Processor.FinishBlock], without overlap of
 // blocks.
 func (p *Processor[R]) StartBlock(b *types.Block, rules params.Rules) error {
+	p.handler.BeforeBlock(types.CopyHeader(b.Header()))
 	txs := b.Transactions()
 	jobs := make([]*job, 0, len(txs))
 
@@ -202,14 +204,7 @@ func (p *Processor[R]) shouldProcess(tx *types.Transaction, rules params.Rules) 
 		}
 	}()
 
-	spent, err := core.IntrinsicGas(
-		tx.Data(),
-		tx.AccessList(),
-		tx.To() == nil,
-		rules.IsHomestead,
-		rules.IsIstanbul, // EIP-2028
-		rules.IsShanghai, // EIP-3860
-	)
+	spent, err := txIntrinsicGas(tx, &rules)
 	if err != nil {
 		return false, fmt.Errorf("calculating intrinsic gas of %v: %v", tx.Hash(), err)
 	}
@@ -218,6 +213,22 @@ func (p *Processor[R]) shouldProcess(tx *types.Transaction, rules params.Rules) 
 	// the intrinsic cost, which would have invalidated it for inclusion.
 	left := tx.Gas() - spent
 	return left >= cost, nil
+}
+
+func txIntrinsicGas(tx *types.Transaction, rules *params.Rules) (uint64, error) {
+	return intrinsicGas(tx.Data(), tx.AccessList(), tx.To(), rules)
+}
+
+func intrinsicGas(data []byte, access types.AccessList, txTo *common.Address, rules *params.Rules) (uint64, error) {
+	create := txTo == nil
+	return core.IntrinsicGas(
+		data,
+		access,
+		create,
+		rules.IsHomestead,
+		rules.IsIstanbul, // EIP-2028
+		rules.IsShanghai, // EIP-3860
+	)
 }
 
 // ErrTxUnknown is returned by [Processor.PreprocessingGasCharge] if it is
