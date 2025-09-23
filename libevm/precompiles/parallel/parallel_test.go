@@ -32,7 +32,6 @@ import (
 	"go.uber.org/goleak"
 
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/consensus"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
@@ -190,19 +189,13 @@ func TestProcessor(t *testing.T) {
 	}
 }
 
-type noopHooks struct{}
-
-func (noopHooks) OverrideNewEVMArgs(a *vm.NewEVMArgs) *vm.NewEVMArgs {
-	return a
-}
-
-func (noopHooks) OverrideEVMResetArgs(_ params.Rules, a *vm.EVMResetArgs) *vm.EVMResetArgs {
-	return a
-}
-
 type vmHooks struct {
 	vm.Preprocessor // the [Processor]
-	noopHooks
+	vm.NOOPHooks
+}
+
+func (h *vmHooks) PreprocessingGasCharge(tx common.Hash) (uint64, error) {
+	return h.Preprocessor.PreprocessingGasCharge(tx)
 }
 
 func TestIntegration(t *testing.T) {
@@ -214,7 +207,7 @@ func TestIntegration(t *testing.T) {
 	sut := New(handler, 8)
 	t.Cleanup(sut.Close)
 
-	vm.RegisterHooks(vmHooks{Preprocessor: sut})
+	vm.RegisterHooks(&vmHooks{Preprocessor: sut})
 	t.Cleanup(vm.TestOnlyClearRegisteredHooks)
 
 	stub := &hookstest.Stub{
@@ -313,7 +306,7 @@ func TestIntegration(t *testing.T) {
 		var usedGas uint64
 		receipt, err := core.ApplyTransaction(
 			evm.ChainConfig(),
-			chainContext{},
+			ethtest.DummyChainContext(),
 			&block.Header().Coinbase,
 			&pool,
 			state,
@@ -330,13 +323,3 @@ func TestIntegration(t *testing.T) {
 		t.Errorf("%T diff (-want +got):\n%s", got, diff)
 	}
 }
-
-// Dummy implementations of interfaces required by [core.ApplyTransaction].
-type (
-	chainContext struct{}
-	engine       struct{ consensus.Engine }
-)
-
-func (chainContext) Engine() consensus.Engine                    { return engine{} }
-func (chainContext) GetHeader(common.Hash, uint64) *types.Header { panic("unimplemented") }
-func (engine) Author(h *types.Header) (common.Address, error)    { return common.Address{}, nil }

@@ -89,3 +89,19 @@ func (evm *EVM) overrideEVMResetArgs(txCtx TxContext, statedb StateDB) (TxContex
 	args := libevmHooks.Get().OverrideEVMResetArgs(evm.chainRules, &EVMResetArgs{txCtx, statedb})
 	return args.TxContext, args.StateDB
 }
+
+// NOOPHooks implements [Hooks] such that every method is a noop.
+type NOOPHooks struct{}
+
+var _ Hooks = NOOPHooks{}
+
+// OverrideNewEVMArgs returns the args unchanged.
+func (NOOPHooks) OverrideNewEVMArgs(a *NewEVMArgs) *NewEVMArgs { return a }
+
+// OverrideEVMResetArgs returns the args unchanged.
+func (NOOPHooks) OverrideEVMResetArgs(_ params.Rules, a *EVMResetArgs) *EVMResetArgs {
+	return a
+}
+
+// PreprocessingGasCharge returns (0, nil).
+func (NOOPHooks) PreprocessingGasCharge(common.Hash) (uint64, error) { return 0, nil }
