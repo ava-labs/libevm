@@ -65,7 +65,7 @@ func (r *reverser) Gas(tx *types.Transaction) (uint64, bool) {
 }
 
 func reverserOutput(data, extra []byte) []byte {
-	out := append(data, extra...)
+	out := append(slices.Clone(data), extra...)
 	slices.Reverse(out)
 	return out
 }
@@ -222,7 +222,7 @@ func TestIntegration(t *testing.T) {
 				if !ok {
 					t.Errorf("no result for tx[%d] %v", txi, txh)
 				}
-				env.StateDB().AddLog(&types.Log{
+				sdb.AddLog(&types.Log{
 					Data: got[:],
 				})
 				return nil, nil
@@ -231,13 +231,13 @@ func TestIntegration(t *testing.T) {
 	}
 	stub.Register(t)
 
-	state, evm := ethtest.NewZeroEVM(t)
-
 	key, err := crypto.GenerateKey()
 	require.NoErrorf(t, err, "crypto.GenerateKey()")
 	eoa := crypto.PubkeyToAddress(key.PublicKey)
+
+	state, evm := ethtest.NewZeroEVM(t)
 	state.CreateAccount(eoa)
-	state.AddBalance(eoa, uint256.NewInt(10*params.Ether))
+	state.SetBalance(eoa, new(uint256.Int).SetAllOne())
 
 	var (
 		txs  types.Transactions
@@ -251,7 +251,14 @@ func TestIntegration(t *testing.T) {
 		cmpopts.IgnoreFields(types.Log{}, "BlockHash"),
 	}
 
-	signer := types.LatestSigner(evm.ChainConfig())
+	header := &types.Header{
+		Number:  big.NewInt(0),
+		BaseFee: big.NewInt(0),
+	}
+	config := evm.ChainConfig()
+	rules := config.Rules(header.Number, true, header.Time)
+	signer := types.MakeSigner(config, header.Number, header.Time)
+
 	for i, addr := range []common.Address{
 		{'o', 't', 'h', 'e', 'r'},
 		handler.addr,
@@ -259,9 +266,6 @@ func TestIntegration(t *testing.T) {
 		ui := uint(i)
 		data := []byte("hello, world")
 
-		// Having all arguments `false` is equivalent to what
-		// [core.ApplyTransaction] will do.
-		rules := evm.ChainConfig().Rules(big.NewInt(0), false, 0)
 		gas, err := intrinsicGas(data, types.AccessList{}, &addr, &rules)
 		require.NoError(t, err, "core.IntrinsicGas(%#x, nil, false, false, false, false)", data)
 		if addr == handler.addr {
@@ -293,8 +297,7 @@ func TestIntegration(t *testing.T) {
 		want = append(want, wantR)
 	}
 
-	block := types.NewBlock(&types.Header{}, txs, nil, nil, trie.NewStackTrie(nil))
-	rules := evm.ChainConfig().Rules(block.Number(), true, block.Time())
+	block := types.NewBlock(header, txs, nil, nil, trie.NewStackTrie(nil))
 	require.NoError(t, sut.StartBlock(block, rules), "StartBlock()")
 	defer sut.FinishBlock(block)
 
