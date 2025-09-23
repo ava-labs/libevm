@@ -17,6 +17,7 @@
 package vm_test
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -41,22 +42,25 @@ type preprocessingCharger struct {
 	charge map[common.Hash]uint64
 }
 
+var errUnknownTx = errors.New("unknown tx")
+
 func (p preprocessingCharger) PreprocessingGasCharge(tx common.Hash) (uint64, error) {
 	c, ok := p.charge[tx]
 	if !ok {
-		return 0, fmt.Errorf("unknown tx %v", tx)
+		return 0, fmt.Errorf("%w: %v", errUnknownTx, tx)
 	}
 	return c, nil
 }
 
 func TestChargePreprocessingGas(t *testing.T) {
 	tests := []struct {
-		name        string
-		to          *common.Address
-		charge      uint64
-		txGas       uint64
-		wantVMErr   error
-		wantGasUsed uint64
+		name                   string
+		to                     *common.Address
+		charge                 uint64
+		skipChargeRegistration bool
+		txGas                  uint64
+		wantVMErr              error
+		wantGasUsed            uint64
 	}{
 		{
 			name:        "standard create",
@@ -92,6 +96,14 @@ func TestChargePreprocessingGas(t *testing.T) {
 			txGas:       params.TxGas + 20000,
 			wantGasUsed: params.TxGas + 13579,
 		},
+		{
+			name:                   "error propagation",
+			to:                     &common.Address{},
+			skipChargeRegistration: true,
+			txGas:                  params.TxGas,
+			wantGasUsed:            params.TxGas,
+			wantVMErr:              errUnknownTx,
+		},
 	}
 
 	config := params.AllDevChainProtocolChanges
@@ -108,14 +120,19 @@ func TestChargePreprocessingGas(t *testing.T) {
 
 	var txs types.Transactions
 	charge := make(map[common.Hash]uint64)
-	for _, tt := range tests {
+	for i, tt := range tests {
 		tx := types.MustSignNewTx(key, signer, &types.LegacyTx{
+			// Although nonces aren't strictly necessary, they guarantee a
+			// different tx hash for each one.
+			Nonce:    uint64(i), //nolint:gosec // Known to not overflow
 			To:       tt.to,
 			GasPrice: big.NewInt(1),
 			Gas:      tt.txGas,
 		})
 		txs = append(txs, tx)
-		charge[tx.Hash()] = tt.charge
+		if !tt.skipChargeRegistration {
+			charge[tx.Hash()] = tt.charge
+		}
 	}
 
 	vm.RegisterHooks(&preprocessingCharger{
@@ -138,6 +155,7 @@ func TestChargePreprocessingGas(t *testing.T) {
 				require.NoError(t, err, "state.New(types.EmptyRootHash, [memory db], nil)")
 				sdb.SetTxContext(tx.Hash(), i)
 				sdb.SetBalance(eoa, new(uint256.Int).SetAllOne())
+				sdb.SetNonce(eoa, tx.Nonce())
 
 				var gotGasUsed uint64
 				gp := core.GasPool(math.MaxUint64)
@@ -164,8 +182,9 @@ func TestChargePreprocessingGas(t *testing.T) {
 
 			t.Run("VM_error", func(t *testing.T) {
 				sdb, evm := ethtest.NewZeroEVM(t, ethtest.WithChainConfig(config))
-				sdb.SetBalance(eoa, new(uint256.Int).SetAllOne())
 				sdb.SetTxContext(tx.Hash(), i)
+				sdb.SetBalance(eoa, new(uint256.Int).SetAllOne())
+				sdb.SetNonce(eoa, tx.Nonce())
 
 				msg, err := core.TransactionToMessage(tx, signer, header.BaseFee)
 				require.NoError(t, err, "core.TransactionToMessage(...)")
