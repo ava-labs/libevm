@@ -48,13 +48,14 @@ func TestMain(m *testing.M) {
 }
 
 type reverser struct {
-	extra []byte
-	addr  common.Address
-	gas   uint64
+	headerExtra []byte
+	addr        common.Address
+	stateKey    common.Hash
+	gas         uint64
 }
 
 func (r *reverser) BeforeBlock(h *types.Header) {
-	r.extra = h.Extra
+	r.headerExtra = slices.Clone(h.Extra)
 }
 
 func (r *reverser) Gas(tx *types.Transaction) (uint64, bool) {
@@ -64,20 +65,25 @@ func (r *reverser) Gas(tx *types.Transaction) (uint64, bool) {
 	return r.gas, true
 }
 
-func reverserOutput(data, extra []byte) []byte {
-	out := append(slices.Clone(data), extra...)
+func reverserOutput(txData []byte, state common.Hash, extra []byte) []byte {
+	out := slices.Concat(txData, state[:], extra)
 	slices.Reverse(out)
 	return out
 }
 
-func (r *reverser) Process(i int, tx *types.Transaction, _ libevm.StateReader) []byte {
-	return reverserOutput(tx.Data(), r.extra)
+func (r *reverser) Process(sdb libevm.StateReader, i int, tx *types.Transaction) []byte {
+	return reverserOutput(
+		tx.Data(),
+		sdb.GetTransientState(r.addr, r.stateKey),
+		r.headerExtra,
+	)
 }
 
 func TestProcessor(t *testing.T) {
 	handler := &reverser{
-		addr: common.Address{'r', 'e', 'v', 'e', 'r', 's', 'e'},
-		gas:  1e6,
+		addr:     common.Address{'r', 'e', 'v', 'e', 'r', 's', 'e'},
+		stateKey: common.Hash{'k', 'e', 'y'},
+		gas:      1e6,
 	}
 	p := New(handler, 8)
 	t.Cleanup(p.Close)
@@ -128,6 +134,8 @@ func TestProcessor(t *testing.T) {
 	}
 
 	_, _, sdb := ethtest.NewEmptyStateDB(t)
+	stateVal := common.Hash{'s', 't', 'a', 't', 'e'}
+	sdb.SetTransientState(handler.addr, handler.stateKey, stateVal)
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
@@ -175,7 +183,7 @@ func TestProcessor(t *testing.T) {
 
 				var want []byte
 				if wantOK {
-					want = reverserOutput(tx.Data(), extra)
+					want = reverserOutput(tx.Data(), stateVal, extra)
 				}
 
 				got, gotOK := p.Result(i)
@@ -292,7 +300,7 @@ func TestIntegration(t *testing.T) {
 			wantR.Logs = []*types.Log{{
 				TxHash:  tx.Hash(),
 				TxIndex: ui,
-				Data:    reverserOutput(data, nil),
+				Data:    reverserOutput(data, common.Hash{}, nil),
 			}}
 		}
 		want = append(want, wantR)

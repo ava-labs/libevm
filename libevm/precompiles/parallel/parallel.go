@@ -46,7 +46,7 @@ import (
 type Handler[Result any] interface {
 	BeforeBlock(*types.Header)
 	Gas(*types.Transaction) (gas uint64, process bool)
-	Process(index int, tx *types.Transaction, sdb libevm.StateReader) Result
+	Process(sdb libevm.StateReader, index int, tx *types.Transaction) Result
 }
 
 // A Processor orchestrates dispatch and collection of results from a [Handler].
@@ -133,7 +133,7 @@ func (p *Processor[R]) worker() {
 				return
 			}
 
-			r := p.handler.Process(w.index, w.tx, sdb)
+			r := p.handler.Process(sdb, w.index, w.tx)
 			p.results[w.index] <- result[R]{
 				tx:  w.tx.Hash(),
 				val: &r,
