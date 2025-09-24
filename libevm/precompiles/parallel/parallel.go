@@ -25,8 +25,10 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core"
+	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/params"
 )
 
@@ -44,16 +46,17 @@ import (
 type Handler[Result any] interface {
 	BeforeBlock(*types.Header)
 	Gas(*types.Transaction) (gas uint64, process bool)
-	Process(index int, tx *types.Transaction) Result
+	Process(index int, tx *types.Transaction, sdb libevm.StateReader) Result
 }
 
 // A Processor orchestrates dispatch and collection of results from a [Handler].
 type Processor[R any] struct {
-	handler Handler[R]
-	workers sync.WaitGroup
-	work    chan *job
-	results [](chan result[R])
-	txGas   map[common.Hash]uint64
+	handler    Handler[R]
+	workers    sync.WaitGroup
+	work       chan *job
+	results    [](chan result[R])
+	txGas      map[common.Hash]uint64
+	stateShare stateDBSharer
 }
 
 type job struct {
@@ -66,36 +69,75 @@ type result[T any] struct {
 	val *T
 }
 
+// A stateDBSharer allows concurrent workers to make copies of a primary
+// database. When the `nextAvailable` channel is closed, all workers call
+// [state.StateDB.Copy] then signal completion on the [sync.WaitGroup]. The
+// channel is replaced for each round of distribution.
+type stateDBSharer struct {
+	nextAvailable chan struct{}
+	primary       *state.StateDB
+	mu            sync.Mutex
+	workers       int
+	wg            sync.WaitGroup
+}
+
 // New constructs a new [Processor] with the specified number of concurrent
 // workers. [Processor.Close] must be called after the final call to
 // [Processor.FinishBlock] to avoid leaking goroutines.
 func New[R any](h Handler[R], workers int) *Processor[R] {
+	workers = max(workers, 1)
+
 	p := &Processor[R]{
 		handler: h,
 		work:    make(chan *job),
 		txGas:   make(map[common.Hash]uint64),
+		stateShare: stateDBSharer{
+			workers:       workers,
+			nextAvailable: make(chan struct{}),
+		},
 	}
 
-	workers = max(workers, 1)
-	p.workers.Add(workers)
+	p.workers.Add(workers)       // for shutdown via [Processor.Close]
+	p.stateShare.wg.Add(workers) // for readiness of [Processor.worker] loops
 	for range workers {
 		go p.worker()
 	}
+	p.stateShare.wg.Wait()
+
 	return p
 }
 
 func (p *Processor[R]) worker() {
 	defer p.workers.Done()
-	for {
-		w, ok := <-p.work
-		if !ok {
-			return
-		}
 
-		r := p.handler.Process(w.index, w.tx)
-		p.results[w.index] <- result[R]{
-			tx:  w.tx.Hash(),
-			val: &r,
+	var sdb *state.StateDB
+	share := &p.stateShare
+	stateAvailable := share.nextAvailable
+	// Without this signal of readiness, a premature call to
+	// [Processor.StartBlock] could replace `share.nextAvailable` before we've
+	// copied it.
+	share.wg.Done()
+
+	for {
+		select {
+		case <-stateAvailable: // guaranteed at the beginning of each block
+			share.mu.Lock()
+			sdb = share.primary.Copy()
+			share.mu.Unlock()
+
+			stateAvailable = share.nextAvailable
+			share.wg.Done()
+
+		case w, ok := <-p.work:
+			if !ok {
+				return
+			}
+
+			r := p.handler.Process(w.index, w.tx, sdb)
+			p.results[w.index] <- result[R]{
+				tx:  w.tx.Hash(),
+				val: &r,
+			}
 		}
 	}
 }
@@ -109,7 +151,8 @@ func (p *Processor[R]) Close() {
 // StartBlock dispatches transactions to the [Handler] and returns immediately.
 // It MUST be paired with a call to [Processor.FinishBlock], without overlap of
 // blocks.
-func (p *Processor[R]) StartBlock(b *types.Block, rules params.Rules) error {
+func (p *Processor[R]) StartBlock(b *types.Block, rules params.Rules, sdb *state.StateDB) error {
+	p.stateShare.distribute(sdb)
 	p.handler.BeforeBlock(types.CopyHeader(b.Header()))
 	txs := b.Transactions()
 	jobs := make([]*job, 0, len(txs))
@@ -147,6 +190,17 @@ func (p *Processor[R]) StartBlock(b *types.Block, rules params.Rules) error {
 		}
 	}()
 	return nil
+}
+
+func (s *stateDBSharer) distribute(sdb *state.StateDB) {
+	s.primary = sdb // no need to Copy() as each worker does it
+
+	ch := s.nextAvailable
+	s.nextAvailable = make(chan struct{}) // already copied by each worker
+
+	s.wg.Add(s.workers)
+	close(ch)
+	s.wg.Wait()
 }
 
 // FinishBlock returns the [Processor] to a state ready for the next block. A

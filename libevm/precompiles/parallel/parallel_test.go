@@ -70,7 +70,7 @@ func reverserOutput(data, extra []byte) []byte {
 	return out
 }
 
-func (r *reverser) Process(i int, tx *types.Transaction) []byte {
+func (r *reverser) Process(i int, tx *types.Transaction, _ libevm.StateReader) []byte {
 	return reverserOutput(tx.Data(), r.extra)
 }
 
@@ -127,6 +127,8 @@ func TestProcessor(t *testing.T) {
 		})
 	}
 
+	_, _, sdb := ethtest.NewEmptyStateDB(t)
+
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
 			t.Logf("%+v", tt)
@@ -165,7 +167,7 @@ func TestProcessor(t *testing.T) {
 
 			extra := []byte("extra")
 			block := types.NewBlock(&types.Header{Extra: extra}, txs, nil, nil, trie.NewStackTrie(nil))
-			require.NoError(t, p.StartBlock(block, rules), "StartBlock()")
+			require.NoError(t, p.StartBlock(block, rules, sdb), "StartBlock()")
 			defer p.FinishBlock(block)
 
 			for i, tx := range txs {
@@ -287,18 +289,17 @@ func TestIntegration(t *testing.T) {
 			TransactionIndex: ui,
 		}
 		if addr == handler.addr {
-			res := handler.Process(i, tx)
 			wantR.Logs = []*types.Log{{
 				TxHash:  tx.Hash(),
 				TxIndex: ui,
-				Data:    res[:],
+				Data:    reverserOutput(data, nil),
 			}}
 		}
 		want = append(want, wantR)
 	}
 
 	block := types.NewBlock(header, txs, nil, nil, trie.NewStackTrie(nil))
-	require.NoError(t, sut.StartBlock(block, rules), "StartBlock()")
+	require.NoError(t, sut.StartBlock(block, rules, state), "StartBlock()")
 	defer sut.FinishBlock(block)
 
 	pool := core.GasPool(math.MaxUint64)
