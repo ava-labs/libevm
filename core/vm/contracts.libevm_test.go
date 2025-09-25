@@ -280,7 +280,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				Raw: &rawAddresses,
 			},
 			wantReadOnly:  false,
-			wantCallValue: callCallerValue,
+			wantCallValue: callCallerValue, // Important difference from [vm.EVM.Call]
 			wantCallType:  vm.DelegateCall,
 		},
 		{
