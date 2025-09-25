@@ -19,14 +19,15 @@ package reentrancy
 import (
 	"testing"
 
+	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/ethtest"
 	"github.com/ava-labs/libevm/libevm/hookstest"
-	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/require"
-	"gotest.tools/assert"
 )
 
 func TestGuard(t *testing.T) {
