@@ -217,21 +217,13 @@ type PrecompileEnvironment interface {
 	// Invalidate invalidates the transaction calling this precompile.
 	InvalidateExecution(error)
 
-	// ReentrancyGuard returns [ErrExecutionReverted] i.f.f. it has already been
-	// called with the same `key` by the same contract, in the same transaction.
-	// It otherwise returns nil. The `key` MAY be nil.
-	//
-	// Contract equality is defined as the [libevm.AddressContext] "self"
-	// address being the same under EVM semantics.
-	ReentrancyGuard(key []byte) error
-
 	// Call is equivalent to [EVM.Call] except that the `caller` argument is
 	// removed and automatically determined according to the type of call that
 	// invoked the precompile.
 	//
 	// WARNING: using this method makes the precompile susceptible to reentrancy
-	// attacks as with a regular contract. The `ReentrancyGuard()` method, the
-	// Checks-Effects-Interactions pattern, or some other protection MUST be
+	// attacks as with a regular contract. The Checks-Effects-Interactions
+	// pattern, libevm's `reentrancy` package, or some other protection MUST be
 	// used in conjunction with `Call()`.
 	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...CallOption) (ret []byte, _ error)
 }
