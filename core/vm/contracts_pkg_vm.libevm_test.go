@@ -14,36 +14,20 @@
 // along with the go-ethereum library. If not, see
 // <http://www.gnu.org/licenses/>.
 
-package rawdb
+package vm
 
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/ava-labs/libevm/common"
 )
 
-func TestSkipFreezers(t *testing.T) {
-	db := NewMemoryDatabase()
+func TestExportedP256Verify(t *testing.T) {
+	addr := common.Address{'p', '2', '5', '6', 'l', 'i', 'b', 'e', 'v', 'm'}
+	allPrecompiles[addr] = &P256Verify{}
+	t.Cleanup(func() {
+		delete(allPrecompiles, addr)
+	})
 
-	tests := []struct {
-		skipFreezers bool
-		wantErr      error
-	}{
-		{
-			skipFreezers: false,
-			wantErr:      errNotSupported,
-		},
-		{
-			skipFreezers: true,
-			wantErr:      nil,
-		},
-	}
-
-	for _, tt := range tests {
-		var opts []InspectDatabaseOption
-		if tt.skipFreezers {
-			opts = append(opts, WithSkipFreezers())
-		}
-		assert.ErrorIsf(t, InspectDatabase(db, nil, nil, opts...), tt.wantErr, "InspectDatabase(%T, nil, nil, [WithSkipFreezers = %t])", db, tt.skipFreezers)
-	}
+	testJson("p256Verify", addr.Hex(), t)
 }
