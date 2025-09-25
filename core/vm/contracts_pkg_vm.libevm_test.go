@@ -14,8 +14,20 @@
 // along with the go-ethereum library. If not, see
 // <http://www.gnu.org/licenses/>.
 
-package params
+package vm
 
-// P256VerifyGas is the gas required by the RIP-7212 precompile for P256 ECDSA
-// verification.
-const P256VerifyGas uint64 = 3450
+import (
+	"testing"
+
+	"github.com/ava-labs/libevm/common"
+)
+
+func TestExportedP256Verify(t *testing.T) {
+	addr := common.Address{'p', '2', '5', '6', 'l', 'i', 'b', 'e', 'v', 'm'}
+	allPrecompiles[addr] = &P256Verify{}
+	t.Cleanup(func() {
+		delete(allPrecompiles, addr)
+	})
+
+	testJson("p256Verify", addr.Hex(), t)
+}
