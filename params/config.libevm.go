@@ -72,14 +72,8 @@ func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPaylo
 	mustBeStructOrPointerToOne[C]()
 	mustBeStructOrPointerToOne[R]()
 
-	payloads := e.payloads()
-	registeredExtras.MustRegister(&extraConstructors{
-		newChainConfig: pseudo.NewConstructor[C]().Zero,
-		newRules:       pseudo.NewConstructor[R]().Zero,
-		reuseJSONRoot:  e.ReuseJSONRoot,
-		newForRules:    e.newForRules,
-		payloads:       payloads,
-	})
+	payloads, ctors := payloadsAndConstructors(e)
+	registeredExtras.MustRegister(ctors)
 	log.Info(
 		"Registered params extras",
 		"ChainConfig", log.TypeOf(pseudo.Zero[C]().Value.Get()),
@@ -87,6 +81,33 @@ func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPaylo
 		"ReuseJSONRoot", e.ReuseJSONRoot,
 	)
 	return payloads
+}
+
+func payloadsAndConstructors[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) (ExtraPayloads[C, R], *extraConstructors) {
+	payloads := e.payloads()
+	return payloads, &extraConstructors{
+		newChainConfig: pseudo.NewConstructor[C]().Zero,
+		newRules:       pseudo.NewConstructor[R]().Zero,
+		reuseJSONRoot:  e.ReuseJSONRoot,
+		newForRules:    e.newForRules,
+		payloads:       payloads,
+	}
+}
+
+// WithTempRegisteredExtras temporarily registers `C` and `R` as if calling
+// [RegisterExtras] with `e`. The [ExtraPayloads] are passed to `fn` instead of
+// being returned. After `fn` returns, the registration is returned to its
+// former state, be that none or the types originally passed to
+// [RegisterExtras].
+//
+// This MUST NOT be used in a live chain. It is solely intended for off-chain
+// consumers that require access to extras.
+func WithTempRegisteredExtras[C ChainConfigHooks, R RulesHooks](
+	e Extras[C, R],
+	fn func(ExtraPayloads[C, R]),
+) {
+	payloads, ctors := payloadsAndConstructors(e)
+	registeredExtras.TempOverride(ctors, func() { fn(payloads) })
 }
 
 // TestOnlyClearRegisteredExtras clears the [Extras] previously passed to
