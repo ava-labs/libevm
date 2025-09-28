@@ -18,44 +18,58 @@ package types
 
 import (
 	"testing"
+
+	"github.com/ava-labs/libevm/rlp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+type tempBlockBodyHooks struct {
+	X string
+	NOOPBlockBodyHooks
+}
+
+func (b *tempBlockBodyHooks) Copy() *tempBlockBodyHooks {
+	return &tempBlockBodyHooks{X: b.X}
+}
+
+func (b *tempBlockBodyHooks) BlockRLPFieldsForEncoding(*BlockRLPProxy) *rlp.Fields {
+	return &rlp.Fields{
+		Required: []any{b.X},
+	}
+}
 
 func TestTempRegisteredExtras(t *testing.T) {
 	TestOnlyClearRegisteredExtras()
 	t.Cleanup(TestOnlyClearRegisteredExtras)
 
-	type (
-		primary struct {
-			NOOPHeaderHooks
-		}
-		override struct {
-			NOOPHeaderHooks
-		}
-	)
+	rlpWithoutHooks, err := rlp.EncodeToBytes(&Block{})
+	require.NoErrorf(t, err, "rlp.EncodeToBytes(%T) without hooks", &Block{})
 
-	RegisterExtras[primary, *primary, NOOPBlockBodyHooks, *NOOPBlockBodyHooks, bool]()
+	extras := RegisterExtras[NOOPHeaderHooks, *NOOPHeaderHooks, NOOPBlockBodyHooks, *NOOPBlockBodyHooks, bool]()
 	testPrimaryExtras := func(t *testing.T) {
 		t.Helper()
-		assertHeaderHooksConcreteType[*primary](t)
+		b := new(Block)
+		got, err := rlp.EncodeToBytes(b)
+		require.NoErrorf(t, err, "rlp.EncodeToBytes(%T) with %T hooks", b, extras.Block.Get(b))
+		assert.Equalf(t, rlpWithoutHooks, got, "rlp.EncodeToBytes(%T) with noop hooks; expect same as without hooks", b)
 	}
 
 	t.Run("before_temp", testPrimaryExtras)
 	t.Run("WithTempRegisteredExtras", func(t *testing.T) {
-		WithTempRegisteredExtras(func(ExtraPayloads[*override, *NOOPBlockBodyHooks, bool]) {
-			assertHeaderHooksConcreteType[*override](t)
+		WithTempRegisteredExtras(func(extras ExtraPayloads[*NOOPHeaderHooks, *tempBlockBodyHooks, bool]) {
+			const val = "Hello, world"
+			b := new(Block)
+			payload := &tempBlockBodyHooks{X: val}
+			extras.Block.Set(b, payload)
+
+			got, err := rlp.EncodeToBytes(b)
+			require.NoErrorf(t, err, "rlp.EncodeToBytes(%T) with %T hooks", b, extras.Block.Get(b))
+			want, err := rlp.EncodeToBytes([]string{val})
+			require.NoErrorf(t, err, "rlp.EncodeToBytes(%T{%[1]v})", []string{val})
+
+			assert.Equalf(t, want, got, "rlp.EncodeToBytes(%T) with %T hooks", b, payload)
 		})
 	})
 	t.Run("after_temp", testPrimaryExtras)
-}
-
-func assertHeaderHooksConcreteType[WantT any](t *testing.T) {
-	t.Helper()
-
-	hdr := new(Header)
-	switch got := hdr.hooks().(type) {
-	case WantT:
-	default:
-		var want WantT
-		t.Errorf("%T.hooks() got concrete type %T; want %T", hdr, got, want)
-	}
 }
