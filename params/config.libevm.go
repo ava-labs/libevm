@@ -94,10 +94,11 @@ func payloadsAndConstructors[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) (
 	}
 }
 
-// WithTempRegisteredExtras temporarily registers `C` and `R` as if calling
-// [RegisterExtras] with `e`. The [ExtraPayloads] are passed to `fn` instead of
-// being returned. After `fn` returns, the registration is returned to its
-// former state, be that none or the types originally passed to
+// WithTempRegisteredExtras temporarily registers `HPtr`, `BPtr`, and `SA` as if
+// calling [RegisterExtras] the same type parameters. The [ExtraPayloads] are
+// passed to `fn` instead of being returned; the argument MUST NOT be persisted
+// beyond the life of `fn`. After `fn` returns, the registration is returned to
+// its former state, be that none or the types originally passed to
 // [RegisterExtras].
 //
 // This MUST NOT be used in a live chain. It is solely intended for off-chain

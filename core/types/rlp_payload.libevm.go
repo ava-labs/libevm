@@ -101,9 +101,10 @@ func payloadsAndConstructors[
 
 // WithTempRegisteredExtras temporarily registers `HPtr`, `BPtr`, and `SA` as if
 // calling [RegisterExtras] the same type parameters. The [ExtraPayloads] are
-// passed to `fn` instead of being returned. After `fn` returns, the
-// registration is returned to its former state, be that none or the types
-// originally passed to [RegisterExtras].
+// passed to `fn` instead of being returned; the argument MUST NOT be persisted
+// beyond the life of `fn`. After `fn` returns, the registration is returned to
+// its former state, be that none or the types originally passed to
+// [RegisterExtras].
 //
 // This MUST NOT be used in a live chain. It is solely intended for off-chain
 // consumers that require access to extras.
@@ -133,9 +134,9 @@ type BlockBodyHooksPointer[B any, Self any] interface {
 // A BlockBodyPayload is an implementation of [BlockBodyHooks] that is also able
 // to clone itself. Both [Block.Body] and [Block.WithBody] require this
 // functionality to copy the payload between the types.
-type BlockBodyPayload[BPtr any] interface {
+type BlockBodyPayload[Self any] interface {
 	BlockBodyHooks
-	Copy() BPtr
+	Copy() Self
 }
 
 // TestOnlyClearRegisteredExtras clears the [Extras] previously passed to
