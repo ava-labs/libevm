@@ -66,7 +66,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	return evm.call(caller, addr, input, gas, value)
 }
 
-// create wraps the original geth method of the same name, now name
+// create wraps the original geth method of the same name, now named
 // [EVM.createCommon], first spending preprocessing gas.
 func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
 	gas, err := evm.spendPreprocessingGas(gas)
