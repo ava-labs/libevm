@@ -77,7 +77,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 }
 
 func (evm *EVM) spendPreprocessingGas(gas uint64) (uint64, error) {
-	if evm.depth > 0 || !libevmHooks.Registered() {
+	if internalCall := evm.depth > 0; internalCall || !libevmHooks.Registered() {
 		return gas, nil
 	}
 	c, err := libevmHooks.Get().PreprocessingGasCharge(evm.StateDB.TxHash())
