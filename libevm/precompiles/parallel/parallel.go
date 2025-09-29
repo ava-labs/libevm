@@ -69,18 +69,6 @@ type result[T any] struct {
 	val *T
 }
 
-// A stateDBSharer allows concurrent workers to make copies of a primary
-// database. When the `nextAvailable` channel is closed, all workers call
-// [state.StateDB.Copy] then signal completion on the [sync.WaitGroup]. The
-// channel is replaced for each round of distribution.
-type stateDBSharer struct {
-	nextAvailable chan struct{}
-	primary       *state.StateDB
-	mu            sync.Mutex
-	workers       int
-	wg            sync.WaitGroup
-}
-
 // New constructs a new [Processor] with the specified number of concurrent
 // workers. [Processor.Close] must be called after the final call to
 // [Processor.FinishBlock] to avoid leaking goroutines.
@@ -105,6 +93,29 @@ func New[R any](h Handler[R], workers int) *Processor[R] {
 	p.stateShare.wg.Wait()
 
 	return p
+}
+
+// A stateDBSharer allows concurrent workers to make copies of a primary
+// database. When the `nextAvailable` channel is closed, all workers call
+// [state.StateDB.Copy] then signal completion on the [sync.WaitGroup]. The
+// channel is replaced for each round of distribution.
+type stateDBSharer struct {
+	nextAvailable chan struct{}
+	primary       *state.StateDB
+	mu            sync.Mutex
+	workers       int
+	wg            sync.WaitGroup
+}
+
+func (s *stateDBSharer) distribute(sdb *state.StateDB) {
+	s.primary = sdb // no need to Copy() as each worker does it
+
+	ch := s.nextAvailable                 // already copied by [Processor.worker], which is waiting for it to close
+	s.nextAvailable = make(chan struct{}) // will be copied, ready for the next distribution
+
+	s.wg.Add(s.workers)
+	close(ch)
+	s.wg.Wait()
 }
 
 func (p *Processor[R]) worker() {
@@ -192,17 +203,6 @@ func (p *Processor[R]) StartBlock(b *types.Block, rules params.Rules, sdb *state
 	return nil
 }
 
-func (s *stateDBSharer) distribute(sdb *state.StateDB) {
-	s.primary = sdb // no need to Copy() as each worker does it
-
-	ch := s.nextAvailable
-	s.nextAvailable = make(chan struct{}) // already copied by each worker
-
-	s.wg.Add(s.workers)
-	close(ch)
-	s.wg.Wait()
-}
-
 // FinishBlock returns the [Processor] to a state ready for the next block. A
 // return from FinishBlock guarantees that all dispatched work from the
 // respective call to [Processor.StartBlock] has been completed.
@@ -210,7 +210,7 @@ func (p *Processor[R]) FinishBlock(b *types.Block) {
 	for i := range len(b.Transactions()) {
 		// Every result channel is guaranteed to have some value in its buffer
 		// because [Processor.BeforeBlock] either sends a nil *R or it
-		// dispatches a job that will send a non-nil *R.
+		// dispatches a job, which will send a non-nil *R.
 		tx := (<-p.results[i]).tx
 		delete(p.txGas, tx)
 	}
@@ -243,7 +243,7 @@ func (p *Processor[R]) Result(i int) (R, bool) {
 	return *r.val, true
 }
 
-func (p *Processor[R]) shouldProcess(tx *types.Transaction, rules params.Rules) (process bool, err error) {
+func (p *Processor[R]) shouldProcess(tx *types.Transaction, rules params.Rules) (process bool, retErr error) {
 	// An explicit 0 is necessary to avoid [Processor.PreprocessingGasCharge]
 	// returning [ErrTxUnknown].
 	p.txGas[tx.Hash()] = 0
@@ -253,7 +253,7 @@ func (p *Processor[R]) shouldProcess(tx *types.Transaction, rules params.Rules) 
 		return false, nil
 	}
 	defer func() {
-		if process && err == nil {
+		if process && retErr == nil {
 			p.txGas[tx.Hash()] = cost
 		}
 	}()
@@ -262,11 +262,12 @@ func (p *Processor[R]) shouldProcess(tx *types.Transaction, rules params.Rules) 
 	if err != nil {
 		return false, fmt.Errorf("calculating intrinsic gas of %v: %v", tx.Hash(), err)
 	}
-
-	// This could only overflow if the gas limit was insufficient to cover
-	// the intrinsic cost, which would have invalidated it for inclusion.
-	left := tx.Gas() - spent
-	return left >= cost, nil
+	if spent > tx.Gas() {
+		// If this happens then consensus has a bug because the tx shouldn't
+		// have been included. We include the check, however, for completeness.
+		return false, core.ErrIntrinsicGas
+	}
+	return tx.Gas()-spent >= cost, nil
 }
 
 func txIntrinsicGas(tx *types.Transaction, rules *params.Rules) (uint64, error) {

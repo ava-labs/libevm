@@ -29,8 +29,6 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core"
-	"github.com/ava-labs/libevm/core/rawdb"
-	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
@@ -148,12 +146,7 @@ func TestChargePreprocessingGas(t *testing.T) {
 			t.Logf("Extra gas charge: %d", tt.charge)
 
 			t.Run("ApplyTransaction", func(t *testing.T) {
-				sdb, err := state.New(
-					types.EmptyRootHash,
-					state.NewDatabase(rawdb.NewMemoryDatabase()),
-					nil,
-				)
-				require.NoError(t, err, "state.New(types.EmptyRootHash, [memory db], nil)")
+				_, _, sdb := ethtest.NewEmptyStateDB(t)
 				sdb.SetTxContext(tx.Hash(), i)
 				sdb.SetBalance(eoa, new(uint256.Int).SetAllOne())
 				sdb.SetNonce(eoa, tx.Nonce())

@@ -47,41 +47,39 @@ func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m, goleak.IgnoreCurrent())
 }
 
-type reverser struct {
+type concat struct {
 	headerExtra []byte
 	addr        common.Address
 	stateKey    common.Hash
 	gas         uint64
 }
 
-func (r *reverser) BeforeBlock(h *types.Header) {
-	r.headerExtra = slices.Clone(h.Extra)
+func (c *concat) BeforeBlock(h *types.Header) {
+	c.headerExtra = slices.Clone(h.Extra)
 }
 
-func (r *reverser) Gas(tx *types.Transaction) (uint64, bool) {
-	if to := tx.To(); to == nil || *to != r.addr {
-		return 0, false
+func (c *concat) Gas(tx *types.Transaction) (uint64, bool) {
+	if to := tx.To(); to != nil && *to == c.addr {
+		return c.gas, true
 	}
-	return r.gas, true
+	return 0, false
 }
 
-func reverserOutput(txData []byte, state common.Hash, extra []byte) []byte {
-	out := slices.Concat(txData, state[:], extra)
-	slices.Reverse(out)
-	return out
+func concatOutput(txData []byte, state common.Hash, extra []byte) []byte {
+	return slices.Concat(txData, state[:], extra)
 }
 
-func (r *reverser) Process(sdb libevm.StateReader, i int, tx *types.Transaction) []byte {
-	return reverserOutput(
+func (c *concat) Process(sdb libevm.StateReader, i int, tx *types.Transaction) []byte {
+	return concatOutput(
 		tx.Data(),
-		sdb.GetTransientState(r.addr, r.stateKey),
-		r.headerExtra,
+		sdb.GetTransientState(c.addr, c.stateKey),
+		c.headerExtra,
 	)
 }
 
 func TestProcessor(t *testing.T) {
-	handler := &reverser{
-		addr:     common.Address{'r', 'e', 'v', 'e', 'r', 's', 'e'},
+	handler := &concat{
+		addr:     common.Address{'c', 'o', 'n', 'c', 'a', 't'},
 		stateKey: common.Hash{'k', 'e', 'y'},
 		gas:      1e6,
 	}
@@ -164,7 +162,7 @@ func TestProcessor(t *testing.T) {
 
 				data := binary.BigEndian.AppendUint64(nil, uint64(i))
 				gas, err := intrinsicGas(data, types.AccessList{}, &handler.addr, &rules)
-				require.NoError(t, err, "core.IntrinsicGas(%#x, nil, false, true, true, true)", data)
+				require.NoError(t, err, "core.IntrinsicGas(%#x, nil, false, ...)", data)
 
 				txs[i] = types.NewTx(&types.LegacyTx{
 					To:   &to,
@@ -183,7 +181,7 @@ func TestProcessor(t *testing.T) {
 
 				var want []byte
 				if wantOK {
-					want = reverserOutput(tx.Data(), stateVal, extra)
+					want = concatOutput(tx.Data(), stateVal, extra)
 				}
 
 				got, gotOK := p.Result(i)
@@ -210,8 +208,8 @@ func (h *vmHooks) PreprocessingGasCharge(tx common.Hash) (uint64, error) {
 
 func TestIntegration(t *testing.T) {
 	const handlerGas = 500
-	handler := &reverser{
-		addr: common.Address{'r', 'e', 'v', 'e', 'r', 's', 'e'},
+	handler := &concat{
+		addr: common.Address{'c', 'o', 'n', 'c', 'a', 't'},
 		gas:  handlerGas,
 	}
 	sut := New(handler, 8)
@@ -277,7 +275,7 @@ func TestIntegration(t *testing.T) {
 		data := []byte("hello, world")
 
 		gas, err := intrinsicGas(data, types.AccessList{}, &addr, &rules)
-		require.NoError(t, err, "core.IntrinsicGas(%#x, nil, false, false, false, false)", data)
+		require.NoError(t, err, "core.IntrinsicGas(%#x, nil, false, ...)", data)
 		if addr == handler.addr {
 			gas += handlerGas
 		}
@@ -300,7 +298,7 @@ func TestIntegration(t *testing.T) {
 			wantR.Logs = []*types.Log{{
 				TxHash:  tx.Hash(),
 				TxIndex: ui,
-				Data:    reverserOutput(data, common.Hash{}, nil),
+				Data:    concatOutput(data, common.Hash{}, nil),
 			}}
 		}
 		want = append(want, wantR)
