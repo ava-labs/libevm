@@ -373,6 +373,30 @@ func (op uint256Op) genDecode(ctx *genContext) (string, string) {
 	return result, b.String()
 }
 
+func (bctx *buildContext) makeNamedBasicOp(named *types.Named) (op, error) {
+	underlying := named.Underlying()
+	basic, ok := underlying.(*types.Basic)
+	if !ok {
+		return nil, fmt.Errorf("expected basic type, got %T", underlying)
+	}
+
+	// Use the existing makeBasicOp function to get the base operation
+	baseOp, err := bctx.makeBasicOp(basic)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cast to basicOp and modify the typ field to use the named type
+	op := baseOp.(basicOp)
+	op.typ = named // Use the named type as the main type instead of the underlying basic type
+
+	// For decoding, we want to decode as the underlying basic type and convert to named type
+	// So we need to set decResultType to the underlying basic type
+	op.decResultType = basic
+
+	return op, nil
+}
+
 // encoderDecoderOp handles rlp.Encoder and rlp.Decoder.
 // In order to be used with this, the type must implement both interfaces.
 // This restriction may be lifted in the future by creating separate ops for
@@ -683,6 +707,9 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 		}
 		if typ == bctx.rawValueType {
 			return bctx.makeRawValueOp(), nil
+		}
+		if isNamedWithBasicUnderlying(typ) {
+			return bctx.makeNamedBasicOp(typ)
 		}
 		if bctx.isDecoder(typ) {
 			return nil, fmt.Errorf("type %v implements rlp.Decoder with non-pointer receiver", typ)

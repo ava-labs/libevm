@@ -12,6 +12,7 @@ func (obj *Test) EncodeRLP(_w io.Writer) error {
 	}
 	w.WriteBigInt(&obj.BigAlias)
 	w.WriteUint256(&obj.Uint256Alias)
+	w.WriteUint64(uint64(obj.Uint64NewT))
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }
@@ -34,6 +35,13 @@ func (obj *Test) DecodeRLP(dec *rlp.Stream) error {
 			return err
 		}
 		_tmp0.Uint256Alias = _tmp2
+		// Uint64NewT:
+		_tmp3, err := dec.Uint64()
+		if err != nil {
+			return err
+		}
+		_tmp4 := Uint64T(_tmp3)
+		_tmp0.Uint64NewT = _tmp4
 		if err := dec.ListEnd(); err != nil {
 			return err
 		}
