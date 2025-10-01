@@ -82,6 +82,17 @@ func RegisterExtras(s StateDBHooks) {
 	registeredExtras.MustRegister(s)
 }
 
+// WithTempRegisteredExtras temporarily registers `s` as if calling
+// [RegisterExtras] the same type parameter. After `fn` returns, the
+// registration is returned to its former state, be that none or the types
+// originally passed to [RegisterExtras].
+//
+// This MUST NOT be used in a live chain. It is solely intended for off-chain
+// consumers that require access to extras, and is also not threadsafe.
+func WithTempRegisteredExtras(s StateDBHooks, fn func()) {
+	registeredExtras.TempOverride(s, fn)
+}
+
 // TestOnlyClearRegisteredExtras clears the arguments previously passed to
 // [RegisterExtras]. It panics if called from a non-testing call stack.
 //
