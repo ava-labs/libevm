@@ -27,6 +27,17 @@ func RegisterHooks(h Hooks) {
 	libevmHooks.MustRegister(h)
 }
 
+// WithTempRegisteredHooks temporarily registers `h` as if calling
+// [RegisterHooks] the same type parameter. After `fn` returns, the registration
+// is returned to its former state, be that none or the types originally passed
+// to [RegisterHooks].
+//
+// This MUST NOT be used in a live chain. It is solely intended for off-chain
+// consumers that require access to extras, and is also not threadsafe.
+func WithTempRegisteredHooks(h Hooks, fn func()) {
+	libevmHooks.TempOverride(h, fn)
+}
+
 // TestOnlyClearRegisteredHooks clears the [Hooks] previously passed to
 // [RegisterHooks]. It panics if called from a non-testing call stack.
 func TestOnlyClearRegisteredHooks() {
