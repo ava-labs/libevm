@@ -106,10 +106,12 @@ func payloadsAndConstructors[
 // its former state, be that none or the types originally passed to
 // [RegisterExtras].
 //
-// This MUST NOT be used in a live chain. It is solely intended for off-chain
-// consumers that require access to extras, and is also not threadsafe.
+// This MUST NOT be used on a live chain. It is solely intended for off-chain
+// consumers that require access to extras. Said consumers SHOULD NOT, however
+// call this function directly. Use the libevm/temporary.WithRegisteredExtras()
+// function instead as it atomically overrides all possible packages.
 func WithTempRegisteredExtras[
-	H any, B any, SA any,
+	H, B, SA any,
 	HPtr HeaderHooksPointer[H],
 	BPtr BlockBodyHooksPointer[B, BPtr],
 ](fn func(ExtraPayloads[HPtr, BPtr, SA])) {
