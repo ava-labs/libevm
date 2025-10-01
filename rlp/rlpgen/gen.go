@@ -387,7 +387,10 @@ func (bctx *buildContext) makeNamedBasicOp(named *types.Named) (op, error) {
 	}
 
 	// Cast to basicOp and modify the typ field to use the named type
-	op := baseOp.(basicOp)
+	op, ok := baseOp.(basicOp)
+	if !ok {
+		return nil, fmt.Errorf("expected basicOp, got %T", baseOp)
+	}
 	op.typ = named // Use the named type as the main type instead of the underlying basic type
 
 	// For decoding, we want to decode as the underlying basic type and convert to named type
