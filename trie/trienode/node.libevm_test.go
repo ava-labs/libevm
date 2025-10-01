@@ -33,7 +33,7 @@ type setPayload struct {
 	added map[string]uint64
 }
 
-func (p *setPayload) Add(_ *NodeSet, path []byte, n *Node) {
+func (p *setPayload) AddNode(_ *NodeSet, path []byte, n *Node) {
 	if p.added == nil {
 		p.added = make(map[string]uint64)
 	}
@@ -44,7 +44,7 @@ type mergedSetPayload struct {
 	merged []map[string]uint64
 }
 
-func (p *mergedSetPayload) Merge(_ *MergedNodeSet, ns *NodeSet) error {
+func (p *mergedSetPayload) MergeNodeSet(_ *MergedNodeSet, ns *NodeSet) error {
 	p.merged = append(p.merged, maps.Clone(extras.NodeSet.Get(ns).added))
 	return nil
 }

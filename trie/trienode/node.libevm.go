@@ -23,12 +23,12 @@ import (
 
 // MergedNodeSetHooks
 type MergedNodeSetHooks interface {
-	Merge(into *MergedNodeSet, _ *NodeSet) error
+	MergeNodeSet(into *MergedNodeSet, _ *NodeSet) error
 }
 
 // NodeSetHooks
 type NodeSetHooks interface {
-	Add(into *NodeSet, path []byte, _ *Node)
+	AddNode(into *NodeSet, path []byte, _ *Node)
 }
 
 // RegisterExtras
@@ -92,14 +92,14 @@ func (set *MergedNodeSet) Merge(other *NodeSet) error {
 		return err
 	}
 	if r := registeredExtras; r.Registered() {
-		return r.Get().hooks.hooksFromMNS(set).Merge(set, other)
+		return r.Get().hooks.hooksFromMNS(set).MergeNodeSet(set, other)
 	}
 	return nil
 }
 
 func (set *NodeSet) mergePayload(path []byte, n *Node) {
 	if r := registeredExtras; r.Registered() {
-		r.Get().hooks.hooksFromNS(set).Add(set, path, n)
+		r.Get().hooks.hooksFromNS(set).AddNode(set, path, n)
 	}
 }
 
