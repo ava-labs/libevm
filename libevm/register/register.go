@@ -68,7 +68,7 @@ func (o *AtMostOnce[T]) TestOnlyClear() {
 }
 
 // TempOverride calls `fn`, overriding any registered `T`, but only for the life
-// of the call.
+// of the call. It is not threadsafe.
 //
 // It is valid to call this method with or without a prior call to
 // [AtMostOnce.Register].
@@ -77,7 +77,7 @@ func (o *AtMostOnce[T]) TempOverride(with T, fn func()) {
 }
 
 // TempClear calls `fn`, clearing any registered `T`, but only for the life of
-// the call.
+// the call. It is not threadsafe.
 //
 // It is valid to call this method with or without a prior call to
 // [AtMostOnce.Register].

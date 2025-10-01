@@ -102,7 +102,7 @@ func payloadsAndConstructors[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) (
 // [RegisterExtras].
 //
 // This MUST NOT be used in a live chain. It is solely intended for off-chain
-// consumers that require access to extras.
+// consumers that require access to extras, and is also not threadsafe.
 func WithTempRegisteredExtras[C ChainConfigHooks, R RulesHooks](
 	e Extras[C, R],
 	fn func(ExtraPayloads[C, R]),

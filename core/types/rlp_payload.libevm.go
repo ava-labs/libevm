@@ -107,7 +107,7 @@ func payloadsAndConstructors[
 // [RegisterExtras].
 //
 // This MUST NOT be used in a live chain. It is solely intended for off-chain
-// consumers that require access to extras.
+// consumers that require access to extras, and is also not threadsafe.
 func WithTempRegisteredExtras[
 	H any, B any, SA any,
 	HPtr HeaderHooksPointer[H],
