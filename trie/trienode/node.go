@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/libevm/pseudo"
 )
 
 // Node is a wrapper which contains the encoded blob of the trie node and its
@@ -30,6 +31,8 @@ import (
 type Node struct {
 	Hash common.Hash // Node hash, empty for deleted node
 	Blob []byte      // Encoded node blob, nil for the deleted node
+
+	extra *pseudo.Type // libevm
 }
 
 // Size returns the total memory size used by this node.
@@ -64,6 +67,8 @@ type NodeSet struct {
 	Nodes   map[string]*Node
 	updates int // the count of updated and inserted nodes
 	deletes int // the count of deleted nodes
+
+	extra *pseudo.Type // libevm
 }
 
 // NewNodeSet initializes a node set. The owner is zero for the account trie and
@@ -97,6 +102,7 @@ func (set *NodeSet) AddNode(path []byte, n *Node) {
 		set.updates += 1
 	}
 	set.Nodes[string(path)] = n
+	set.mergePayload(path, n)
 }
 
 // Merge adds a set of nodes into the set.
@@ -164,6 +170,8 @@ func (set *NodeSet) Summary() string {
 // MergedNodeSet represents a merged node set for a group of tries.
 type MergedNodeSet struct {
 	Sets map[common.Hash]*NodeSet
+
+	extra *pseudo.Type // libevm
 }
 
 // NewMergedNodeSet initializes an empty merged set.
@@ -180,7 +188,7 @@ func NewWithNodeSet(set *NodeSet) *MergedNodeSet {
 
 // Merge merges the provided dirty nodes of a trie into the set. The assumption
 // is held that no duplicated set belonging to the same trie will be merged twice.
-func (set *MergedNodeSet) Merge(other *NodeSet) error {
+func (set *MergedNodeSet) merge(other *NodeSet) error {
 	subset, present := set.Sets[other.Owner]
 	if present {
 		return subset.Merge(other.Owner, other.Nodes)
