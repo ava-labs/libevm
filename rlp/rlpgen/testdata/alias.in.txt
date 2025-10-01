@@ -14,11 +14,9 @@ type (
     // Demonstrate recursive unaliasing
     intermediate = uint256.Int
     Uint256      = intermediate
-    Uint64T uint64 // This is not an alias, it's a new type
 )
 
 type Test struct {
     BigAlias     Big
     Uint256Alias Uint256
-    Uint64NewT Uint64T
 }

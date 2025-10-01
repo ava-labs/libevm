@@ -1,17 +1,14 @@
 package test
 
 import "github.com/ava-labs/libevm/rlp"
-import "github.com/holiman/uint256"
 import "io"
 
 func (obj *Test) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
 	_tmp0 := w.List()
-	if obj.BigAlias.Sign() == -1 {
-		return rlp.ErrNegativeBigInt
-	}
-	w.WriteBigInt(&obj.BigAlias)
-	w.WriteUint256(&obj.Uint256Alias)
+	w.WriteBool(bool(obj.BoolNewT))
+	w.WriteUint64(uint64(obj.Uint64NewT))
+	w.WriteString(string(obj.StringNewT))
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }
@@ -22,18 +19,27 @@ func (obj *Test) DecodeRLP(dec *rlp.Stream) error {
 		if _, err := dec.List(); err != nil {
 			return err
 		}
-		// BigAlias:
-		_tmp1, err := dec.BigInt()
+		// BoolNewT:
+		_tmp1, err := dec.Bool()
 		if err != nil {
 			return err
 		}
-		_tmp0.BigAlias = (*_tmp1)
-		// Uint256Alias:
-		var _tmp2 uint256.Int
-		if err := dec.ReadUint256(&_tmp2); err != nil {
+		_tmp2 := BoolT(_tmp1)
+		_tmp0.BoolNewT = _tmp2
+		// Uint64NewT:
+		_tmp3, err := dec.Uint64()
+		if err != nil {
 			return err
 		}
-		_tmp0.Uint256Alias = _tmp2
+		_tmp4 := Uint64T(_tmp3)
+		_tmp0.Uint64NewT = _tmp4
+		// StringNewT:
+		_tmp5, err := dec.String()
+		if err != nil {
+			return err
+		}
+		_tmp6 := StringT(_tmp5)
+		_tmp0.StringNewT = _tmp6
 		if err := dec.ListEnd(); err != nil {
 			return err
 		}
