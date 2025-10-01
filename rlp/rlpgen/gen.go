@@ -393,10 +393,6 @@ func (bctx *buildContext) makeNamedBasicOp(named *types.Named) (op, error) {
 	}
 	op.typ = named // Use the named type as the main type instead of the underlying basic type
 
-	// For decoding, we want to decode as the underlying basic type and convert to named type
-	// So we need to set decResultType to the underlying basic type
-	op.decResultType = basic
-
 	return op, nil
 }
 
