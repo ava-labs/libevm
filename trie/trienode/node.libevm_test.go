@@ -33,7 +33,7 @@ type setPayload struct {
 	added map[string]uint64
 }
 
-func (p *setPayload) AddNode(_ *NodeSet, path []byte, n *Node) {
+func (p *setPayload) AfterAddNode(_ *NodeSet, path []byte, n *Node) {
 	if p.added == nil {
 		p.added = make(map[string]uint64)
 	}
@@ -44,21 +44,21 @@ type mergedSetPayload struct {
 	merged []map[string]uint64
 }
 
-func (p *mergedSetPayload) MergeNodeSet(_ *MergedNodeSet, ns *NodeSet) error {
+func (p *mergedSetPayload) AfterMergeNodeSet(_ *MergedNodeSet, ns *NodeSet) error {
 	p.merged = append(p.merged, maps.Clone(extras.NodeSet.Get(ns).added))
 	return nil
 }
 
-var extras ExtraPayloads[*mergedSetPayload, *setPayload, nodePayload]
+var extras ExtraPayloads[*mergedSetPayload, *setPayload, *nodePayload]
 
 func TestExtras(t *testing.T) {
 	extras = RegisterExtras[mergedSetPayload, setPayload, nodePayload]()
 	t.Cleanup(TestOnlyClearRegisteredExtras)
 
 	n1 := New(common.Hash{0}, nil)
-	extras.Node.Set(n1, nodePayload{x: 1})
+	extras.Node.Set(n1, &nodePayload{x: 1})
 	n42 := New(common.Hash{1}, nil)
-	extras.Node.Set(n42, nodePayload{x: 42})
+	extras.Node.Set(n42, &nodePayload{x: 42})
 
 	set := NewNodeSet(common.Hash{})
 	merge := NewMergedNodeSet()

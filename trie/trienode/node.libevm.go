@@ -21,17 +21,19 @@ import (
 	"github.com/ava-labs/libevm/libevm/register"
 )
 
-// MergedNodeSetHooks
+// MergedNodeSetHooks are called as part of standard [MergedNodeSet] behaviour.
 type MergedNodeSetHooks interface {
-	MergeNodeSet(into *MergedNodeSet, _ *NodeSet) error
+	AfterMergeNodeSet(into *MergedNodeSet, _ *NodeSet) error
 }
 
-// NodeSetHooks
+// NodeSetHooks are called as part of standard [NodeSet] behaviour.
 type NodeSetHooks interface {
-	AddNode(into *NodeSet, path []byte, _ *Node)
+	AfterAddNode(into *NodeSet, path []byte, _ *Node)
 }
 
-// RegisterExtras
+// RegisterExtras registers types `MNSPtr`, `NSPtr`, and `N` to be carried as
+// extra payloads in [MergedNodeSet], [NodeSet], and [Node] objects
+// respectively. It MUST NOT be called more than once.
 func RegisterExtras[
 	MNS, NS, N any,
 	MNSPtr interface {
@@ -42,8 +44,9 @@ func RegisterExtras[
 		NodeSetHooks
 		*NS
 	},
-]() ExtraPayloads[MNSPtr, NSPtr, N] {
-	payloads := ExtraPayloads[MNSPtr, NSPtr, N]{
+	NPtr interface{ *N },
+]() ExtraPayloads[MNSPtr, NSPtr, NPtr] {
+	payloads := ExtraPayloads[MNSPtr, NSPtr, NPtr]{
 		MergedNodeSet: pseudo.NewAccessor[*MergedNodeSet, MNSPtr](
 			(*MergedNodeSet).extraPayload,
 			func(s *MergedNodeSet, t *pseudo.Type) { s.extra = t },
@@ -52,23 +55,24 @@ func RegisterExtras[
 			(*NodeSet).extraPayload,
 			func(s *NodeSet, t *pseudo.Type) { s.extra = t },
 		),
-		Node: pseudo.NewAccessor[*Node, N](
+		Node: pseudo.NewAccessor[*Node, NPtr](
 			(*Node).extraPayload,
 			func(n *Node, t *pseudo.Type) { n.extra = t },
 		),
 	}
 
 	registeredExtras.MustRegister(&extraConstructors{
-		newMergedNodeSet: pseudo.NewConstructor[MNS]().NewPointer,
-		newNodeSet:       pseudo.NewConstructor[NS]().NewPointer,
-		newNode:          pseudo.NewConstructor[N]().Zero,
+		newMergedNodeSet: pseudo.NewConstructor[MNS]().NewPointer, // i.e. non-nil MNSPtr
+		newNodeSet:       pseudo.NewConstructor[NS]().NewPointer,  // i.e. non-nil NSPtr
+		newNode:          pseudo.NewConstructor[N]().NewPointer,   // i.e. non-nil N
 		hooks:            payloads,
 	})
 
 	return payloads
 }
 
-// TestOnlyClearRegisteredExtras
+// TestOnlyClearRegisteredExtras clears any previous call to [RegisterExtras].
+// It panics if called from a non-testing call stack.
 func TestOnlyClearRegisteredExtras() {
 	registeredExtras.TestOnlyClear()
 }
@@ -86,32 +90,37 @@ type extraConstructors struct {
 }
 
 // Merge merges the provided dirty nodes of a trie into the set. The assumption
-// is held that no duplicated set belonging to the same trie will be merged twice.
+// is held that no duplicated set belonging to the same trie will be merged
+// twice.
 func (set *MergedNodeSet) Merge(other *NodeSet) error {
 	if err := set.merge(other); err != nil {
 		return err
 	}
 	if r := registeredExtras; r.Registered() {
-		return r.Get().hooks.hooksFromMNS(set).MergeNodeSet(set, other)
+		return r.Get().hooks.hooksFromMNS(set).AfterMergeNodeSet(set, other)
 	}
 	return nil
 }
 
 func (set *NodeSet) mergePayload(path []byte, n *Node) {
 	if r := registeredExtras; r.Registered() {
-		r.Get().hooks.hooksFromNS(set).AddNode(set, path, n)
+		r.Get().hooks.hooksFromNS(set).AfterAddNode(set, path, n)
 	}
 }
 
-// ExtraPayloads
+// ExtraPayloads provides strongly typed access to the extra payloads carried by
+// [MergedNodeSet], [NodeSet], and [Node] ojects. The only valid way to
+// construct an instance is by a call to [RegisterExtras]. The default `MNSPtr`
+// and `NSPtr` default values, returned by [pseudo.Accessor.Get] are guaranteed
+// to be non-nil pointers to zero values, equivalent to, e.g. `new(MNS)`.
 type ExtraPayloads[
-	MNS MergedNodeSetHooks,
-	NS NodeSetHooks,
-	N any,
+	MNSPtr MergedNodeSetHooks,
+	NSPtr NodeSetHooks,
+	NPtr any,
 ] struct {
-	MergedNodeSet pseudo.Accessor[*MergedNodeSet, MNS]
-	NodeSet       pseudo.Accessor[*NodeSet, NS]
-	Node          pseudo.Accessor[*Node, N]
+	MergedNodeSet pseudo.Accessor[*MergedNodeSet, MNSPtr]
+	NodeSet       pseudo.Accessor[*NodeSet, NSPtr]
+	Node          pseudo.Accessor[*Node, NPtr]
 }
 
 func (e ExtraPayloads[MNS, NS, N]) hooksFromMNS(s *MergedNodeSet) MergedNodeSetHooks {
