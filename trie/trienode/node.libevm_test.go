@@ -20,9 +20,10 @@ import (
 	"maps"
 	"testing"
 
-	"github.com/ava-labs/libevm/common"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/libevm/common"
 )
 
 type nodePayload struct {
