@@ -24,13 +24,17 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/ethtest"
 	"github.com/ava-labs/libevm/libevm/hookstest"
 )
 
-func TestGuard(t *testing.T) {
+func TestGuardIntegration(t *testing.T) {
 	sut := common.HexToAddress("7E57ED")
 	eve := common.HexToAddress("BAD")
 	eveCalled := false
@@ -49,7 +53,7 @@ func TestGuard(t *testing.T) {
 			}),
 			sut: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
 				// The argument is optional and used only to allow more than one
-				// guard in a contract.
+				// guard in a contract, tested in a separate unit test.
 				if err := Guard(env, nil); err != nil {
 					return returnIfGuarded, err
 				}
@@ -72,4 +76,60 @@ func TestGuard(t *testing.T) {
 	// This MUST NOT be [assert.ErrorIs] as such errors are never wrapped in geth.
 	assert.Equal(t, err, vm.ErrExecutionReverted, "Precompile reverted")
 	assert.Equal(t, returnIfGuarded, got, "Precompile reverted with expected data")
+}
+
+type envStub struct {
+	self common.Address
+	db   *state.StateDB
+	vm.PrecompileEnvironment
+}
+
+func (s *envStub) Addresses() *libevm.AddressContext {
+	return &libevm.AddressContext{
+		EVMSemantic: libevm.CallerAndSelf{
+			Self: s.self,
+		},
+	}
+}
+
+func (s *envStub) StateDB() vm.StateDB {
+	return s.db
+}
+
+func TestGuard(t *testing.T) {
+	db, err := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	require.NoError(t, err, "state.New()")
+	env := &envStub{db: db}
+
+	addr0 := common.Address{}
+	addr1 := common.Address{1}
+	key0 := []byte{0}
+	key1 := []byte{1}
+
+	// All tests run on the same [envStub] so are dependent on the effects of
+	// the one(s) before.
+	tests := []struct {
+		self common.Address
+		key  []byte
+		want error
+	}{
+		{addr0, key0, nil},
+		{addr0, key0, vm.ErrExecutionReverted},
+		{addr0, key1, nil},
+		{addr1, key0, nil},
+		{addr1, key1, nil},
+		{addr1, key1, vm.ErrExecutionReverted},
+		{addr0, key1, vm.ErrExecutionReverted},
+	}
+
+	history := make(map[common.Hash]bool) // for better error reporting
+	for _, tt := range tests {
+		h := crypto.Keccak256Hash(tt.self[:], tt.key)
+		already := history[h]
+		history[h] = true
+
+		env.self = tt.self
+		// Tests are dependent so we don't use assert.Equalf.
+		require.Equalf(t, Guard(env, tt.key), tt.want, "Guard([self=%v], %#x) when already called = %t", tt.self, tt.key, already)
+	}
 }
