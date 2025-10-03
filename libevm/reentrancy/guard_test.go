@@ -130,6 +130,6 @@ func TestGuard(t *testing.T) {
 
 		env.self = tt.self
 		// Tests are dependent so we don't use assert.Equalf.
-		require.Equalf(t, Guard(env, tt.key), tt.want, "Guard([self=%v], %#x) when already called = %t", tt.self, tt.key, already)
+		require.Equalf(t, tt.want, Guard(env, tt.key), "Guard([self=%v], %#x) when already called = %t", tt.self, tt.key, already)
 	}
 }
