@@ -29,53 +29,59 @@ import (
 // other packages. A call to RegisterExtras is required for the rest of this
 // package to function correctly.
 func RegisterExtras() {
-	extras = trienode.RegisterExtras[proposal, proposal, struct{}]()
+	extras = trienode.RegisterExtras[proposals, proposals, struct{}]()
 }
 
-var extras trienode.ExtraPayloads[*proposal, *proposal, *struct{}]
+var extras trienode.ExtraPayloads[*proposals, *proposals, *struct{}]
 
-// A proposal is embedded as a payload in the [trienode.NodeSet] object returned
-// by trie `Commit()`. A preceding call to [RegisterExtras] ensures that the
-// proposal will be propagated to [Database.Update].
-//
-// After construction, [proposal.setFinalizer] SHOULD be called to ensure
-// release of resources via [proposal.free] once the proposal is garbage
-// collected.
-type proposal struct {
+// A proposals carrier is embedded as a payload in the [trienode.NodeSet] object
+// returned by trie `Commit()`. A preceding call to [RegisterExtras] ensures
+// that the proposals will be propagated to [Database.Update].
+type proposals struct {
 	// root MUST match the argument returned by the trie's `Commit()` method.
 	root common.Hash
-
-	// TODO(alarso16) add handles etc. here and clean them up in [proposal.free]
-
-	finalized chan struct{} // https://go.dev/doc/gc-guide#Testing_object_death
+	// handles MAY carry >=1 handle, based off different parents, but all MUST
+	// result in the same root (i.e. the one specified in the other field).
+	handles []*handle
 }
 
-func (p *proposal) injectInto(ns *trienode.NodeSet) {
+func (p *proposals) injectInto(ns *trienode.NodeSet) {
 	extras.NodeSet.Set(ns, p)
 }
 
+// A handle carries a Firewood FFI proposal handle (i.e. Rust-owned memory).
+// After construction, [handle.setFinalizer] SHOULD be called to ensure release
+// of resources via [handle.free] once the handle is garbage collected.
+type handle struct {
+	// TODO(alarso16) place the FFI handle here
+
+	// finalized is set by [handle.setFinalizer] to signal when said finalizer
+	// has run; see https://go.dev/doc/gc-guide#Testing_object_death
+	finalized chan struct{}
+}
+
 // setFinalizer calls [runtime.SetFinalizer] with `p`.
-func (p *proposal) setFinalizer() {
-	p.finalized = make(chan struct{})
-	runtime.SetFinalizer(p, (*proposal).finalizer)
+func (h *handle) setFinalizer() {
+	h.finalized = make(chan struct{})
+	runtime.SetFinalizer(h, (*handle).finalizer)
 }
 
 // finalizer is expected to be passed to [runtime.SetFinalizer], abstracted as a
 // method to guarantee that it doesn't accidentally capture the value being
 // collected, thus resurrecting it.
-func (p *proposal) finalizer() {
-	p.free()
-	close(p.finalized)
+func (h *handle) finalizer() {
+	h.free()
+	close(h.finalized)
 }
 
 // free is called when the [proposal] is no longer reachable.
-func (p *proposal) free() {
+func (h *handle) free() {
 	// TODO(alarso16) free the Rust object(s).
 }
 
 // AfterMergeNodeSet implements [trienode.MergedNodeSetHooks], copying at most
 // one proposal handle into the merged set.
-func (h *proposal) AfterMergeNodeSet(into *trienode.MergedNodeSet, ns *trienode.NodeSet) error {
+func (p *proposals) AfterMergeNodeSet(into *trienode.MergedNodeSet, ns *trienode.NodeSet) error {
 	if p := extras.MergedNodeSet.Get(into); p.root != (common.Hash{}) {
 		return fmt.Errorf(">1 %T carrying non-zero %T", ns, p)
 	}
@@ -86,4 +92,4 @@ func (h *proposal) AfterMergeNodeSet(into *trienode.MergedNodeSet, ns *trienode.
 }
 
 // AfterAddNode implements [trienode.NodeSetHooks] as a noop.
-func (h *proposal) AfterAddNode(*trienode.NodeSet, []byte, *trienode.Node) {}
+func (p *proposals) AfterAddNode(*trienode.NodeSet, []byte, *trienode.Node) {}

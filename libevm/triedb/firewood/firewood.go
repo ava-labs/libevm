@@ -38,7 +38,7 @@ type database struct {
 
 func (db *database) Update(root, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set, opts ...stateconf.TrieDBUpdateOption) error {
 	// TODO(alarso16)
-	var _ *proposal = extras.MergedNodeSet.Get(nodes)
+	var _ *proposals = extras.MergedNodeSet.Get(nodes)
 
 	db.afterUpdate(nodes) // MUST be the last statement before the final return
 	return errors.New("unimplemented")

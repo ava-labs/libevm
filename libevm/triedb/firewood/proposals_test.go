@@ -17,12 +17,15 @@
 package firewood
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"runtime"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -72,8 +75,13 @@ func (t *trieWithDummyProposals) Commit(collectLeaf bool) (common.Hash, *trienod
 	// happens. We use the existing geth plumbing to carry the proposal back to
 	// [hashDBWithDummyProposals.Update], knowing that the Go GC will trigger
 	// the FFI call to free the Rust memory.
-	p := &proposal{root: root}
-	p.setFinalizer()
+	p := &proposals{
+		root:    root,
+		handles: []*handle{{}, {}},
+	}
+	for _, h := range p.handles {
+		h.setFinalizer()
+	}
 	p.injectInto(set)
 
 	return root, set, nil
@@ -83,7 +91,7 @@ func (t *trieWithDummyProposals) Commit(collectLeaf bool) (common.Hash, *trienod
 // propagated from [trieWithDummyProposals.Commit].
 type hashDBWithDummyProposals struct {
 	*hashdb.Database
-	got *proposal
+	got *proposals
 }
 
 func (db *hashDBWithDummyProposals) Reader(root common.Hash) (databasepkg.Reader, error) {
@@ -120,8 +128,11 @@ func TestProposalPropagation(t *testing.T) {
 		t.Errorf("got %v; want %v", got, want)
 	}
 
-	t.Run("GC_finalizer_invoked", func(t *testing.T) {
-		finalized := backend.got.finalized
+	t.Run("GC_finalizers_invoked", func(t *testing.T) {
+		var finalized []chan struct{}
+		for _, h := range backend.got.handles {
+			finalized = append(finalized, h.finalized)
+		}
 
 		// Everything that might still hold a reference to the `proposal`,
 		// stopping it from being garbage collected.
@@ -133,10 +144,22 @@ func TestProposalPropagation(t *testing.T) {
 		// Note that [runtime.GC] doesn't block on finalizers; see
 		// https://go.dev/doc/gc-guide#Testing_object_death
 		runtime.GC()
-		select {
-		case <-finalized:
-		case <-time.After(5 * time.Second):
-			t.Errorf("%T finalizer did not run", &proposal{})
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		g, ctx := errgroup.WithContext(ctx)
+
+		for i, ch := range finalized {
+			g.Go(func() error {
+				select {
+				case <-ch:
+					return nil
+				case <-ctx.Done():
+					return fmt.Errorf("%T[%d] finalizer didn't run", &handle{}, i)
+				}
+			})
 		}
+
+		require.NoError(t, g.Wait())
 	})
 }
