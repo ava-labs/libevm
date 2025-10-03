@@ -123,6 +123,8 @@ func TestProposalPropagation(t *testing.T) {
 	t.Run("GC_finalizer_invoked", func(t *testing.T) {
 		finalized := backend.got.finalized
 
+		// Everything that might still hold a reference to the `proposal`,
+		// stopping it from being garbage collected.
 		sdb = nil
 		cache = nil
 		tdb = nil

@@ -32,7 +32,7 @@ type Node struct {
 	Hash common.Hash // Node hash, empty for deleted node
 	Blob []byte      // Encoded node blob, nil for the deleted node
 
-	extra *pseudo.Type // libevm
+	extra *pseudo.Type
 }
 
 // Size returns the total memory size used by this node.
@@ -68,7 +68,7 @@ type NodeSet struct {
 	updates int // the count of updated and inserted nodes
 	deletes int // the count of deleted nodes
 
-	extra *pseudo.Type // libevm
+	extra *pseudo.Type
 }
 
 // NewNodeSet initializes a node set. The owner is zero for the account trie and
@@ -171,7 +171,7 @@ func (set *NodeSet) Summary() string {
 type MergedNodeSet struct {
 	Sets map[common.Hash]*NodeSet
 
-	extra *pseudo.Type // libevm
+	extra *pseudo.Type
 }
 
 // NewMergedNodeSet initializes an empty merged set.

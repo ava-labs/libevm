@@ -23,12 +23,16 @@ import (
 
 // MergedNodeSetHooks are called as part of standard [MergedNodeSet] behaviour.
 type MergedNodeSetHooks interface {
-	AfterMergeNodeSet(into *MergedNodeSet, _ *NodeSet) error
+	// AfterMergeNodeSet is called at the end of [MergedNodeSet.Merge], with the
+	// method receiver and argument propagated.
+	AfterMergeNodeSet(receiver *MergedNodeSet, _ *NodeSet) error
 }
 
 // NodeSetHooks are called as part of standard [NodeSet] behaviour.
 type NodeSetHooks interface {
-	AfterAddNode(into *NodeSet, path []byte, _ *Node)
+	// AfterAddNode is called at the end of [NodeSet.AddNode], with the method
+	// receiver and arguments propagated.
+	AfterAddNode(receiver *NodeSet, path []byte, _ *Node)
 }
 
 // RegisterExtras registers types `MNSPtr`, `NSPtr`, and `N` to be carried as
