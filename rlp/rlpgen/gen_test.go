@@ -47,7 +47,7 @@ func init() {
 	}
 }
 
-var tests = []string{"uints", "nil", "rawvalue", "optional", "bigint", "uint256", "alias", "named"}
+var tests = []string{"uints", "nil", "rawvalue", "optional", "bigint", "uint256", "alias", "named.libevm"}
 
 func TestOutput(t *testing.T) {
 	for _, test := range tests {
@@ -66,7 +66,7 @@ func TestOutput(t *testing.T) {
 
 			// Set this environment variable to regenerate the test outputs.
 			if os.Getenv("WRITE_TEST_FILES") != "" {
-				os.WriteFile(outputFile, output, 0o644)
+				os.WriteFile(outputFile, output, 0644)
 			}
 
 			// Check if output matches.

@@ -113,16 +113,6 @@ func isByte(typ types.Type) bool {
 	return ok && basic.Kind() == types.Uint8
 }
 
-// isNamedWithBasicUnderlying checks whether 'typ' is a named type with an underlying basic type.
-func isNamedWithBasicUnderlying(typ types.Type) bool {
-	named, ok := typ.(*types.Named)
-	if !ok {
-		return false
-	}
-	_, ok = named.Underlying().(*types.Basic)
-	return ok
-}
-
 func resolveUnderlying(typ types.Type) types.Type {
 	for {
 		t := typ.Underlying()

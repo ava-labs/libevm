@@ -373,29 +373,6 @@ func (op uint256Op) genDecode(ctx *genContext) (string, string) {
 	return result, b.String()
 }
 
-func (bctx *buildContext) makeNamedBasicOp(named *types.Named) (op, error) {
-	underlying := named.Underlying()
-	basic, ok := underlying.(*types.Basic)
-	if !ok {
-		return nil, fmt.Errorf("expected basic type, got %T", underlying)
-	}
-
-	// Use the existing makeBasicOp function to get the base operation
-	baseOp, err := bctx.makeBasicOp(basic)
-	if err != nil {
-		return nil, err
-	}
-
-	// Cast to basicOp and modify the typ field to use the named type
-	op, ok := baseOp.(basicOp)
-	if !ok {
-		return nil, fmt.Errorf("expected basicOp, got %T", baseOp)
-	}
-	op.typ = named // Use the named type as the main type instead of the underlying basic type
-
-	return op, nil
-}
-
 // encoderDecoderOp handles rlp.Encoder and rlp.Decoder.
 // In order to be used with this, the type must implement both interfaces.
 // This restriction may be lifted in the future by creating separate ops for
@@ -707,11 +684,14 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 		if typ == bctx.rawValueType {
 			return bctx.makeRawValueOp(), nil
 		}
-		if isNamedWithBasicUnderlying(typ) {
-			return bctx.makeNamedBasicOp(typ)
-		}
 		if bctx.isDecoder(typ) {
 			return nil, fmt.Errorf("type %v implements rlp.Decoder with non-pointer receiver", typ)
+		}
+		// libevm: named types are reduced to their underlying basic type in this loop.
+		// We're handling named types here by passing the named type as the main type.
+		// See [named.libevm.go] for more details.
+		if hasBasicUnderlying(typ) {
+			return bctx.makeNamedBasicOp(typ)
 		}
 		// TODO: same check for encoder?
 		return bctx.makeOp(typ, typ.Underlying(), tags)
