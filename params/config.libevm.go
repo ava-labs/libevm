@@ -114,11 +114,8 @@ func WithTempRegisteredExtras[C ChainConfigHooks, R RulesHooks](
 	if err := lock.Verify(); err != nil {
 		return err
 	}
-
 	payloads, ctors := payloadsAndConstructors(e)
-	var err error
-	registeredExtras.TempOverride(ctors, func() { err = fn(payloads) })
-	return err
+	return registeredExtras.TempOverride(ctors, func() error { return fn(payloads) })
 }
 
 // TestOnlyClearRegisteredExtras clears the [Extras] previously passed to
