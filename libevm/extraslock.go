@@ -27,6 +27,12 @@ var (
 	extrasHandle atomic.Uint64
 )
 
+// An ExtrasLock is a handle that proves a current call to
+// [WithTemporaryExtrasLock].
+type ExtrasLock struct {
+	handle *uint64
+}
+
 // WithTemporaryExtrasLock takes a global lock and calls `fn` with a handle that
 // can be used to prove that the lock is held. All package-specific temporary
 // overrides require this proof.
@@ -47,12 +53,6 @@ func WithTemporaryExtrasLock(fn func(lock ExtrasLock) error) error {
 // ErrExpiredExtrasLock is returned by [ExtrasLock.Verify] if the lock has been
 // persisted beyond the call to [WithTemporaryExtrasLock] that created it.
 var ErrExpiredExtrasLock = errors.New("libevm.ExtrasLock expired")
-
-// An ExtrasLock is a handle that proves a current call to
-// [WithTemporaryExtrasLock].
-type ExtrasLock struct {
-	handle *uint64
-}
 
 // Verify verifies that the lock is valid.
 func (l ExtrasLock) Verify() error {
