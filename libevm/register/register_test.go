@@ -82,7 +82,7 @@ func TestAtMostOnce(t *testing.T) {
 	t.Run("error_propagation", func(t *testing.T) {
 		errFoo := errors.New("foo")
 		fn := func() error { return errFoo }
-		assert.ErrorIs(t, sut.TempOverride(0, fn), errFoo, "TempOverride()")
+		assert.ErrorIs(t, sut.TempOverride(0, fn), errFoo, "TempOverride()") //nolint:testifylint // Blindly using require is an anti-pattern!!!
 		assert.ErrorIs(t, sut.TempClear(fn), errFoo, "TempClear()")
 	})
 }

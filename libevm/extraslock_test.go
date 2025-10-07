@@ -45,10 +45,7 @@ func TestExtrasLock(t *testing.T) {
 			persisted = l
 			return l.Verify()
 		}))
-		assert.ErrorIs( //nolint:testifylint // Blindly using require is an anti-pattern!!!
-			t, persisted.Verify(), ErrExpiredExtrasLock,
-			"Verify() of persisted ExtrasLock",
-		)
+		assert.ErrorIs(t, persisted.Verify(), ErrExpiredExtrasLock, "Verify() of persisted ExtrasLock")
 	})
 
 	t.Run("repeat_usage", testIntegration)
