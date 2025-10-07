@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	// Testing from outside the package to guarantee usage of the public API only.
 	. "github.com/ava-labs/libevm/libevm"
@@ -27,21 +28,28 @@ import (
 
 func TestExtrasLock(t *testing.T) {
 	var zero ExtrasLock
-	assert.Panics(t, func() { zero.Verify() }, "Verify() method of zero-value ExtrasLock{}")
+	assert.Panics(t, func() { _ = zero.Verify() }, "Verify() method of zero-value ExtrasLock{}")
 
-	assert.NoError(t,
-		WithTemporaryExtrasLock((ExtrasLock).Verify),
-		"WithTemporaryExtrasLock((ExtrasLock).Verify)",
-	)
+	testIntegration := func(t *testing.T) {
+		t.Helper()
+		require.NoError(t,
+			WithTemporaryExtrasLock((ExtrasLock).Verify),
+			"WithTemporaryExtrasLock((ExtrasLock).Verify)",
+		)
+	}
+	t.Run("initial_usage", testIntegration)
 
-	var persisted ExtrasLock
-	WithTemporaryExtrasLock(func(l ExtrasLock) error {
-		persisted = l
-		return nil
+	t.Run("lock_expiration", func(t *testing.T) {
+		var persisted ExtrasLock
+		require.NoError(t, WithTemporaryExtrasLock(func(l ExtrasLock) error {
+			persisted = l
+			return l.Verify()
+		}))
+		assert.ErrorIs(
+			t, persisted.Verify(), ErrExpiredExtrasLock,
+			"Verify() of persisted ExtrasLock",
+		)
 	})
 
-	assert.ErrorIs(
-		t, persisted.Verify(), ErrExpiredExtrasLock,
-		"Verify() of persisted ExtrasLock",
-	)
+	t.Run("repeat_usage", testIntegration)
 }
