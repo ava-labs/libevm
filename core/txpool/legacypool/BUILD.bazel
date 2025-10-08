@@ -1,0 +1,52 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "legacypool",
+    srcs = [
+        "journal.go",
+        "legacypool.go",
+        "list.go",
+        "noncer.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/core/txpool/legacypool",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//common/prque",
+        "//consensus/misc/eip1559",
+        "//core",
+        "//core/state",
+        "//core/txpool",
+        "//core/types",
+        "//event",
+        "//log",
+        "//metrics",
+        "//params",
+        "//rlp",
+        "@com_github_holiman_uint256//:uint256",
+        "@org_golang_x_exp//slices",
+    ],
+)
+
+go_test(
+    name = "legacypool_test",
+    srcs = [
+        "legacypool2_test.go",
+        "legacypool_test.go",
+        "list_test.go",
+    ],
+    embed = [":legacypool"],
+    deps = [
+        "//common",
+        "//core",
+        "//core/rawdb",
+        "//core/state",
+        "//core/txpool",
+        "//core/types",
+        "//crypto",
+        "//event",
+        "//params",
+        "//trie",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)
