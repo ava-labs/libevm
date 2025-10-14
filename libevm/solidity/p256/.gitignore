@@ -1,2 +1,4 @@
 *.abi
 *.bin
+!P256Proxy.abi
+!P256Proxy.bin
