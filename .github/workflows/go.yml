@@ -64,6 +64,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
+      - uses: arr4n/setup-solc@193eb14e442e10b2fb4b6d2bce8f4f7c74b6a69b
+        with:
+          version: 0.8.30
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:

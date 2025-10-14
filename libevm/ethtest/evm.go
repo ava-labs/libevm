@@ -19,6 +19,7 @@
 package ethtest
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -95,4 +96,19 @@ func WithChainConfig(c *params.ChainConfig) EVMOption {
 	return funcOption(func(args *evmConstructorArgs) {
 		args.chainConfig = c
 	})
+}
+
+// WithPUSH0Enabled returns [vm.BlockContext] and [params.ChainConfig] options
+// to enable the [vm.PUSH0] instruction.
+func WithPUSH0Enabled() []EVMOption {
+	return []EVMOption{
+		WithChainConfig(params.AllDevChainProtocolChanges),
+		WithBlockContext(vm.BlockContext{
+			CanTransfer: core.CanTransfer,
+			Transfer:    core.Transfer,
+			BlockNumber: big.NewInt(1),
+			Random:      &common.Hash{},
+			Time:        1,
+		}),
+	}
 }
