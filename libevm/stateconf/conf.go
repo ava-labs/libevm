@@ -18,8 +18,8 @@
 package stateconf
 
 import (
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/libevm/options"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/libevm/options"
 )
 
 // A StateDBCommitOption configures the behaviour of state.StateDB.Commit()

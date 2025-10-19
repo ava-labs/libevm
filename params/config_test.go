@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/libevm/common/math"
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 func TestCheckCompatible(t *testing.T) {

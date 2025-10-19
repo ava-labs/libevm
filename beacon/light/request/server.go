@@ -21,8 +21,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/libevm/common/mclock"
-	"github.com/ava-labs/libevm/log"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var (

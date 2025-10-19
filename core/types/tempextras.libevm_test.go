@@ -22,8 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/libevm/libevm"
-	"github.com/ava-labs/libevm/rlp"
+	"github.com/ethereum/go-ethereum/libevm"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type tempBlockBodyHooks struct {

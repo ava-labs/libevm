@@ -23,9 +23,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	. "github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/libevm/ethtest"
-	"github.com/ava-labs/libevm/rlp"
+	. "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/libevm/ethtest"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func TestHeaderRLPBackwardsCompatibility(t *testing.T) {

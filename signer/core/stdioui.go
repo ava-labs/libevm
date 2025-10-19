@@ -19,9 +19,9 @@ package core
 import (
 	"context"
 
-	"github.com/ava-labs/libevm/internal/ethapi"
-	"github.com/ava-labs/libevm/log"
-	"github.com/ava-labs/libevm/rpc"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 type StdIOUI struct {

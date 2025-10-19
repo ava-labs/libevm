@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ava-labs/libevm/p2p"
+	"github.com/ethereum/go-ethereum/p2p"
 )
 
 var (

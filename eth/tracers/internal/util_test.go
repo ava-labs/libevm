@@ -18,7 +18,7 @@ package internal
 import (
 	"testing"
 
-	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 func TestMemCopying(t *testing.T) {

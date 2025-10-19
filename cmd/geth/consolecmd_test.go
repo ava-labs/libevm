@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/libevm/params"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 const (

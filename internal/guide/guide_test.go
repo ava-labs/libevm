@@ -28,9 +28,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/libevm/accounts/keystore"
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/types"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // Tests that the account management snippets work correctly.
