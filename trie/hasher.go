@@ -19,8 +19,8 @@ package trie
 import (
 	"sync"
 
-	"github.com/ava-labs/libevm/crypto"
-	"github.com/ava-labs/libevm/rlp"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
 

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/ava-labs/libevm/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var _ = (*headerMarshaling)(nil)

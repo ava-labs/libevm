@@ -26,7 +26,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ava-labs/libevm/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const (

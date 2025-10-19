@@ -22,12 +22,12 @@ import (
 
 	"github.com/holiman/uint256"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/common/math"
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/libevm"
-	"github.com/ava-labs/libevm/libevm/options"
-	"github.com/ava-labs/libevm/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/libevm"
+	"github.com/ethereum/go-ethereum/libevm/options"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var _ PrecompileEnvironment = (*environment)(nil)

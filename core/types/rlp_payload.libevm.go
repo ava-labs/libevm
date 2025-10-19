@@ -20,13 +20,13 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/libevm"
-	"github.com/ava-labs/libevm/libevm/pseudo"
-	"github.com/ava-labs/libevm/libevm/register"
-	"github.com/ava-labs/libevm/libevm/testonly"
-	"github.com/ava-labs/libevm/log"
-	"github.com/ava-labs/libevm/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/libevm"
+	"github.com/ethereum/go-ethereum/libevm/pseudo"
+	"github.com/ethereum/go-ethereum/libevm/register"
+	"github.com/ethereum/go-ethereum/libevm/testonly"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // RegisterExtras registers the type `HPtr` to be carried as an extra payload in

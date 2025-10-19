@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 var (

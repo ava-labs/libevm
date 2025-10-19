@@ -19,7 +19,7 @@ package vm
 import (
 	"fmt"
 
-	"github.com/ava-labs/libevm/params"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type (

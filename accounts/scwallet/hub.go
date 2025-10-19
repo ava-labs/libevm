@@ -41,10 +41,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/libevm/accounts"
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/event"
-	"github.com/ava-labs/libevm/log"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	pcsc "github.com/gballet/go-libpcsclite"
 )
 

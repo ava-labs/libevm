@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // stubPrecompileEnvironment implements [vm.PrecompileEnvironment] for testing.

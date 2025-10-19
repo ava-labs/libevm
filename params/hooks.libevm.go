@@ -19,8 +19,8 @@ package params
 import (
 	"math/big"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/libevm"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/libevm"
 )
 
 // ChainConfigHooks are required for all types registered as [Extras] for

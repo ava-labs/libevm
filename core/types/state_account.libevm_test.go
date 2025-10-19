@@ -25,9 +25,9 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/libevm/pseudo"
-	"github.com/ava-labs/libevm/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/libevm/pseudo"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func TestStateAccountRLP(t *testing.T) {

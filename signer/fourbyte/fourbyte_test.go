@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ava-labs/libevm/accounts/abi"
-	"github.com/ava-labs/libevm/common"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Tests that all the selectors contained in the 4byte database are valid.

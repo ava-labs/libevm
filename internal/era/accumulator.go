@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/libevm/common"
+	"github.com/ethereum/go-ethereum/common"
 	ssz "github.com/ferranbt/fastssz"
 )
 

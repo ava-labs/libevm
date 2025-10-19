@@ -17,9 +17,9 @@
 package state
 
 import (
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/libevm/pseudo"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/libevm/pseudo"
 )
 
 // GetExtra returns the extra payload from the [types.StateAccount] associated

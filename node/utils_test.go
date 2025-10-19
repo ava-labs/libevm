@@ -20,8 +20,8 @@
 package node
 
 import (
-	"github.com/ava-labs/libevm/p2p"
-	"github.com/ava-labs/libevm/rpc"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // NoopLifecycle is a trivial implementation of the Service interface.
