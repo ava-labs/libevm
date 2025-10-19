@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/libevm/ethtest"
@@ -64,7 +65,7 @@ func TestGetSetExtra(t *testing.T) {
 	assert.Nilf(t, state.GetExtra(stateDB, payloads, addr), "state.GetExtra() returns zero-value %T if before account creation", extra)
 	stateDB.CreateAccount(addr)
 	stateDB.SetNonce(addr, nonce)
-	stateDB.SetBalance(addr, balance)
+	stateDB.SetBalance(addr, balance, tracing.BalanceChangeUnspecified)
 	assert.Nilf(t, state.GetExtra(stateDB, payloads, addr), "state.GetExtra() returns zero-value %T if after account creation but before SetExtra()", extra)
 	state.SetExtra(stateDB, payloads, addr, extra)
 	require.Equal(t, extra, state.GetExtra(stateDB, payloads, addr), "state.GetExtra() immediately after SetExtra()")

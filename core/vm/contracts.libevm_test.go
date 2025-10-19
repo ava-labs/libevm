@@ -33,16 +33,18 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
-	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/libevm"
 	"github.com/ethereum/go-ethereum/libevm/ethtest"
 	"github.com/ethereum/go-ethereum/libevm/hookstest"
 	"github.com/ethereum/go-ethereum/libevm/legacy"
 	"github.com/ethereum/go-ethereum/params"
+
+	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 )
 
 type precompileStub struct {
@@ -215,7 +217,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 		),
 	)
 	state.SetState(precompile, slot, stateValue)
-	state.SetBalance(caller, new(uint256.Int).Not(uint256.NewInt(0)))
+	state.SetBalance(caller, new(uint256.Int).Not(uint256.NewInt(0)), tracing.BalanceChangeUnspecified)
 	evm.Origin = eoa
 
 	// By definition, the raw caller and self are the same for every test case,
@@ -867,9 +869,13 @@ func TestPrecompileCallWithTracer(t *testing.T) {
 	const tracerName = "prestateTracer"
 	tracer, err := tracers.DefaultDirectory.New(tracerName, nil, nil)
 	require.NoErrorf(t, err, "tracers.DefaultDirectory.New(%q)", tracerName)
-	evm.Config.Tracer = tracer
+	evm.Config.Tracer = tracer.Hooks
 
-	_, _, err = evm.Call(vm.AccountRef(rng.Address()), precompile, []byte{}, 1e6, uint256.NewInt(0))
+	tx := types.NewTransaction(0, precompile, nil, 0, nil, nil) // only To() is required
+	eoa := rng.Address()
+	tracer.OnTxStart(evm.GetVMContext(), tx, eoa)
+
+	_, _, err = evm.Call(vm.AccountRef(eoa), precompile, []byte{}, 1e6, uint256.NewInt(0))
 	require.NoError(t, err, "evm.Call([precompile that calls regular contract])")
 
 	gotJSON, err := tracer.GetResult()

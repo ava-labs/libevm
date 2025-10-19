@@ -20,18 +20,24 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/tracing"
 )
 
-// CaptureEnter implements the [vm.EVMLogger] hook for entering a new scope (via
-// CALL*, CREATE or SELFDESTRUCT).
-func (t *prestateTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func init() {
+	var (
+		p *prestateTracer
+		_ tracing.EnterHook = p.OnEnter
+	)
+}
+
+// OnEnter implements [tracing.EnterHook].
+func (t *prestateTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Although [prestateTracer.lookupStorage] expects
 	// [prestateTracer.lookupAccount] to have been called, the invariant is
-	// maintained by [prestateTracer.CaptureState] when it encounters an OpCode
+	// maintained by [prestateTracer.OnOpcode] when it encounters an OpCode
 	// corresponding to scope entry. This, however, doesn't work when using a
 	// call method exposed by [vm.PrecompileEnvironment], and is restored by a
-	// call to this CaptureEnter implementation. Note that lookupAccount(x) is
+	// call to this OnEnter implementation. Note that lookupAccount(x) is
 	// idempotent.
 	t.lookupAccount(to)
 }

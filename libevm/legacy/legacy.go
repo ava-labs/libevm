@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
@@ -43,7 +44,7 @@ func (c PrecompiledStatefulContract) Upgrade() vm.PrecompiledStatefulContract {
 		if remainingGas > gas {
 			return ret, fmt.Errorf("%w: %d > %d", errRemainingGasExceedsSuppliedGas, remainingGas, gas)
 		}
-		if !env.UseGas(gas - remainingGas) {
+		if !env.UseGas(gas-remainingGas, env.Tracer(), tracing.GasChangeIgnored) {
 			return ret, vm.ErrOutOfGas
 		}
 		return ret, err

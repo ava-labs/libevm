@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
@@ -36,13 +37,15 @@ func (s *stubPrecompileEnvironment) Gas() uint64 {
 	return s.gas
 }
 
-func (s *stubPrecompileEnvironment) UseGas(gas uint64) (hasEnoughGas bool) {
+func (s *stubPrecompileEnvironment) UseGas(gas uint64, _ *tracing.Hooks, _ tracing.GasChangeReason) (hasEnoughGas bool) {
 	if s.gas < gas {
 		return false
 	}
 	s.gas -= gas
 	return true
 }
+
+func (*stubPrecompileEnvironment) Tracer() *tracing.Hooks { return nil }
 
 func TestPrecompiledStatefulContract_Upgrade(t *testing.T) {
 	t.Parallel()

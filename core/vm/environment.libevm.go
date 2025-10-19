@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/libevm"
 	"github.com/ethereum/go-ethereum/libevm/options"
@@ -40,9 +41,12 @@ type environment struct {
 	rawSelf, rawCaller common.Address
 }
 
-func (e *environment) Gas() uint64            { return e.self.Gas }
-func (e *environment) UseGas(gas uint64) bool { return e.self.UseGas(gas) }
-func (e *environment) Value() *uint256.Int    { return new(uint256.Int).Set(e.self.Value()) }
+func (e *environment) Gas() uint64         { return e.self.Gas }
+func (e *environment) Value() *uint256.Int { return new(uint256.Int).Set(e.self.Value()) }
+
+func (e *environment) UseGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) bool {
+	return e.self.UseGas(gas, logger, reason)
+}
 
 func (e *environment) ChainConfig() *params.ChainConfig  { return e.evm.chainConfig }
 func (e *environment) Rules() params.Rules               { return e.evm.chainRules }
@@ -50,6 +54,7 @@ func (e *environment) ReadOnlyState() libevm.StateReader { return e.evm.StateDB 
 func (e *environment) IncomingCallType() CallType        { return e.callType }
 func (e *environment) BlockNumber() *big.Int             { return new(big.Int).Set(e.evm.Context.BlockNumber) }
 func (e *environment) BlockTime() uint64                 { return e.evm.Context.Time }
+func (e *environment) Tracer() *tracing.Hooks            { return e.evm.Config.Tracer }
 
 func (e *environment) InvalidateExecution(err error) { e.evm.InvalidateExecution(err) }
 
@@ -119,21 +124,15 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 	if e.ReadOnly() && value != nil && !value.IsZero() {
 		return nil, ErrWriteProtection
 	}
-	if !e.UseGas(gas) {
+	if !e.UseGas(gas, e.evm.Config.Tracer, tracing.GasChangeIgnored) {
 		return nil, ErrOutOfGas
 	}
 
-	if t := e.evm.Config.Tracer; t != nil {
-		var bigVal *big.Int
-		if value != nil {
-			bigVal = value.ToBig()
-		}
-		t.CaptureEnter(typ.OpCode(), caller.Address(), addr, input, gas, bigVal)
-
-		startGas := gas
-		defer func() {
-			t.CaptureEnd(retData, startGas-e.Gas(), retErr)
-		}()
+	if evm := e.evm; evm.Config.Tracer != nil {
+		evm.captureBegin(evm.depth, CALL, caller.Address(), addr, input, gas, value.ToBig())
+		defer func(startGas uint64) {
+			evm.captureEnd(evm.depth, startGas, e.Gas(), retData, retErr)
+		}(gas)
 	}
 
 	switch typ {

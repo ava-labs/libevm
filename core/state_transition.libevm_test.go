@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -157,7 +158,7 @@ func TestMinimumGasConsumption(t *testing.T) {
 			const startingBalance = 10 * params.Ether
 			from := crypto.PubkeyToAddress(key.PublicKey)
 			stateDB.SetNonce(from, 0)
-			stateDB.SetBalance(from, uint256.NewInt(startingBalance))
+			stateDB.SetBalance(from, uint256.NewInt(startingBalance), tracing.BalanceChangeUnspecified)
 			stateDB.AddRefund(tt.refund)
 
 			var (

@@ -24,6 +24,7 @@ import (
 	"golang.org/x/exp/slog"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/libevm"
 	"github.com/ethereum/go-ethereum/libevm/set"
@@ -207,12 +208,13 @@ type PrecompileEnvironment interface {
 	ReadOnly() bool
 	// Equivalent to respective methods on [Contract].
 	Gas() uint64
-	UseGas(uint64) (hasEnoughGas bool)
+	UseGas(uint64, *tracing.Hooks, tracing.GasChangeReason) (hasEnoughGas bool)
 	Value() *uint256.Int
 
 	BlockHeader() (types.Header, error)
 	BlockNumber() *big.Int
 	BlockTime() uint64
+	Tracer() *tracing.Hooks
 
 	// Invalidate invalidates the transaction calling this precompile.
 	InvalidateExecution(error)
