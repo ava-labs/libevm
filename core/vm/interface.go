@@ -19,13 +19,13 @@ package vm
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 
 	// libevm extra imports
-	"github.com/ethereum/go-ethereum/libevm/stateconf"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 )
 
 // StateDB is an EVM database for full state querying.

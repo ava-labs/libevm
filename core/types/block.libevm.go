@@ -20,8 +20,8 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/ethereum/go-ethereum/libevm/pseudo"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/libevm/pseudo"
+	"github.com/ava-labs/libevm/rlp"
 )
 
 // HeaderHooks are required for all types registered with [RegisterExtras] for
