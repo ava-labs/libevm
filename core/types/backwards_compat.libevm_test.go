@@ -157,7 +157,7 @@ func TestBlockRLPBackwardsCompatibility(t *testing.T) {
 			require.NoErrorf(t, err, "rlp.DecodeBytes(..., [%T with methods stripped])", &wantBlock)
 
 			t.Run("Encode", func(t *testing.T) {
-				b := NewBlockWithHeader(hdr).WithBody(*body).WithWithdrawals(body.Withdrawals)
+				b := NewBlockWithHeader(hdr).WithBody(*body)
 				got, err := rlp.EncodeToBytes(b)
 				require.NoErrorf(t, err, "rlp.EncodeToBytes(%T)", b)
 

@@ -20,6 +20,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/libevm/stateconf"
 	"github.com/ethereum/go-ethereum/log"
@@ -51,9 +52,6 @@ var HashDefaults = &Config{
 // backend defines the methods needed to access/update trie nodes in different
 // state scheme.
 type backend interface {
-	// Scheme returns the identifier of used storage scheme.
-	Scheme() string
-
 	// Initialized returns an indicator if the state data is already initialized
 	// according to the state scheme.
 	Initialized(genesisRoot common.Hash) bool
@@ -189,7 +187,10 @@ func (db *Database) Initialized(genesisRoot common.Hash) bool {
 
 // Scheme returns the node scheme used in the database.
 func (db *Database) Scheme() string {
-	return db.backend.Scheme()
+	if db.config.PathDB != nil {
+		return rawdb.PathScheme
+	}
+	return rawdb.HashScheme
 }
 
 // Close flushes the dangling preimages to disk and closes the trie database.

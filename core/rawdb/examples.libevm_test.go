@@ -108,6 +108,11 @@ func ExampleInspectDatabase() {
 	// | Ancient store (Chain) | Hashes                  | 0.00 B  |     0 |
 	// | Ancient store (Chain) | Headers                 | 0.00 B  |     0 |
 	// | Ancient store (Chain) | Receipts                | 0.00 B  |     0 |
+	// | Ancient store (State) | Account.Data            | 0.00 B  |     0 |
+	// | Ancient store (State) | Account.Index           | 0.00 B  |     0 |
+	// | Ancient store (State) | History.Meta            | 0.00 B  |     0 |
+	// | Ancient store (State) | Storage.Data            | 0.00 B  |     0 |
+	// | Ancient store (State) | Storage.Index           | 0.00 B  |     0 |
 	// | Key-Value store       | Account snapshot        | 0.00 B  |     0 |
 	// | Key-Value store       | Beacon sync headers     | 0.00 B  |     0 |
 	// | Key-Value store       | Block hash->number      | 0.00 B  |     0 |
@@ -142,6 +147,10 @@ type stubDatabase struct {
 
 func (s *stubDatabase) NewIterator(keyPrefix, keyStart []byte) ethdb.Iterator {
 	return s.iterator
+}
+
+func (*stubDatabase) AncientDatadir() (string, error) {
+	return "", nil
 }
 
 // AncientSize is used in [InspectDatabase] to determine the ancient sizes.

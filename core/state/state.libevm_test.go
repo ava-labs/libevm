@@ -19,6 +19,7 @@ package state_test
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -36,12 +37,21 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
-func TestGetSetExtra(t *testing.T) {
-	type accountExtra struct {
-		// Data is a pointer to test deep copying.
-		Data *[]byte // MUST be exported; I spent 20 minutes investigating failing tests because I'm an idiot
-	}
+type accountExtra struct {
+	// Data is a pointer to test deep copying.
+	Data *[]byte // MUST be exported; I spent 20 minutes investigating failing tests because I'm an idiot
+}
 
+func (e *accountExtra) Clone() *accountExtra {
+	cp := &accountExtra{}
+	if e.Data != nil {
+		d := slices.Clone(*e.Data)
+		cp.Data = &d
+	}
+	return cp
+}
+
+func TestGetSetExtra(t *testing.T) {
 	types.TestOnlyClearRegisteredExtras()
 	t.Cleanup(types.TestOnlyClearRegisteredExtras)
 	// Just as its Data field is a pointer, the registered type is a pointer to

@@ -34,15 +34,20 @@ func GetExtra[SA any](s *StateDB, a pseudo.Accessor[types.StateOrSlimAccount, SA
 	return zero
 }
 
+// A SelfCloner is any type that can produce independent copies of itself.
+type SelfCloner[Self any] interface {
+	Clone() Self
+}
+
 // SetExtra sets the extra payload for the address. See [GetExtra] for details.
-func SetExtra[SA any](s *StateDB, a pseudo.Accessor[types.StateOrSlimAccount, SA], addr common.Address, extra SA) {
+func SetExtra[SA SelfCloner[SA]](s *StateDB, a pseudo.Accessor[types.StateOrSlimAccount, SA], addr common.Address, extra SA) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		setExtraOnObject(stateObject, a, addr, extra)
 	}
 }
 
-func setExtraOnObject[SA any](s *stateObject, a pseudo.Accessor[types.StateOrSlimAccount, SA], addr common.Address, extra SA) {
+func setExtraOnObject[SA SelfCloner[SA]](s *stateObject, a pseudo.Accessor[types.StateOrSlimAccount, SA], addr common.Address, extra SA) {
 	s.db.journal.append(extraChange[SA]{
 		accessor: a,
 		account:  &addr,
@@ -52,7 +57,7 @@ func setExtraOnObject[SA any](s *stateObject, a pseudo.Accessor[types.StateOrSli
 }
 
 // extraChange is a [journalEntry] for [SetExtra] / [setExtraOnObject].
-type extraChange[SA any] struct {
+type extraChange[SA SelfCloner[SA]] struct {
 	accessor pseudo.Accessor[types.StateOrSlimAccount, SA]
 	account  *common.Address
 	prev     SA
@@ -62,4 +67,16 @@ func (e extraChange[SA]) dirtied() *common.Address { return e.account }
 
 func (e extraChange[SA]) revert(s *StateDB) {
 	e.accessor.Set(&s.getStateObject(*e.account).data, e.prev)
+}
+
+func (e extraChange[SA]) copy() journalEntry {
+	cp := extraChange[SA]{
+		accessor: e.accessor,
+		prev:     e.prev.Clone(),
+	}
+	if e.account != nil {
+		a := *e.account
+		cp.account = &a
+	}
+	return cp
 }
