@@ -19,7 +19,7 @@ package options_test
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/libevm/options"
+	"github.com/ava-labs/libevm/libevm/options"
 )
 
 // config is an arbitrary type to be configured with [options.Option] values.

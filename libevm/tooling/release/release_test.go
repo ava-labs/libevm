@@ -32,7 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ava-labs/libevm/params"
 )
 
 func TestMain(m *testing.M) {

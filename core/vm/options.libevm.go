@@ -16,7 +16,7 @@
 
 package vm
 
-import "github.com/ethereum/go-ethereum/libevm/options"
+import "github.com/ava-labs/libevm/libevm/options"
 
 type callConfig struct {
 	unsafeCallerAddressProxying bool

@@ -15,7 +15,7 @@
 // <http://www.gnu.org/licenses/>.
 package vm
 
-import "github.com/ethereum/go-ethereum/core/tracing"
+import "github.com/ava-labs/libevm/core/tracing"
 
 // The original RunPrecompiledContract was migrated to being a method on
 // [evmCallArgs]. We need to replace it for use by regular geth tests.
