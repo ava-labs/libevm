@@ -24,7 +24,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ava-labs/libevm/log"
+	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/exp/slog"
 )
 

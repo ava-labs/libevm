@@ -22,7 +22,7 @@ import (
 	metrics2 "runtime/metrics"
 	"time"
 
-	"github.com/ava-labs/libevm/metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 // ExampleMetrics returns an ordered registry populated with a sample of metrics.

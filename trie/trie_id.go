@@ -16,7 +16,7 @@
 
 package trie
 
-import "github.com/ava-labs/libevm/common"
+import "github.com/ethereum/go-ethereum/common"
 
 // ID is the identifier for uniquely identifying a trie.
 type ID struct {

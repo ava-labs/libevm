@@ -17,7 +17,7 @@
 package state
 
 import (
-	"github.com/ava-labs/libevm/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // transientStorage is a representation of EIP-1153 "Transient Storage".

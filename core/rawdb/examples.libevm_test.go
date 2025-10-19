@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/ava-labs/libevm/common"
+	"github.com/ethereum/go-ethereum/common"
 	// To ensure that all methods are available to importing packages, this test
 	// is defined in package `rawdb_test` instead of `rawdb`.
-	"github.com/ava-labs/libevm/core/rawdb"
-	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // ExampleDatabaseStat demonstrates the method signatures of DatabaseStat, which

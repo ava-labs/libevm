@@ -30,7 +30,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ava-labs/libevm/params"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (

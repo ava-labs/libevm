@@ -19,8 +19,8 @@ package native
 import (
 	"math/big"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // CaptureEnter implements the [vm.EVMLogger] hook for entering a new scope (via

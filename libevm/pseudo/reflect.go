@@ -19,7 +19,7 @@ package pseudo
 import (
 	"reflect"
 
-	"github.com/ava-labs/libevm/rlp"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Reflection is used as a last resort in pseudo types so is limited to this

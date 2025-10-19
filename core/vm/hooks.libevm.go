@@ -17,9 +17,9 @@
 package vm
 
 import (
-	"github.com/ava-labs/libevm/libevm"
-	"github.com/ava-labs/libevm/libevm/register"
-	"github.com/ava-labs/libevm/params"
+	"github.com/ethereum/go-ethereum/libevm"
+	"github.com/ethereum/go-ethereum/libevm/register"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // RegisterHooks registers the Hooks. It is expected to be called in an `init()`
