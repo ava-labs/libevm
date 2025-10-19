@@ -469,17 +469,17 @@ func (b *Block) WithSeal(header *Header) *Block {
 }
 
 // WithBody returns a copy of the block with the given transaction and uncle contents.
-func (b *Block) WithBody(body Body) *Block {
+func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
 	block := &Block{
 		header:       b.header,
-		transactions: make([]*Transaction, len(body.Transactions)),
-		uncles:       make([]*Header, len(body.Uncles)),
+		transactions: make([]*Transaction, len(transactions)),
+		uncles:       make([]*Header, len(uncles)),
 		withdrawals:  b.withdrawals,
 		extra:        body.cloneExtra(),
 	}
-	copy(block.transactions, body.Transactions)
-	for i := range body.Uncles {
-		block.uncles[i] = CopyHeader(body.Uncles[i])
+	copy(block.transactions, transactions)
+	for i := range uncles {
+		block.uncles[i] = CopyHeader(uncles[i])
 	}
 	return block
 }

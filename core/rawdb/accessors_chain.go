@@ -753,7 +753,7 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 	if body == nil {
 		return nil
 	}
-	return types.NewBlockWithHeader(header).WithBody(*body).WithWithdrawals(body.Withdrawals)
+	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles).WithWithdrawals(body.Withdrawals)
 }
 
 // WriteBlock serializes a block into the database, header and body separately.
@@ -843,12 +843,7 @@ func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
 	}
 	for _, bad := range badBlocks {
 		if bad.Header.Hash() == hash {
-			block := types.NewBlockWithHeader(bad.Header)
-			if bad.Body != nil {
-				block = block.WithBody(*bad.Body)
-				block = block.WithWithdrawals(bad.Body.Withdrawals)
-			}
-			return block
+			return types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles).WithWithdrawals(bad.Body.Withdrawals)
 		}
 	}
 	return nil
@@ -867,12 +862,7 @@ func ReadAllBadBlocks(db ethdb.Reader) []*types.Block {
 	}
 	var blocks []*types.Block
 	for _, bad := range badBlocks {
-		block := types.NewBlockWithHeader(bad.Header)
-		if bad.Body != nil {
-			block = block.WithBody(*bad.Body)
-			block = block.WithWithdrawals(bad.Body.Withdrawals)
-		}
-		blocks = append(blocks, block)
+		blocks = append(blocks, types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles).WithWithdrawals(bad.Body.Withdrawals))
 	}
 	return blocks
 }
