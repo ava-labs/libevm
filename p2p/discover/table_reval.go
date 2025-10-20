@@ -22,8 +22,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ava-labs/libevm/common/mclock"
+	"github.com/ava-labs/libevm/p2p/enode"
 )
 
 const never = mclock.AbsTime(math.MaxInt64)
