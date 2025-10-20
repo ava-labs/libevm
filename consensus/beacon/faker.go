@@ -19,8 +19,8 @@ package beacon
 import (
 	"math/big"
 
-	"github.com/ava-labs/libevm/consensus"
-	"github.com/ava-labs/libevm/core/types"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // NewFaker creates a fake consensus engine for testing.

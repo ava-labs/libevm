@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"math/big"
 
-	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 var _ = (*supplyInfoBurnMarshaling)(nil)

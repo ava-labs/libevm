@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ava-labs/libevm/rpc"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
 )
 

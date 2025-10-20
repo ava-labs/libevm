@@ -27,9 +27,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ava-labs/libevm/core/rawdb/ancienttest"
-	"github.com/ava-labs/libevm/ethdb"
-	"github.com/ava-labs/libevm/rlp"
+	"github.com/ethereum/go-ethereum/core/rawdb/ancienttest"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/require"
 )
 

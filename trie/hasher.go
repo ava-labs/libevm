@@ -19,8 +19,8 @@ package trie
 import (
 	"sync"
 
-	"github.com/ava-labs/libevm/crypto"
-	"github.com/ava-labs/libevm/rlp"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // hasher is a type used for the trie Hash operation. A hasher has some

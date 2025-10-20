@@ -21,7 +21,7 @@ import (
 	"encoding/binary"
 	mrand "math/rand"
 
-	"github.com/ava-labs/libevm/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // prng is a pseudo random number generator seeded by strong randomness.

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/libevm/metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 func TestCollectRuntimeMetrics(t *testing.T) {

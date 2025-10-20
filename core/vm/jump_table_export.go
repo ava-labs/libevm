@@ -19,7 +19,7 @@ package vm
 import (
 	"errors"
 
-	"github.com/ava-labs/libevm/params"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // LookupInstructionSet returns the instruction set for the fork configured by
