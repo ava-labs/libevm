@@ -19,8 +19,8 @@ package libevm
 import (
 	"github.com/holiman/uint256"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/libevm/stateconf"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/libevm/stateconf"
 )
 
 // PrecompiledContract is an exact copy of vm.PrecompiledContract, mirrored here

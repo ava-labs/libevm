@@ -19,7 +19,7 @@ package trie
 import (
 	"maps"
 
-	"github.com/ava-labs/libevm/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // tracer tracks the changes of trie nodes. During the trie operations,

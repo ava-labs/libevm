@@ -19,9 +19,9 @@ package state
 import (
 	"testing"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/params"
-	"github.com/ava-labs/libevm/trie/utils"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie/utils"
 )
 
 var (

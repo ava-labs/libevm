@@ -22,7 +22,7 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/ava-labs/libevm/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // weightedIterator is an iterator with an assigned weight. It is used to prioritise

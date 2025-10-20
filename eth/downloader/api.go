@@ -21,10 +21,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/libevm"
-	"github.com/ava-labs/libevm/core"
-	"github.com/ava-labs/libevm/event"
-	"github.com/ava-labs/libevm/rpc"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // DownloaderAPI provides an API which gives information about the current

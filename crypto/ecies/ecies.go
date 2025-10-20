@@ -41,7 +41,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ava-labs/libevm/crypto"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (

@@ -1,4 +1,4 @@
-module github.com/ava-labs/libevm
+module github.com/ethereum/go-ethereum
 
 go 1.24.8
 
