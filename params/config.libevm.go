@@ -128,6 +128,13 @@ func TestOnlyClearRegisteredExtras() {
 	registeredExtras.TestOnlyClear()
 }
 
+// ExtrasRegistered returns whether [RegisterExtras] has been called
+// successfully, or if we are currently within a [WithTempRegisteredExtras]
+// function.
+func ExtrasRegistered() bool {
+	return registeredExtras.Registered()
+}
+
 // registeredExtras holds non-generic constructors for the [Extras] types
 // registered via [RegisterExtras].
 var registeredExtras register.AtMostOnce[*extraConstructors]

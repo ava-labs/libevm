@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -97,7 +96,7 @@ func (s *envStub) StateDB() vm.StateDB {
 }
 
 func TestGuard(t *testing.T) {
-	db, err := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	db, err := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	require.NoError(t, err, "state.New()")
 	env := &envStub{db: db}
 

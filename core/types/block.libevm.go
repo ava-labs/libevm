@@ -140,11 +140,11 @@ func (NOOPBlockBodyHooks) Copy() *NOOPBlockBodyHooks { return &NOOPBlockBodyHook
 // backwards-compatibility tests added.
 var (
 	_ = &Body{
-		[]*Transaction{}, []*Header{}, []*Withdrawal{}, // geth
+		[]*Transaction{}, []*Header{}, []*Withdrawal{}, []*Request{}, // geth
 		&pseudo.Type{}, // libevm
 	}
 	_ = extblock{
-		&Header{}, []*Transaction{}, []*Header{}, []*Withdrawal{}, // geth
+		&Header{}, []*Transaction{}, []*Header{}, []*Withdrawal{}, []*Request{}, // geth
 		BlockBodyHooks(nil), // libevm
 	}
 	// Demonstrate identity of these two types, by definition but useful for
@@ -155,27 +155,27 @@ var (
 func (NOOPBlockBodyHooks) BlockRLPFieldsForEncoding(b *BlockRLPProxy) *rlp.Fields {
 	return &rlp.Fields{
 		Required: []any{b.Header, b.Txs, b.Uncles},
-		Optional: []any{b.Withdrawals},
+		Optional: []any{b.Withdrawals, b.Requests},
 	}
 }
 
 func (NOOPBlockBodyHooks) BlockRLPFieldPointersForDecoding(b *BlockRLPProxy) *rlp.Fields {
 	return &rlp.Fields{
 		Required: []any{&b.Header, &b.Txs, &b.Uncles},
-		Optional: []any{&b.Withdrawals},
+		Optional: []any{&b.Withdrawals, &b.Requests},
 	}
 }
 
 func (NOOPBlockBodyHooks) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
 	return &rlp.Fields{
 		Required: []any{b.Transactions, b.Uncles},
-		Optional: []any{b.Withdrawals},
+		Optional: []any{b.Withdrawals, b.Requests},
 	}
 }
 
 func (NOOPBlockBodyHooks) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 	return &rlp.Fields{
 		Required: []any{&b.Transactions, &b.Uncles},
-		Optional: []any{&b.Withdrawals},
+		Optional: []any{&b.Withdrawals, &b.Requests},
 	}
 }

@@ -246,6 +246,8 @@ func TestBlockWithX(t *testing.T) {
 				newBlock = block.WithBody(body)
 			case "WithSeal":
 				newBlock = block.WithSeal(&Header{})
+			case "WithWitness":
+				newBlock = block.WithWitness(&ExecutionWitness{})
 			default:
 				t.Fatalf("method call not implemented: %s", method)
 			}

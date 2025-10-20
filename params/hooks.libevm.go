@@ -54,7 +54,7 @@ type RulesHooks interface {
 	// returned by said function, which will be propagated. It MAY alter the
 	// received slice. The value it returns MUST be consistent with the
 	// behaviour of the PrecompileOverride hook.
-	ActivePrecompiles([]common.Address) []common.Address
+	ActivePrecompiles(libevm.PrecompiledContracts) libevm.PrecompiledContracts
 	// MinimumGasConsumption receives a transaction's gas limit and returns the
 	// minimum quantity of gas units to be charged for said transaction. If the
 	// returned value is greater than the transaction's limit, the minimum spend
@@ -136,7 +136,7 @@ func (NOOPHooks) PrecompileOverride(common.Address) (libevm.PrecompiledContract,
 }
 
 // ActivePrecompiles echoes the active addresses unchanged.
-func (NOOPHooks) ActivePrecompiles(active []common.Address) []common.Address {
+func (NOOPHooks) ActivePrecompiles(active libevm.PrecompiledContracts) libevm.PrecompiledContracts {
 	return active
 }
 

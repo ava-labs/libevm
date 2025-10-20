@@ -61,7 +61,7 @@ func (c *prefetcherConfig) applyTo(sf *subfetcher) {
 			// Although the workers may be shared between all subfetchers, each
 			// MUST have its own Trie pool.
 			New: func() Trie {
-				return sf.db.CopyTrie(sf.trie)
+				return mustCopyTrie(sf.trie)
 			},
 		},
 	}

@@ -23,13 +23,16 @@ import (
 	"github.com/ethereum/go-ethereum/libevm/stateconf"
 )
 
-// PrecompiledContract is an exact copy of vm.PrecompiledContract, mirrored here
-// for instances where importing that package would result in a circular
-// dependency.
-type PrecompiledContract interface {
-	RequiredGas(input []byte) uint64
-	Run(input []byte) ([]byte, error)
-}
+// PrecompiledContract and PrecompiledContracts are exact copies of the
+// respective types in the `vm` package, mirrored here for instances where
+// importing that package would result in a circular dependency.
+type (
+	PrecompiledContract interface {
+		RequiredGas(input []byte) uint64
+		Run(input []byte) ([]byte, error)
+	}
+	PrecompiledContracts map[common.Address]PrecompiledContract
+)
 
 // StateReader is a subset of vm.StateDB, exposing only methods that read from
 // but do not modify state. See method comments in vm.StateDB, which aren't

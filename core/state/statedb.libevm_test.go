@@ -37,8 +37,8 @@ import (
 )
 
 func TestTxHash(t *testing.T) {
-	db := NewDatabase(rawdb.NewMemoryDatabase())
-	state, err := New(types.EmptyRootHash, db, nil)
+	db := NewDatabaseForTesting()
+	state, err := New(types.EmptyRootHash, db)
 	require.NoError(t, err)
 
 	assert.Zero(t, state.TxHash(), "Tx hash should initially be uninitialized")
@@ -60,7 +60,7 @@ func TestStateDBCommitPropagatesOptions(t *testing.T) {
 		},
 	)
 	var snapRec snapTreeRecorder
-	sdb, err := New(types.EmptyRootHash, NewDatabaseWithNodeDB(memdb, triedb), &snapRec)
+	sdb, err := New(types.EmptyRootHash, NewDatabase(triedb, &snapRec))
 	require.NoError(t, err, "New()")
 
 	// Ensures that rec.Update() will be called.
@@ -157,10 +157,9 @@ func (noopHooks) TransformStateKey(_ common.Address, key common.Hash) common.Has
 }
 
 func TestTransformStateKey(t *testing.T) {
-	rawdb := rawdb.NewMemoryDatabase()
-	trie := triedb.NewDatabase(rawdb, nil)
-	db := NewDatabaseWithNodeDB(rawdb, trie)
-	sdb, err := New(types.EmptyRootHash, db, nil)
+	tdb := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
+	db := NewDatabase(tdb, nil)
+	sdb, err := New(types.EmptyRootHash, db)
 	require.NoErrorf(t, err, "New()")
 
 	addr := common.Address{1}
@@ -183,10 +182,10 @@ func TestTransformStateKey(t *testing.T) {
 	root, err := sdb.Commit(0, false)
 	require.NoErrorf(t, err, "state.Commit()")
 
-	err = trie.Commit(root, false)
+	err = tdb.Commit(root, false)
 	require.NoErrorf(t, err, "trie.Commit()")
 
-	sdb, err = New(root, db, nil)
+	sdb, err = New(root, db)
 	require.NoErrorf(t, err, "New()")
 
 	assertCommittedEq := func(t *testing.T, key, want common.Hash, opts ...stateconf.StateDBStateOption) {

@@ -18,7 +18,9 @@ package vm
 
 import (
 	"fmt"
+	"maps"
 	"math/big"
+	"slices"
 
 	"github.com/holiman/uint256"
 	"golang.org/x/exp/slog"
@@ -40,30 +42,49 @@ type P256Verify struct {
 	p256Verify
 }
 
-// ActivePrecompiles returns the precompiles enabled with the current configuration.
-func ActivePrecompiles(rules params.Rules) []common.Address {
-	orig := activePrecompiles(rules) // original, upstream implementation
-	active := rules.Hooks().ActivePrecompiles(append([]common.Address{}, orig...))
+func activePrecompiledContracts(rules params.Rules) map[common.Address]PrecompiledContract {
+	orig := overriddenActivePrecompiledContracts(rules) // original, upstream implementation
+	active := rules.Hooks().ActivePrecompiles(asLibEVM(orig))
 
 	// As all set computation is done lazily and only when debugging, there is
 	// some duplication in favour of simplified code.
 	log.Debug(
 		"Overriding active precompiles",
 		"added", log.Lazy(func() slog.Value {
-			diff := set.From(active...).Sub(set.From(orig...))
+			diff := keys(active).Sub(keys(orig))
 			return slog.AnyValue(diff.Slice())
 		}),
 		"removed", log.Lazy(func() slog.Value {
-			diff := set.From(orig...).Sub(set.From(active...))
+			diff := keys(orig).Sub(keys(active))
 			return slog.AnyValue(diff.Slice())
 		}),
 		"unchanged", log.Lazy(func() slog.Value {
-			both := set.From(active...).Intersect(set.From(orig...))
+			both := keys(active).Intersect(keys(orig))
 			return slog.AnyValue(both.Slice())
 		}),
 	)
 
-	return active
+	return asGeth(active)
+}
+
+func asLibEVM(m PrecompiledContracts) libevm.PrecompiledContracts {
+	out := make(libevm.PrecompiledContracts)
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+func asGeth(m libevm.PrecompiledContracts) PrecompiledContracts {
+	out := make(PrecompiledContracts)
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+func keys[K comparable, V any](m map[K]V) set.Set[K] {
+	return set.From(slices.Collect(maps.Keys(m))...)
 }
 
 // evmCallArgs mirrors the parameters of the [EVM] methods Call(), CallCode(),

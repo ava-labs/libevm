@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/libevm/ethtest"
 	"github.com/ethereum/go-ethereum/triedb"
 )
@@ -160,28 +159,27 @@ type stateViews struct {
 
 func (v stateViews) newStateDB(t *testing.T, root common.Hash) *state.StateDB {
 	t.Helper()
-	s, err := state.New(root, v.database, v.snaps)
+	s, err := state.New(root, v.database)
 	require.NoError(t, err, "state.New()")
 	return s
 }
 
 func newWithSnaps(t *testing.T) stateViews {
 	t.Helper()
-	empty := types.EmptyRootHash
-	kvStore := memorydb.New()
-	ethDB := rawdb.NewDatabase(kvStore)
+	db := rawdb.NewMemoryDatabase()
+	tdb := triedb.NewDatabase(db, nil)
 	snaps, err := snapshot.New(
 		snapshot.Config{
 			CacheSize: 16, // Mb (arbitrary but non-zero)
 		},
-		kvStore,
-		triedb.NewDatabase(ethDB, nil),
-		empty,
+		db,
+		tdb,
+		types.EmptyRootHash,
 	)
 	require.NoError(t, err, "snapshot.New()")
 
 	return stateViews{
 		snaps:    snaps,
-		database: state.NewDatabase(ethDB),
+		database: state.NewDatabase(tdb, snaps),
 	}
 }

@@ -151,7 +151,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 			state, err := trie.NewStateTrie(id, db)
 			require.NoError(t, err, "trie.NewStateTrie(types.EmptyRootHash, ...)")
 
-			require.NoErrorf(t, state.UpdateAccount(addr, acct), "%T.UpdateAccount(...)", state)
+			require.NoErrorf(t, state.UpdateAccount(addr, acct, 0 /*arg dropped by method*/), "%T.UpdateAccount(...)", state)
 			assert.Equalf(t, tt.wantTrieHash, state.Hash(), "%T.Hash() after UpdateAccount()", state)
 
 			got, err := state.GetAccount(addr)

@@ -27,12 +27,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func newTx(nonce uint64) *Transaction    { return NewTx(&LegacyTx{Nonce: nonce}) }
 func newHdr(parentHashHigh byte) *Header { return &Header{ParentHash: common.Hash{parentHashHigh}} }
 func newWithdraw(idx uint64) *Withdrawal { return &Withdrawal{Index: idx} }
+func newRequest(amount uint64) *Request  { return NewRequest(&Deposit{Amount: amount}) }
 
 func blockBodyRLPTestInputs() []*Body {
 	// We build up test-case [Body] instances from the Cartesian product of each
@@ -52,12 +54,19 @@ func blockBodyRLPTestInputs() []*Body {
 		{newWithdraw(1)},
 		{newWithdraw(2), newWithdraw(3)},
 	}
+	requestMatrix := [][]*Request{
+		nil, {}, // Must be different for optional field
+		{newRequest(1)},
+		{newRequest(2), newRequest(3)},
+	}
 
 	var bodies []*Body
 	for _, tx := range txMatrix {
 		for _, u := range uncleMatrix {
 			for _, w := range withdrawMatrix {
-				bodies = append(bodies, &Body{tx, u, w, nil /* extra field */})
+				for _, r := range requestMatrix {
+					bodies = append(bodies, &Body{tx, u, w, r, nil /* extra field */})
+				}
 			}
 		}
 	}
@@ -67,12 +76,6 @@ func blockBodyRLPTestInputs() []*Body {
 func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 	for _, body := range blockBodyRLPTestInputs() {
 		t.Run("", func(t *testing.T) {
-			t.Cleanup(func() {
-				if t.Failed() {
-					t.Logf("\n%s", pretty.Sprint(body))
-				}
-			})
-
 			// The original [Body] doesn't implement [rlp.Encoder] nor
 			// [rlp.Decoder] so we can use a methodless equivalent as the gold
 			// standard.
@@ -104,9 +107,16 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 					want.Uncles = []*Header{}
 				}
 
+				// If any later optional field is non-nil then so too must a
+				// current optional one be non-nil.
+				if want.Withdrawals == nil && want.Requests != nil {
+					want.Withdrawals = []*Withdrawal{}
+				}
+
 				opts := cmp.Options{
 					cmp.Comparer((*Header).equalHash),
 					cmp.Comparer((*Transaction).equalHash),
+					cmp.Comparer((*Request).equalHash),
 					cmpopts.IgnoreUnexported(Body{}),
 				}
 				if diff := cmp.Diff(want, got, opts); diff != "" {
@@ -138,10 +148,12 @@ func TestBlockRLPBackwardsCompatibility(t *testing.T) {
 			// backwards-compatible gold standard.
 			hdr := newHdr(99)
 			block := extblock{
-				Header:      hdr,
-				Txs:         body.Transactions,
-				Uncles:      body.Uncles,
-				Withdrawals: body.Withdrawals,
+				hdr,
+				body.Transactions,
+				body.Uncles,
+				body.Withdrawals,
+				body.Requests,
+				(BlockBodyHooks)(nil),
 			}
 
 			// We've added [extblock.EncodeRLP] and [extblock.DecodeRLP] for our
@@ -174,12 +186,14 @@ func TestBlockRLPBackwardsCompatibility(t *testing.T) {
 					gotBlock.Transactions(),
 					gotBlock.Uncles(),
 					gotBlock.Withdrawals(),
-					nil, // unexported libevm hooks
+					gotBlock.Requests(),
+					BlockBodyHooks(nil), // unexported libevm hooks
 				}
 
 				opts := cmp.Options{
 					cmp.Comparer((*Header).equalHash),
 					cmp.Comparer((*Transaction).equalHash),
+					cmp.Comparer((*Request).equalHash),
 					cmpopts.IgnoreUnexported(extblock{}),
 				}
 				if diff := cmp.Diff(wantBlock, got, opts); diff != "" {
@@ -317,6 +331,7 @@ func TestBodyRLPCChainCompat(t *testing.T) {
 				opts := cmp.Options{
 					cmp.Comparer((*Header).equalHash),
 					cmp.Comparer((*Transaction).equalHash),
+					cmp.Comparer((*Request).equalHash),
 					cmpopts.IgnoreUnexported(Body{}),
 				}
 				if diff := cmp.Diff(body, got, opts); diff != "" {
@@ -347,3 +362,14 @@ func equalHash[
 
 func (h *Header) equalHash(hh *Header) bool           { return equalHash(h, hh) }
 func (tx *Transaction) equalHash(u *Transaction) bool { return equalHash(tx, u) }
+func (r *Request) equalHash(s *Request) bool          { return equalHash(r, s) }
+
+func (r *Request) Hash() common.Hash {
+	s := crypto.NewKeccakState()
+	if err := r.EncodeRLP(s); err != nil {
+		panic(err)
+	}
+	var h common.Hash
+	copy(h[:], s.Sum(nil))
+	return h
+}

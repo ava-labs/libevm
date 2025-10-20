@@ -16,14 +16,16 @@
 package params
 
 import (
-	"bytes"
 	"encoding/json"
 	"math/big"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/libevm/jsoncmp"
 	"github.com/ethereum/go-ethereum/libevm/pseudo"
 )
 
@@ -135,14 +137,30 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 			})
 
 			t.Run("json.Marshal()", func(t *testing.T) {
-				var want bytes.Buffer
-				require.NoError(t, json.Compact(&want, []byte(tt.jsonInput)), "json.Compact()")
-
 				got, err := json.Marshal(tt.want)
 				require.NoError(t, err, "json.Marshal()")
-				require.Equal(t, want.String(), string(got))
+				want := []byte(tt.jsonInput)
+				if diff := cmp.Diff(want, got, chainConfigJSONComparison(t)); diff != "" {
+					t.Errorf("json.Marshal() diff (-want +got):\n%s", diff)
+				}
 			})
 		})
+	}
+}
+
+func chainConfigJSONComparison(t *testing.T) cmp.Options {
+	t.Helper()
+	return cmp.Options{
+		jsoncmp.AsMapToAny(t),
+		cmp.Transformer("remove_zero_deposit_contract", func(m map[string]any) map[string]any {
+			// The `omitEmpty` tag doesn't handle all zero values,
+			// so addresses are always emitted (not omitted).
+			const key = `depositContractAddress`
+			if m[key] == (common.Address{}).String() {
+				delete(m, key)
+			}
+			return m
+		}),
 	}
 }
 
@@ -264,7 +282,9 @@ func TestMarshalChainConfigJSON_Errors(t *testing.T) {
 				require.Error(t, err)
 				assert.Regexp(t, testCase.wantErrRegex, err.Error())
 			}
-			assert.Equal(t, testCase.wantJSONData, string(data))
+			if diff := cmp.Diff([]byte(testCase.wantJSONData), data, chainConfigJSONComparison(t)); diff != "" {
+				t.Errorf("MarshalChainConfigJSON(...) diff (-want +got):\n%s", diff)
+			}
 		})
 	}
 }

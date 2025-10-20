@@ -20,12 +20,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/big"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -622,26 +626,52 @@ func TestCanCreateContract(t *testing.T) {
 	}
 }
 
+func asGethPrecompiles(m libevm.PrecompiledContracts) vm.PrecompiledContracts {
+	out := make(vm.PrecompiledContracts)
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
 func TestActivePrecompilesOverride(t *testing.T) {
+	// Rules MUST be constructed at the time of use to ensure that the correct
+	// extras are used.
 	newRules := func() params.Rules {
 		return new(params.ChainConfig).Rules(big.NewInt(0), false, 0)
 	}
-	defaultActive := vm.ActivePrecompiles(newRules())
+	defaultActive := vm.ActivePrecompiledContracts(newRules())
+
+	assertActiveAddresses := func(t *testing.T, rules params.Rules, want vm.PrecompiledContracts) {
+		t.Helper()
+		opt := cmpopts.SortSlices(func(a, b common.Address) bool {
+			return a.Cmp(b) < 0
+		})
+		if diff := cmp.Diff(slices.Collect(maps.Keys(want)), vm.ActivePrecompiles(rules), opt); diff != "" {
+			t.Errorf("vm.ActivePrecompiles() diff (-want +got):\n%s", diff)
+		}
+	}
+	t.Run("before_registration", func(t *testing.T) {
+		assertActiveAddresses(t, newRules(), defaultActive)
+	})
 
 	rng := ethtest.NewPseudoRand(0xDecafC0ffeeBad)
-	precompiles := make([]common.Address, rng.Intn(10)+5)
-	for i := range precompiles {
-		precompiles[i] = rng.Address()
+	precompiles := libevm.PrecompiledContracts{
+		rng.Address(): nil,
+		rng.Address(): nil,
 	}
 	hooks := &hookstest.Stub{
-		ActivePrecompilesFn: func(active []common.Address) []common.Address {
-			assert.Equal(t, defaultActive, active, "ActivePrecompiles() hook receives default addresses")
+		ActivePrecompilesFn: func(active libevm.PrecompiledContracts) libevm.PrecompiledContracts {
+			assert.Equal(t, defaultActive, asGethPrecompiles(active), "ActivePrecompiledContracts() hook receives default contracts")
 			return precompiles
 		},
 	}
 	hooks.Register(t)
 
-	require.Equal(t, precompiles, vm.ActivePrecompiles(newRules()), "vm.ActivePrecompiles() returns overridden addresses")
+	t.Run("with_registration", func(t *testing.T) {
+		require.Equal(t, asGethPrecompiles(precompiles), vm.ActivePrecompiledContracts(newRules()), "vm.ActivePrecompiledContracts() returns overridden contracts")
+		assertActiveAddresses(t, newRules(), asGethPrecompiles(precompiles))
+	})
 }
 
 func TestPrecompileMakeCall(t *testing.T) {
