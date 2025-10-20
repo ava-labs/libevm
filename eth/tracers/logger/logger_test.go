@@ -22,14 +22,14 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 
 	// libevm extra imports
-	"github.com/ethereum/go-ethereum/libevm/stateconf"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 )
 
 type dummyContractRef struct {

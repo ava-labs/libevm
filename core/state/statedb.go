@@ -30,23 +30,23 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/core/stateless"
-	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/triestate"
-	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state/snapshot"
+	"github.com/ava-labs/libevm/core/stateless"
+	"github.com/ava-labs/libevm/core/tracing"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/params"
+	"github.com/ava-labs/libevm/trie"
+	"github.com/ava-labs/libevm/trie/trienode"
+	"github.com/ava-labs/libevm/trie/triestate"
+	"github.com/ava-labs/libevm/trie/utils"
 	"github.com/holiman/uint256"
 
 	// libevm extra imports
-	"github.com/ethereum/go-ethereum/libevm/stateconf"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 )
 
 // TriesInMemory represents the number of layers that are kept in RAM.

@@ -7,14 +7,14 @@ import (
 	"math/big"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
-	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/consensus/misc/eip4844"
+	"github.com/ava-labs/libevm/core/tracing"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/eth/tracers"
+	"github.com/ava-labs/libevm/log"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 

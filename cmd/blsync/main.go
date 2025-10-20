@@ -21,13 +21,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ethereum/go-ethereum/beacon/blsync"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ava-labs/libevm/beacon/blsync"
+	"github.com/ava-labs/libevm/cmd/utils"
+	"github.com/ava-labs/libevm/internal/debug"
+	"github.com/ava-labs/libevm/internal/flags"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/node"
+	"github.com/ava-labs/libevm/rpc"
 	"github.com/urfave/cli/v2"
 )
 

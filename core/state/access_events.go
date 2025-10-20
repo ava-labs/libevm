@@ -19,10 +19,10 @@ package state
 import (
 	"maps"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/math"
+	"github.com/ava-labs/libevm/params"
+	"github.com/ava-labs/libevm/trie/utils"
 	"github.com/holiman/uint256"
 )
 

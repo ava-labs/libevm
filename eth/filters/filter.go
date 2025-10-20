@@ -22,10 +22,10 @@ import (
 	"math/big"
 	"slices"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/bloombits"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/rpc"
 )
 
 // Filter can be used to retrieve and filter logs.

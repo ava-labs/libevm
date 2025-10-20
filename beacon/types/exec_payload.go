@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/trie"
 	"github.com/holiman/uint256"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	zrntcommon "github.com/protolambda/zrnt/eth2/beacon/common"

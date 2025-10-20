@@ -19,16 +19,16 @@ package blsync
 import (
 	"strings"
 
-	"github.com/ethereum/go-ethereum/beacon/light"
-	"github.com/ethereum/go-ethereum/beacon/light/api"
-	"github.com/ethereum/go-ethereum/beacon/light/request"
-	"github.com/ethereum/go-ethereum/beacon/light/sync"
-	"github.com/ethereum/go-ethereum/beacon/types"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ava-labs/libevm/beacon/light"
+	"github.com/ava-labs/libevm/beacon/light/api"
+	"github.com/ava-labs/libevm/beacon/light/request"
+	"github.com/ava-labs/libevm/beacon/light/sync"
+	"github.com/ava-labs/libevm/beacon/types"
+	"github.com/ava-labs/libevm/cmd/utils"
+	"github.com/ava-labs/libevm/common/mclock"
+	"github.com/ava-labs/libevm/ethdb/memorydb"
+	"github.com/ava-labs/libevm/event"
+	"github.com/ava-labs/libevm/rpc"
 	"github.com/urfave/cli/v2"
 )
 
