@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/libevm"
 	"github.com/ethereum/go-ethereum/libevm/stateconf"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -51,7 +50,7 @@ func TestTxHash(t *testing.T) {
 
 func TestStateDBCommitPropagatesOptions(t *testing.T) {
 	memdb := rawdb.NewMemoryDatabase()
-	trieRec := &triedbRecorder{Database: hashdb.New(memdb, nil, &trie.MerkleResolver{})}
+	trieRec := &triedbRecorder{Database: hashdb.New(memdb, nil)}
 	triedb := triedb.NewDatabase(
 		memdb,
 		&triedb.Config{
