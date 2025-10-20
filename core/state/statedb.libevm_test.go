@@ -55,7 +55,7 @@ func TestStateDBCommitPropagatesOptions(t *testing.T) {
 	triedb := triedb.NewDatabase(
 		memdb,
 		&triedb.Config{
-			DBOverride: func(_ ethdb.Database) triedb.DBOverride {
+			DBOverride: func(ethdb.Database) triedb.BackendDB {
 				return trieRec
 			},
 		},

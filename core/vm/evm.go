@@ -243,6 +243,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		code := evm.StateDB.GetCode(addr)
+		if witness := evm.StateDB.Witness(); witness != nil {
+			witness.AddCode(code)
+		}
 		if len(code) == 0 {
 			ret, err = nil, nil // gas is unchanged
 		} else {
@@ -311,6 +314,9 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
+		if witness := evm.StateDB.Witness(); witness != nil {
+			witness.AddCode(evm.StateDB.GetCode(addrCopy))
+		}
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
@@ -359,6 +365,9 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		addrCopy := addr
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
+		if witness := evm.StateDB.Witness(); witness != nil {
+			witness.AddCode(evm.StateDB.GetCode(addrCopy))
+		}
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
@@ -415,6 +424,9 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(addrCopy), new(uint256.Int), gas)
+		if witness := evm.StateDB.Witness(); witness != nil {
+			witness.AddCode(evm.StateDB.GetCode(addrCopy))
+		}
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
 		// When an error was returned by the EVM or when setting the creation code
 		// above we revert to the snapshot and consume any gas remaining. Additionally

@@ -20,8 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/triestate"
-	"github.com/ethereum/go-ethereum/triedb/database"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
@@ -31,25 +29,8 @@ import (
 // the non-libevm geth implementation.
 type BackendDB backend
 
-// A ReaderProvider exposes its underlying Reader as an interface. Both
-// [hashdb.Database] and [pathdb.Database] return concrete types so Go's lack of
-// support for [covariant types] means that this method can't be defined on
-// [BackendDB].
-//
-// [covariant types]: https://go.dev/doc/faq#covariant_types
-type ReaderProvider interface {
-	Reader(common.Hash) (database.Reader, error)
-}
-
 // A DBConstructor constructs alternative backend-database implementations.
-type DBConstructor func(ethdb.Database) DBOverride
-
-// A DBOverride is an arbitrary implementation of a [Database] backend. It MUST
-// be either a [HashDB] or a [PathDB].
-type DBOverride interface {
-	BackendDB
-	ReaderProvider
-}
+type DBConstructor func(ethdb.Database) BackendDB
 
 // Backend returns the underlying backend of the trie database.
 func (db *Database) Backend() BackendDB {
@@ -93,7 +74,7 @@ type HashDB interface {
 type PathDB interface {
 	BackendDB
 
-	Recover(root common.Hash, loader triestate.TrieLoader) error
+	Recover(root common.Hash) error
 	Recoverable(root common.Hash) bool
 	Disable() error
 	Enable(root common.Hash) error
