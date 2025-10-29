@@ -54,8 +54,8 @@ type concat struct {
 	gas         uint64
 }
 
-func (c *concat) BeforeBlock(h *types.Header) {
-	c.headerExtra = slices.Clone(h.Extra)
+func (c *concat) BeforeBlock(_ libevm.StateReader, b *types.Block) {
+	c.headerExtra = slices.Clone(b.Header().Extra)
 }
 
 func (c *concat) Gas(tx *types.Transaction) (uint64, bool) {
@@ -76,6 +76,8 @@ func (c *concat) Process(sdb libevm.StateReader, i int, tx *types.Transaction) [
 		c.headerExtra,
 	)
 }
+
+func (*concat) AfterBlock(StateDB, *types.Block, types.Receipts) {}
 
 func TestProcessor(t *testing.T) {
 	handler := &concat{
@@ -173,8 +175,8 @@ func TestProcessor(t *testing.T) {
 
 			extra := []byte("extra")
 			block := types.NewBlock(&types.Header{Extra: extra}, txs, nil, nil, trie.NewStackTrie(nil))
-			require.NoError(t, p.StartBlock(block, rules, sdb), "StartBlock()")
-			defer p.FinishBlock(block)
+			require.NoError(t, p.StartBlock(sdb, rules, block), "StartBlock()")
+			defer p.FinishBlock(sdb, block, nil)
 
 			for i, tx := range txs {
 				wantOK := wantProcessed[i]
@@ -305,8 +307,7 @@ func TestIntegration(t *testing.T) {
 	}
 
 	block := types.NewBlock(header, txs, nil, nil, trie.NewStackTrie(nil))
-	require.NoError(t, sut.StartBlock(block, rules, state), "StartBlock()")
-	defer sut.FinishBlock(block)
+	require.NoError(t, sut.StartBlock(state, rules, block), "StartBlock()")
 
 	pool := core.GasPool(math.MaxUint64)
 	var got []*types.Receipt
@@ -332,4 +333,5 @@ func TestIntegration(t *testing.T) {
 	if diff := cmp.Diff(want, got, ignore); diff != "" {
 		t.Errorf("%T diff (-want +got):\n%s", got, diff)
 	}
+	sut.FinishBlock(state, block, got)
 }

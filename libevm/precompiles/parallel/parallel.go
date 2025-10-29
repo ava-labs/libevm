@@ -29,6 +29,7 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/params"
 )
 
@@ -43,10 +44,22 @@ import (
 //
 // Scenario (2) allows precompile access to be determined through inspection of
 // the [types.Transaction] alone, without the need for execution.
+//
+// All [libevm.StateReader] instances are opened to the state at the beginning
+// of the block. The [StateDB] is the same one used to execute the block,
+// before being committed, and MAY be written to.
 type Handler[Result any] interface {
-	BeforeBlock(*types.Header)
+	BeforeBlock(libevm.StateReader, *types.Block)
 	Gas(*types.Transaction) (gas uint64, process bool)
 	Process(sdb libevm.StateReader, index int, tx *types.Transaction) Result
+	AfterBlock(StateDB, *types.Block, types.Receipts)
+}
+
+// StateDB is the subset of [state.StateDB] methods that MAY be called by
+// [Handler.AfterBlock].
+type StateDB interface {
+	libevm.StateReader
+	SetState(_ common.Address, key, val common.Hash, _ ...stateconf.StateDBStateOption)
 }
 
 // A Processor orchestrates dispatch and collection of results from a [Handler].
@@ -162,9 +175,19 @@ func (p *Processor[R]) Close() {
 // StartBlock dispatches transactions to the [Handler] and returns immediately.
 // It MUST be paired with a call to [Processor.FinishBlock], without overlap of
 // blocks.
-func (p *Processor[R]) StartBlock(b *types.Block, rules params.Rules, sdb *state.StateDB) error {
+func (p *Processor[R]) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.Block) error {
+	// The distribution mechanism copies the StateDB so we don't need to do it
+	// here, but the [Handler] is called directly so we do copy.
 	p.stateShare.distribute(sdb)
-	p.handler.BeforeBlock(types.CopyHeader(b.Header()))
+	p.handler.BeforeBlock(
+		sdb.Copy(),
+		types.NewBlockWithHeader(
+			b.Header(),
+		).WithBody(
+			*b.Body(),
+		),
+	)
+
 	txs := b.Transactions()
 	jobs := make([]*job, 0, len(txs))
 
@@ -206,7 +229,7 @@ func (p *Processor[R]) StartBlock(b *types.Block, rules params.Rules, sdb *state
 // FinishBlock returns the [Processor] to a state ready for the next block. A
 // return from FinishBlock guarantees that all dispatched work from the
 // respective call to [Processor.StartBlock] has been completed.
-func (p *Processor[R]) FinishBlock(b *types.Block) {
+func (p *Processor[R]) FinishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipts) {
 	for i := range len(b.Transactions()) {
 		// Every result channel is guaranteed to have some value in its buffer
 		// because [Processor.BeforeBlock] either sends a nil *R or it
@@ -214,6 +237,7 @@ func (p *Processor[R]) FinishBlock(b *types.Block) {
 		tx := (<-p.results[i]).tx
 		delete(p.txGas, tx)
 	}
+	p.handler.AfterBlock(sdb, b, rs)
 }
 
 // Result blocks until the i'th transaction passed to [Processor.StartBlock] has
