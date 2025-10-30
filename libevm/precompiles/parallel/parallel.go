@@ -48,10 +48,11 @@ import (
 // All [libevm.StateReader] instances are opened to the state at the beginning
 // of the block. The [StateDB] is the same one used to execute the block,
 // before being committed, and MAY be written to.
-type Handler[Result any] interface {
+type Handler[Data, Result any] interface {
 	BeforeBlock(libevm.StateReader, *types.Block)
 	Gas(*types.Transaction) (gas uint64, process bool)
-	Process(sdb libevm.StateReader, index int, tx *types.Transaction) Result
+	Prefetch(sdb libevm.StateReader, index int, tx *types.Transaction) Data
+	Process(sdb libevm.StateReader, index int, tx *types.Transaction, data Data) Result
 	AfterBlock(StateDB, *types.Block, types.Receipts)
 }
 
@@ -63,13 +64,14 @@ type StateDB interface {
 }
 
 // A Processor orchestrates dispatch and collection of results from a [Handler].
-type Processor[R any] struct {
-	handler    Handler[R]
-	workers    sync.WaitGroup
-	work       chan *job
-	results    [](chan result[R])
-	txGas      map[common.Hash]uint64
-	stateShare stateDBSharer
+type Processor[D, R any] struct {
+	handler           Handler[D, R]
+	workers           sync.WaitGroup
+	prefetch, process chan *job
+	data              [](chan D)
+	results           [](chan result[R])
+	txGas             map[common.Hash]uint64
+	stateShare        stateDBSharer
 }
 
 type job struct {
@@ -85,13 +87,16 @@ type result[T any] struct {
 // New constructs a new [Processor] with the specified number of concurrent
 // workers. [Processor.Close] must be called after the final call to
 // [Processor.FinishBlock] to avoid leaking goroutines.
-func New[R any](h Handler[R], workers int) *Processor[R] {
-	workers = max(workers, 1)
+func New[D, R any](h Handler[D, R], prefetchers, processors int) *Processor[D, R] {
+	prefetchers = max(prefetchers, 1)
+	processors = max(processors, 1)
+	workers := prefetchers + processors
 
-	p := &Processor[R]{
-		handler: h,
-		work:    make(chan *job),
-		txGas:   make(map[common.Hash]uint64),
+	p := &Processor[D, R]{
+		handler:  h,
+		prefetch: make(chan *job),
+		process:  make(chan *job),
+		txGas:    make(map[common.Hash]uint64),
 		stateShare: stateDBSharer{
 			workers:       workers,
 			nextAvailable: make(chan struct{}),
@@ -100,8 +105,11 @@ func New[R any](h Handler[R], workers int) *Processor[R] {
 
 	p.workers.Add(workers)       // for shutdown via [Processor.Close]
 	p.stateShare.wg.Add(workers) // for readiness of [Processor.worker] loops
-	for range workers {
-		go p.worker()
+	for range prefetchers {
+		go p.worker(p.prefetch, nil)
+	}
+	for range processors {
+		go p.worker(nil, p.process)
 	}
 	p.stateShare.wg.Wait()
 
@@ -131,7 +139,7 @@ func (s *stateDBSharer) distribute(sdb *state.StateDB) {
 	s.wg.Wait()
 }
 
-func (p *Processor[R]) worker() {
+func (p *Processor[D, R]) worker(prefetch, process chan *job) {
 	defer p.workers.Done()
 
 	var sdb *state.StateDB
@@ -152,14 +160,20 @@ func (p *Processor[R]) worker() {
 			stateAvailable = share.nextAvailable
 			share.wg.Done()
 
-		case w, ok := <-p.work:
+		case job, ok := <-prefetch:
+			if !ok {
+				return
+			}
+			p.data[job.index] <- p.handler.Prefetch(sdb, job.index, job.tx)
+
+		case job, ok := <-process:
 			if !ok {
 				return
 			}
 
-			r := p.handler.Process(sdb, w.index, w.tx)
-			p.results[w.index] <- result[R]{
-				tx:  w.tx.Hash(),
+			r := p.handler.Process(sdb, job.index, job.tx, <-p.data[job.index])
+			p.results[job.index] <- result[R]{
+				tx:  job.tx.Hash(),
 				val: &r,
 			}
 		}
@@ -167,15 +181,16 @@ func (p *Processor[R]) worker() {
 }
 
 // Close shuts down the [Processor], after which it can no longer be used.
-func (p *Processor[R]) Close() {
-	close(p.work)
+func (p *Processor[D, R]) Close() {
+	close(p.prefetch)
+	close(p.process)
 	p.workers.Wait()
 }
 
 // StartBlock dispatches transactions to the [Handler] and returns immediately.
 // It MUST be paired with a call to [Processor.FinishBlock], without overlap of
 // blocks.
-func (p *Processor[R]) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.Block) error {
+func (p *Processor[D, R]) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.Block) error {
 	// The distribution mechanism copies the StateDB so we don't need to do it
 	// here, but the [Handler] is called directly so we do copy.
 	p.stateShare.distribute(sdb)
@@ -191,9 +206,10 @@ func (p *Processor[R]) StartBlock(sdb *state.StateDB, rules params.Rules, b *typ
 	txs := b.Transactions()
 	jobs := make([]*job, 0, len(txs))
 
-	// We can reuse the channels already in the results slice because they're
-	// emptied by [Processor.FinishBlock].
+	// We can reuse the channels already in the data and results slices because
+	// they're emptied by [Processor.FinishBlock].
 	for i, n := len(p.results), len(txs); i < n; i++ {
+		p.data = append(p.data, make(chan D, 1))
 		p.results = append(p.results, make(chan result[R], 1))
 	}
 
@@ -216,11 +232,17 @@ func (p *Processor[R]) StartBlock(sdb *state.StateDB, rules params.Rules, b *typ
 		}
 	}
 
+	// The first goroutine pipelines into the second, which has its results
+	// emptied by [Processor.FinishBlock]. The return of said function therefore
+	// guarantees that we haven't leaked either of these.
 	go func() {
-		// This goroutine is guaranteed to have returned by the time
-		// [Processor.FinishBlock] does.
 		for _, j := range jobs {
-			p.work <- j
+			p.prefetch <- j
+		}
+	}()
+	go func() {
+		for _, j := range jobs {
+			p.process <- j
 		}
 	}()
 	return nil
@@ -229,7 +251,7 @@ func (p *Processor[R]) StartBlock(sdb *state.StateDB, rules params.Rules, b *typ
 // FinishBlock returns the [Processor] to a state ready for the next block. A
 // return from FinishBlock guarantees that all dispatched work from the
 // respective call to [Processor.StartBlock] has been completed.
-func (p *Processor[R]) FinishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipts) {
+func (p *Processor[D, R]) FinishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipts) {
 	for i := range len(b.Transactions()) {
 		// Every result channel is guaranteed to have some value in its buffer
 		// because [Processor.BeforeBlock] either sends a nil *R or it
@@ -251,7 +273,7 @@ func (p *Processor[R]) FinishBlock(sdb vm.StateDB, b *types.Block, rs types.Rece
 // [Processor.PreprocessingGasCharge] if registered as a [vm.Preprocessor].
 // The same value will be returned by each call with the same argument, such
 // that if R is a pointer then modifications will persist between calls.
-func (p *Processor[R]) Result(i int) (R, bool) {
+func (p *Processor[D, R]) Result(i int) (R, bool) {
 	ch := p.results[i]
 	r := <-ch
 	defer func() {
@@ -267,7 +289,7 @@ func (p *Processor[R]) Result(i int) (R, bool) {
 	return *r.val, true
 }
 
-func (p *Processor[R]) shouldProcess(tx *types.Transaction, rules params.Rules) (process bool, retErr error) {
+func (p *Processor[R, D]) shouldProcess(tx *types.Transaction, rules params.Rules) (process bool, retErr error) {
 	// An explicit 0 is necessary to avoid [Processor.PreprocessingGasCharge]
 	// returning [ErrTxUnknown].
 	p.txGas[tx.Hash()] = 0
@@ -317,7 +339,7 @@ var ErrTxUnknown = errors.New("transaction unknown by parallel preprocessor")
 
 // PreprocessingGasCharge implements the [vm.Preprocessor] interface and MUST be
 // registered via [vm.RegisterHooks] to ensure proper gas accounting.
-func (p *Processor[R]) PreprocessingGasCharge(tx common.Hash) (uint64, error) {
+func (p *Processor[R, D]) PreprocessingGasCharge(tx common.Hash) (uint64, error) {
 	g, ok := p.txGas[tx]
 	if !ok {
 		return 0, fmt.Errorf("%w: %v", ErrTxUnknown, tx)
@@ -325,4 +347,4 @@ func (p *Processor[R]) PreprocessingGasCharge(tx common.Hash) (uint64, error) {
 	return g, nil
 }
 
-var _ vm.Preprocessor = (*Processor[struct{}])(nil)
+var _ vm.Preprocessor = (*Processor[struct{}, struct{}])(nil)
