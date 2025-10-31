@@ -18,6 +18,8 @@ package parallel
 
 import (
 	"encoding/binary"
+	"iter"
+	"maps"
 	"math"
 	"math/big"
 	"math/rand/v2"
@@ -54,6 +56,7 @@ type recorder struct {
 	gotHeaderExtra []byte
 	gotBlockVal    common.Hash
 	gotReceipts    types.Receipts
+	gotPerTx       map[int]recorded
 }
 
 func (r *recorder) BeforeBlock(sdb libevm.StateReader, b *types.Block) {
@@ -96,8 +99,13 @@ func (r *recorded) asLog() *types.Log {
 	}
 }
 
-func (r *recorder) AfterBlock(_ StateDB, _ *types.Block, rs types.Receipts) {
+func (r *recorder) PostProcess(results iter.Seq2[int, recorded]) map[int]recorded {
+	return maps.Collect(results)
+}
+
+func (r *recorder) AfterBlock(_ StateDB, perTx map[int]recorded, _ *types.Block, rs types.Receipts) {
 	r.gotReceipts = slices.Clone(rs)
+	r.gotPerTx = perTx
 }
 
 func asHash(s string) (h common.Hash) {
@@ -209,8 +217,8 @@ func TestProcessor(t *testing.T) {
 			extra := []byte("extra")
 			block := types.NewBlock(&types.Header{Extra: extra}, txs, nil, nil, trie.NewStackTrie(nil))
 			require.NoError(t, p.StartBlock(sdb, rules, block), "StartBlock()")
-			defer p.FinishBlock(sdb, block, nil)
 
+			wantPerTx := make(map[int]recorded)
 			for i, tx := range txs {
 				wantOK := wantProcessed[i]
 
@@ -223,6 +231,7 @@ func TestProcessor(t *testing.T) {
 						Process:     processVal,
 						TxData:      tx.Data(),
 					}
+					wantPerTx[i] = want
 				}
 
 				got, gotOK := p.Result(i)
@@ -233,6 +242,11 @@ func TestProcessor(t *testing.T) {
 				if diff := cmp.Diff(want, got); diff != "" {
 					t.Errorf("Result(%d) diff (-want +got):\n%s", i, diff)
 				}
+			}
+
+			p.FinishBlock(sdb, block, nil)
+			if diff := cmp.Diff(wantPerTx, h.gotPerTx); diff != "" {
+				t.Errorf("handler.PostProcess() argument diff (-want +got):\n%s", diff)
 			}
 		})
 
