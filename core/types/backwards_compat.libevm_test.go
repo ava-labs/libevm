@@ -27,14 +27,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func newTx(nonce uint64) *Transaction    { return NewTx(&LegacyTx{Nonce: nonce}) }
 func newHdr(parentHashHigh byte) *Header { return &Header{ParentHash: common.Hash{parentHashHigh}} }
 func newWithdraw(idx uint64) *Withdrawal { return &Withdrawal{Index: idx} }
-func newRequest(amount uint64) *Request  { return NewRequest(&Deposit{Amount: amount}) }
 
 func blockBodyRLPTestInputs() []*Body {
 	// We build up test-case [Body] instances from the Cartesian product of each
@@ -54,19 +52,12 @@ func blockBodyRLPTestInputs() []*Body {
 		{newWithdraw(1)},
 		{newWithdraw(2), newWithdraw(3)},
 	}
-	requestMatrix := [][]*Request{
-		nil, {}, // Must be different for optional field
-		{newRequest(1)},
-		{newRequest(2), newRequest(3)},
-	}
 
 	var bodies []*Body
 	for _, tx := range txMatrix {
 		for _, u := range uncleMatrix {
 			for _, w := range withdrawMatrix {
-				for _, r := range requestMatrix {
-					bodies = append(bodies, &Body{tx, u, w, r, nil /* extra field */})
-				}
+				bodies = append(bodies, &Body{tx, u, w, nil /* extra field */})
 			}
 		}
 	}
@@ -107,16 +98,9 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 					want.Uncles = []*Header{}
 				}
 
-				// If any later optional field is non-nil then so too must a
-				// current optional one be non-nil.
-				if want.Withdrawals == nil && want.Requests != nil {
-					want.Withdrawals = []*Withdrawal{}
-				}
-
 				opts := cmp.Options{
 					cmp.Comparer((*Header).equalHash),
 					cmp.Comparer((*Transaction).equalHash),
-					cmp.Comparer((*Request).equalHash),
 					cmpopts.IgnoreUnexported(Body{}),
 				}
 				if diff := cmp.Diff(want, got, opts); diff != "" {
@@ -152,7 +136,6 @@ func TestBlockRLPBackwardsCompatibility(t *testing.T) {
 				body.Transactions,
 				body.Uncles,
 				body.Withdrawals,
-				body.Requests,
 				(BlockBodyHooks)(nil),
 			}
 
@@ -186,14 +169,12 @@ func TestBlockRLPBackwardsCompatibility(t *testing.T) {
 					gotBlock.Transactions(),
 					gotBlock.Uncles(),
 					gotBlock.Withdrawals(),
-					gotBlock.Requests(),
 					BlockBodyHooks(nil), // unexported libevm hooks
 				}
 
 				opts := cmp.Options{
 					cmp.Comparer((*Header).equalHash),
 					cmp.Comparer((*Transaction).equalHash),
-					cmp.Comparer((*Request).equalHash),
 					cmpopts.IgnoreUnexported(extblock{}),
 				}
 				if diff := cmp.Diff(wantBlock, got, opts); diff != "" {
@@ -331,7 +312,6 @@ func TestBodyRLPCChainCompat(t *testing.T) {
 				opts := cmp.Options{
 					cmp.Comparer((*Header).equalHash),
 					cmp.Comparer((*Transaction).equalHash),
-					cmp.Comparer((*Request).equalHash),
 					cmpopts.IgnoreUnexported(Body{}),
 				}
 				if diff := cmp.Diff(body, got, opts); diff != "" {
@@ -362,14 +342,3 @@ func equalHash[
 
 func (h *Header) equalHash(hh *Header) bool           { return equalHash(h, hh) }
 func (tx *Transaction) equalHash(u *Transaction) bool { return equalHash(tx, u) }
-func (r *Request) equalHash(s *Request) bool          { return equalHash(r, s) }
-
-func (r *Request) Hash() common.Hash {
-	s := crypto.NewKeccakState()
-	if err := r.EncodeRLP(s); err != nil {
-		panic(err)
-	}
-	var h common.Hash
-	copy(h[:], s.Sum(nil))
-	return h
-}

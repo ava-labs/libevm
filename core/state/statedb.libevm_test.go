@@ -30,9 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/libevm"
 	"github.com/ethereum/go-ethereum/libevm/stateconf"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/triestate"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/database"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 )
 
@@ -54,7 +52,7 @@ func TestStateDBCommitPropagatesOptions(t *testing.T) {
 	triedb := triedb.NewDatabase(
 		memdb,
 		&triedb.Config{
-			DBOverride: func(ethdb.Database) triedb.BackendDB {
+			DBOverride: func(ethdb.Database) triedb.DBOverride {
 				return trieRec
 			},
 		},
@@ -128,15 +126,11 @@ func (r *triedbRecorder) Update(
 	parent common.Hash,
 	block uint64,
 	nodes *trienode.MergedNodeSet,
-	states *triestate.Set,
+	states *triedb.StateSet,
 	opts ...stateconf.TrieDBUpdateOption,
 ) error {
 	r.parentBlockHash, r.currentBlockHash, r.exists = stateconf.ExtractTrieDBUpdatePayload(opts...)
-	return r.Database.Update(root, parent, block, nodes, states)
-}
-
-func (r *triedbRecorder) Reader(_ common.Hash) (database.Reader, error) {
-	return r.Database.Reader(common.Hash{})
+	return r.Database.Update(root, parent, block, nodes)
 }
 
 type highByteFlipper struct{}

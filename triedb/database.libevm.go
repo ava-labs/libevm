@@ -19,7 +19,9 @@ package triedb
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/libevm/stateconf"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
@@ -30,7 +32,15 @@ import (
 type BackendDB backend
 
 // A DBConstructor constructs alternative backend-database implementations.
-type DBConstructor func(ethdb.Database) BackendDB
+type DBConstructor func(ethdb.Database) DBOverride
+
+// A DBOverride is an arbitrary implementation of a [Database] backend. It MUST
+// be either a [HashDB] or a [PathDB].
+type DBOverride interface {
+	BackendDB
+	// Update receives all arguments passed to [Database.Update].
+	Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *StateSet, opts ...stateconf.TrieDBUpdateOption) error
+}
 
 // Backend returns the underlying backend of the trie database.
 func (db *Database) Backend() BackendDB {
@@ -79,5 +89,4 @@ type PathDB interface {
 	Disable() error
 	Enable(root common.Hash) error
 	Journal(root common.Hash) error
-	SetBufferSize(size int) error
 }

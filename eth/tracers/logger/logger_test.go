@@ -56,7 +56,8 @@ func (*dummyStatedb) GetRefund() uint64 { return 1337 }
 func (*dummyStatedb) GetState(_ common.Address, _ common.Hash, _ ...stateconf.StateDBStateOption) common.Hash {
 	return common.Hash{}
 }
-func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash, _ ...stateconf.StateDBStateOption) {
+func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash, _ ...stateconf.StateDBStateOption) common.Hash {
+	return common.Hash{}
 }
 
 func TestStoreCapture(t *testing.T) {

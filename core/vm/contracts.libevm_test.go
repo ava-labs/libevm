@@ -897,7 +897,7 @@ func TestPrecompileCallWithTracer(t *testing.T) {
 	state.SetCode(contract, convertBytes[vm.OpCode, byte](vm.PC, vm.SLOAD))
 
 	const tracerName = "prestateTracer"
-	tracer, err := tracers.DefaultDirectory.New(tracerName, nil, nil)
+	tracer, err := tracers.DefaultDirectory.New(tracerName, nil, nil, nil)
 	require.NoErrorf(t, err, "tracers.DefaultDirectory.New(%q)", tracerName)
 	evm.Config.Tracer = tracer.Hooks
 

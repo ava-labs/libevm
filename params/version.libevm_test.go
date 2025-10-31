@@ -22,6 +22,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/mod/semver"
+
+	"github.com/ethereum/go-ethereum/version"
 )
 
 // libEVMServer automates the version rules described by the [LibEVMVersion]
@@ -49,9 +51,10 @@ func (t semverTriplet) String() string {
 }
 
 func TestLibEVMVersioning(t *testing.T) {
+	// TODO(arr4n) Move all versioning to the [version] package.
 	t.Run("current", func(t *testing.T) {
 		want := libEVMSemver{
-			geth:   semverTriplet{VersionMajor, VersionMinor, VersionPatch},
+			geth:   semverTriplet{version.Major, version.Minor, version.Patch},
 			libEVM: semverTriplet{LibEVMVersionMajor, LibEVMVersionMinor, LibEVMVersionPatch},
 			typ:    LibEVMReleaseType,
 			rc:     libEVMReleaseCandidate,

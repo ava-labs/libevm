@@ -62,7 +62,9 @@ func TestStopPrefetcherWaitsOnWorkers(t *testing.T) {
 
 	db := filledStateDB()
 	db.prefetcher = newTriePrefetcher(db.db, db.originalRoot, "", false /*noreads*/, opt)
-	db.prefetcher.prefetch(common.Hash{}, common.Hash{}, common.Address{}, [][]byte{{}}, true /*read*/)
+
+	nonEmpty := make([]common.Address, 1) // execute at least 1 function with the pool
+	db.prefetcher.prefetch(common.Hash{}, common.Hash{}, common.Address{}, nonEmpty, []common.Hash{}, true /*read*/)
 
 	go func() {
 		<-pool.executed

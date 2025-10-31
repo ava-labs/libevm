@@ -46,6 +46,7 @@ type StateDB interface {
 	GetNonce(common.Address) uint64
 	GetCode(common.Address) []byte
 	GetState(common.Address, common.Hash, ...stateconf.StateDBStateOption) common.Hash
+	GetTransientState(common.Address, common.Hash) common.Hash
 	Exist(common.Address) bool
 	GetRefund() uint64
 }
@@ -57,9 +58,8 @@ type VMContext struct {
 	Time        uint64
 	Random      *common.Hash
 	// Effective tx gas price
-	GasPrice    *big.Int
-	ChainConfig *params.ChainConfig
-	StateDB     StateDB
+	GasPrice *big.Int
+	StateDB  StateDB
 }
 
 // BlockEvent is emitted upon tracing an incoming block.

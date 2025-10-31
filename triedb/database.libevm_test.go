@@ -17,27 +17,28 @@
 package triedb
 
 import (
+	"errors"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/triedb/database"
+	"github.com/ethereum/go-ethereum/libevm/stateconf"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 func TestDBOverride(t *testing.T) {
 	config := &Config{
-		DBOverride: func(ethdb.Database) BackendDB {
+		DBOverride: func(ethdb.Database) DBOverride {
 			return override{}
 		},
 	}
 
 	db := NewDatabase(nil, config)
-	got, err := db.Reader(common.Hash{})
-	require.NoError(t, err)
-	if _, ok := got.(reader); !ok {
-		t.Errorf("with non-nil %T.DBOverride, %T.Reader() got concrete type %T; want %T", config, db, got, reader{})
+	switch got := db.Backend().(type) {
+	case override:
+		// woot
+	default:
+		t.Errorf("with non-nil %T.DBOverride, %T.Backend() got concrete type %T; want %T", config, db, got, override{})
 	}
 }
 
@@ -45,10 +46,6 @@ type override struct {
 	PathDB
 }
 
-type reader struct {
-	database.Reader
-}
-
-func (override) Reader(common.Hash) (database.Reader, error) {
-	return reader{}, nil
+func (override) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *StateSet, opts ...stateconf.TrieDBUpdateOption) error {
+	return errors.New("unimplemented")
 }
