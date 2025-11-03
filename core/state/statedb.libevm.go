@@ -21,6 +21,7 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/state/snapshot"
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/libevm/stateconf"
 )
@@ -80,6 +81,22 @@ type StateDBHooks interface {
 // `init()` function and MUST NOT be called more than once.
 func RegisterExtras(s StateDBHooks) {
 	registeredExtras.MustRegister(s)
+}
+
+// WithTempRegisteredExtras temporarily registers `s` as if calling
+// [RegisterExtras] the same type parameter. After `fn` returns, the
+// registration is returned to its former state, be that none or the types
+// originally passed to [RegisterExtras].
+//
+// This MUST NOT be used on a live chain. It is solely intended for off-chain
+// consumers that require access to extras. Said consumers SHOULD NOT, however
+// call this function directly. Use the libevm/temporary.WithRegisteredExtras()
+// function instead as it atomically overrides all possible packages.
+func WithTempRegisteredExtras(lock libevm.ExtrasLock, s StateDBHooks, fn func() error) error {
+	if err := lock.Verify(); err != nil {
+		return err
+	}
+	return registeredExtras.TempOverride(s, fn)
 }
 
 // TestOnlyClearRegisteredExtras clears the arguments previously passed to
