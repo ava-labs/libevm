@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/mod/semver"
 
-	"github.com/ethereum/go-ethereum/version"
+	"github.com/ava-labs/libevm/version"
 )
 
 // libEVMServer automates the version rules described by the [LibEVMVersion]

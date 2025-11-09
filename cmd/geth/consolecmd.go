@@ -21,8 +21,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/console"
+	"github.com/ava-labs/libevm/cmd/utils"
+	"github.com/ava-labs/libevm/console"
 	"github.com/urfave/cli/v2"
 )
 

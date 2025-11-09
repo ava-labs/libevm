@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ava-labs/libevm/core/tracing"
 )
 
 type ctorFunc func(config json.RawMessage) (*tracing.Hooks, error)

@@ -29,12 +29,12 @@ import (
 	"time"
 
 	"github.com/donovanhide/eventsource"
-	"github.com/ethereum/go-ethereum/beacon/merkle"
-	"github.com/ethereum/go-ethereum/beacon/params"
-	"github.com/ethereum/go-ethereum/beacon/types"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/beacon/merkle"
+	"github.com/ava-labs/libevm/beacon/params"
+	"github.com/ava-labs/libevm/beacon/types"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/log"
 )
 
 var (

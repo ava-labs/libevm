@@ -24,7 +24,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ava-labs/libevm/params"
 )
 
 const (

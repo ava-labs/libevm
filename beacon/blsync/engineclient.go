@@ -22,13 +22,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/beacon/engine"
-	"github.com/ethereum/go-ethereum/beacon/params"
-	"github.com/ethereum/go-ethereum/beacon/types"
-	"github.com/ethereum/go-ethereum/common"
-	ctypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ava-labs/libevm/beacon/engine"
+	"github.com/ava-labs/libevm/beacon/params"
+	"github.com/ava-labs/libevm/beacon/types"
+	"github.com/ava-labs/libevm/common"
+	ctypes "github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rpc"
 )
 
 type engineClient struct {

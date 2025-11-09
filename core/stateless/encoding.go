@@ -19,8 +19,8 @@ package stateless
 import (
 	"io"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/rlp"
 )
 
 // toExtWitness converts our internal witness representation to the consensus one.

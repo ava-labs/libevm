@@ -19,11 +19,11 @@ package node
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/leveldb"
-	"github.com/ethereum/go-ethereum/ethdb/pebble"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/ethdb/leveldb"
+	"github.com/ava-labs/libevm/ethdb/pebble"
+	"github.com/ava-labs/libevm/log"
 )
 
 // openOptions contains the options to apply when opening a database.

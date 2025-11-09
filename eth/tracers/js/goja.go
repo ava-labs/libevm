@@ -25,18 +25,18 @@ import (
 	"sync"
 
 	"github.com/dop251/goja"
-	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/eth/tracers/internal"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ava-labs/libevm/core/tracing"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/eth/tracers"
+	"github.com/ava-labs/libevm/eth/tracers/internal"
+	"github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	jsassets "github.com/ethereum/go-ethereum/eth/tracers/js/internal/tracers"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
+	jsassets "github.com/ava-labs/libevm/eth/tracers/js/internal/tracers"
 )
 
 var assetTracers = make(map[string]string)

@@ -19,10 +19,10 @@ package blsync
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/beacon/light/request"
-	"github.com/ethereum/go-ethereum/beacon/light/sync"
-	"github.com/ethereum/go-ethereum/beacon/types"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/beacon/light/request"
+	"github.com/ava-labs/libevm/beacon/light/sync"
+	"github.com/ava-labs/libevm/beacon/types"
+	"github.com/ava-labs/libevm/common"
 	zrntcommon "github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 )

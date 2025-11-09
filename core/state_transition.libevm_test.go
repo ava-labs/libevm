@@ -23,16 +23,16 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/libevm"
-	"github.com/ethereum/go-ethereum/libevm/ethtest"
-	"github.com/ethereum/go-ethereum/libevm/hookstest"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core"
+	"github.com/ava-labs/libevm/core/tracing"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/libevm"
+	"github.com/ava-labs/libevm/libevm/ethtest"
+	"github.com/ava-labs/libevm/libevm/hookstest"
+	"github.com/ava-labs/libevm/params"
 )
 
 func TestCanExecuteTransaction(t *testing.T) {

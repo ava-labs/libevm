@@ -22,7 +22,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/internal/version"
+	"github.com/ava-labs/libevm/internal/version"
 	"github.com/urfave/cli/v2"
 )
 
