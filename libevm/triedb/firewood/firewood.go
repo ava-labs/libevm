@@ -267,7 +267,7 @@ func (db *Database) Update(root, parent common.Hash, block uint64, _ *trienode.M
 		// Edge case: first set of proposals before `Commit`, or empty genesis block
 		// Neither `Update` nor `Commit` is called for genesis, so we can accept a proposal with parentHash of empty.
 		for _, possible := range db.possibleProposals {
-			if possible.info.parent.hashes[common.Hash{}] == struct{}{} {
+			if _, ok := possible.info.parent.hashes[common.Hash{}]; ok {
 				h = possible
 				h.info.height = block
 				h.info.parent.hashes[parentHash] = struct{}{}
