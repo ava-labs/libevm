@@ -418,16 +418,11 @@ func (ps *proposals) findProposalToCommitWhenLocked(root common.Hash) (*proposal
 // createProposal creates a new proposal from the given layer
 // If there are no changes, it will return nil.
 func (db *Database) createProposal(parent *proposal, keys, values [][]byte) (*proposal, error) {
-	var (
-		p   *ffi.Proposal
-		err error
-	)
-
-	if parent.handle == nil {
-		p, err = db.Firewood.Propose(keys, values)
-	} else {
-		p, err = parent.handle.Propose(keys, values)
+	propose := db.Firewood.Propose
+	if h := parent.handle; h != nil {
+		propose = h.Propose
 	}
+	handle, err := propose(keys, values)
 	if err != nil {
 		return nil, fmt.Errorf("firewood: unable to create proposal from parent root %s: %w", parent.root.Hex(), err)
 	}
@@ -438,8 +433,8 @@ func (db *Database) createProposal(parent *proposal, keys, values [][]byte) (*pr
 		block = 0
 	}
 
-	h := &proposal{
-		handle: p,
+	p := &proposal{
+		handle: handle,
 		proposalMeta: &proposalMeta{
 			blockHashes: make(map[common.Hash]struct{}),
 			parent:      parent.proposalMeta,
@@ -447,28 +442,28 @@ func (db *Database) createProposal(parent *proposal, keys, values [][]byte) (*pr
 		},
 	}
 
-	currentRootBytes, err := p.Root()
+	currentRootBytes, err := handle.Root()
 	if err != nil {
 		return nil, fmt.Errorf("firewood: error getting root of proposals: %w", err)
 	}
-	h.root = common.BytesToHash(currentRootBytes)
+	p.root = common.BytesToHash(currentRootBytes)
 
-	return h, nil
+	return p, nil
 }
 
 // cleanupCommittedProposal dereferences the proposal and removes it from the proposal map.
 // It also recursively dereferences all children of the proposal.
-func (db *Database) cleanupCommittedProposal(p *proposal) {
-	oldChildren := db.proposals.tree.children
-	db.proposals.tree = p
-	db.proposals.tree.parent = nil
-	db.proposals.tree.handle = nil
+func (ps *proposals) cleanupCommittedProposal(p *proposal) {
+	oldChildren := ps.tree.children
+	ps.tree = p
+	ps.tree.parent = nil
+	ps.tree.handle = nil
 
-	db.removeProposalFromMap(p.proposalMeta)
+	ps.removeProposalFromMap(p.proposalMeta)
 
 	for _, child := range oldChildren {
 		if child != p.proposalMeta {
-			db.removeProposalAndChildren(child)
+			ps.removeProposalAndChildren(child)
 		}
 	}
 }
@@ -476,22 +471,22 @@ func (db *Database) cleanupCommittedProposal(p *proposal) {
 // Internally removes all references of the proposal from the database.
 // Should only be accessed with the proposal lock held.
 // Consumer must not be iterating the proposal map at this root.
-func (db *Database) removeProposalAndChildren(p *proposalMeta) {
+func (ps *proposals) removeProposalAndChildren(p *proposalMeta) {
 	// Base case: if there are children, we need to dereference them as well.
 	for _, child := range p.children {
-		db.removeProposalAndChildren(child)
+		ps.removeProposalAndChildren(child)
 	}
 
 	// Remove the proposal from the map.
-	db.removeProposalFromMap(p)
+	ps.removeProposalFromMap(p)
 }
 
 // removeProposalFromMap removes the proposal from the proposal map.
 // The proposal lock must be held when calling this function.
-func (db *Database) removeProposalFromMap(info *proposalMeta) {
-	rootList := db.proposals.byStateRoot[info.root]
+func (ps *proposals) removeProposalFromMap(meta *proposalMeta) {
+	rootList := ps.byStateRoot[meta.root]
 	for i, p := range rootList {
-		if p.proposalMeta == info { // pointer comparison - guaranteed to be unique
+		if p.proposalMeta == meta { // pointer comparison - guaranteed to be unique
 			rootList[i] = rootList[len(rootList)-1]
 			rootList[len(rootList)-1] = nil
 			rootList = rootList[:len(rootList)-1]
@@ -499,9 +494,9 @@ func (db *Database) removeProposalFromMap(info *proposalMeta) {
 		}
 	}
 	if len(rootList) == 0 {
-		delete(db.proposals.byStateRoot, info.root)
+		delete(ps.byStateRoot, meta.root)
 	} else {
-		db.proposals.byStateRoot[info.root] = rootList
+		ps.byStateRoot[meta.root] = rootList
 	}
 }
 
