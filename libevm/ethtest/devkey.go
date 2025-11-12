@@ -59,7 +59,7 @@ func privateKeyScalar(tb testing.TB, seed []byte, curve elliptic.Curve) *big.Int
 		require.NoError(tb, err, "%T.Read()", s)
 		d := new(big.Int).SetBytes(buf)
 
-		if d.Cmp(curve.Params().N) == -1 {
+		if isZero := d.Sign() == 0; !isZero && d.Cmp(curve.Params().N) == -1 {
 			return d
 		}
 	}
