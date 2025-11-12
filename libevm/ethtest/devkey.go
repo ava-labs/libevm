@@ -22,8 +22,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/libevm/crypto"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/libevm/crypto"
 )
 
 // UNSAFEDeterministicPrivateKey returns a new [crypto.S256] private key,
