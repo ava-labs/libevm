@@ -48,8 +48,12 @@ const (
 	logFileName = "firewood.log"
 )
 
-var _ triedb.DBOverride = (*Database)(nil)
+var (
+	_ triedb.DBConstructor = Config{}.BackendConstructor
+	_ triedb.DBOverride    = (*Database)(nil)
+)
 
+// A Database is an implementation of [triedb.DBOverride].
 type Database struct {
 	// The underlying Firewood database, used for storing proposals and revisions.
 	// This must be exported so other packages (e.g. state sync) can access firewood-specific methods.
@@ -93,8 +97,8 @@ type proposalMeta struct {
 
 type Config struct {
 	ChainDir             string
-	CleanCacheSize       int  // Size of the clean cache in bytes
-	FreeListCacheEntries uint // Number of free list entries to cache
+	CleanCacheSize       int
+	FreeListCacheEntries uint
 	Revisions            uint
 	ReadCacheStrategy    ffi.CacheStrategy
 }
@@ -118,11 +122,10 @@ func (c Config) BackendConstructor(ethdb.Database) triedb.DBOverride {
 // New creates a new Firewood database with the given disk database and configuration.
 // Any error during creation will cause the program to exit.
 func New(config Config) (*Database, error) {
-	if err := validatePath(config.ChainDir); err != nil {
+	if err := validateDir(config.ChainDir); err != nil {
 		return nil, err
 	}
 
-	// Start the logs prior to opening the database
 	logPath := filepath.Join(config.ChainDir, logFileName)
 	if err := ffi.StartLogs(&ffi.LogConfig{Path: logPath}); err != nil {
 		// This shouldn't be a fatal error, as this can only be called once per thread.
@@ -132,7 +135,7 @@ func New(config Config) (*Database, error) {
 
 	dbPath := filepath.Join(config.ChainDir, dbFileName)
 	fw, err := ffi.New(dbPath, &ffi.Config{
-		NodeCacheEntries:     uint(config.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
+		NodeCacheEntries:     uint(config.CleanCacheSize) / 256, // TODO(alarso16): 256 bytes may not be accurate
 		FreeListCacheEntries: config.FreeListCacheEntries,
 		Revisions:            config.Revisions,
 		ReadCacheStrategy:    config.ReadCacheStrategy,
@@ -143,6 +146,9 @@ func New(config Config) (*Database, error) {
 
 	currentRoot, err := fw.Root()
 	if err != nil {
+		if closeErr := fw.Close(context.Background()); closeErr != nil {
+			return nil, fmt.Errorf("%w: error while closing: %w", err, closeErr)
+		}
 		return nil, err
 	}
 
@@ -162,23 +168,22 @@ func New(config Config) (*Database, error) {
 	}, nil
 }
 
-func validatePath(dir string) error {
+func validateDir(dir string) error {
 	if dir == "" {
 		return errors.New("chain data directory must be set")
 	}
 
-	// Check that the directory exists
 	switch info, err := os.Stat(dir); {
 	case os.IsNotExist(err):
 		log.Info("Database directory not found, creating", "path", dir)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("error creating database directory: %w", err)
+			return fmt.Errorf("creating database directory: %v", err)
 		}
 		return nil
 	case err != nil:
-		return fmt.Errorf("error checking database directory: %w", err)
+		return fmt.Errorf("os.Stat() on database directory: %v", err)
 	case !info.IsDir():
-		return fmt.Errorf("database directory path is not a directory: %s", dir)
+		return fmt.Errorf("database directory path is not a directory: %q", dir)
 	}
 
 	return nil
@@ -197,14 +202,15 @@ func (*Database) Scheme() string {
 
 // Initialized checks whether a non-empty genesis block has been written.
 func (db *Database) Initialized(common.Hash) bool {
-	rootBytes, err := db.Firewood.Root()
+	root, err := db.Firewood.Root()
 	if err != nil {
 		log.Error("firewood: error getting current root", "error", err)
 		return false
 	}
-	root := common.BytesToHash(rootBytes)
-	// If the current root isn't empty, then unless the database is empty, we have a genesis block recorded.
-	return root != types.EmptyRootHash
+
+	// If the current root isn't empty, then unless the genesis block is empty,
+	// the database is initialized.
+	return !bytes.Equal(root, types.EmptyRootHash[:])
 }
 
 // Size returns the storage size of diff layer nodes above the persistent disk
@@ -216,11 +222,9 @@ func (*Database) Size() (common.StorageSize, common.StorageSize) {
 	return 0, 0
 }
 
-// This isn't called anywhere in coreth
 func (*Database) Reference(common.Hash, common.Hash) {}
 
-// Dereference drops a proposal from the database.
-// This function is no-op because unused proposals are dereferenced when no longer valid.
+// Dereference is no-op because unused proposals are dereferenced when no longer valid.
 // We cannot dereference at this call. Consider the following case:
 // Chain 1 has root A and root C
 // Chain 2 has root B and root C
@@ -229,7 +233,7 @@ func (*Database) Reference(common.Hash, common.Hash) {}
 // Thus, we recognize the single root C as the only proposal, and dereference it.
 func (*Database) Dereference(common.Hash) {}
 
-// Firewood does not support this.
+// Cap is a no-op because it isn't supported by Firewood.
 func (*Database) Cap(common.StorageSize) error {
 	return nil
 }
