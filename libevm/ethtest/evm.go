@@ -23,13 +23,24 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/libevm/options"
 	"github.com/ava-labs/libevm/params"
+	"github.com/ava-labs/libevm/triedb"
 )
+
+// NewEmptyStateDB returns an empty, memory-backed, state database.
+func NewEmptyStateDB(tb testing.TB, disk ethdb.Database) *state.StateDB {
+	tb.Helper()
+	sdb, err := state.New(types.EmptyRootHash, state.NewDatabase(disk), nil)
+	require.NoError(tb, err, "state.New()")
+	return sdb
+}
 
 // NewZeroEVM returns a new EVM backed by a [rawdb.NewMemoryDatabase]; all other
 // arguments to [vm.NewEVM] are the zero values of their respective types,
@@ -38,27 +49,24 @@ import (
 func NewZeroEVM(tb testing.TB, opts ...EVMOption) (*state.StateDB, *vm.EVM) {
 	tb.Helper()
 
-	sdb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	require.NoError(tb, err, "state.New()")
-
 	args := &evmConstructorArgs{
 		vm.BlockContext{
 			CanTransfer: core.CanTransfer,
 			Transfer:    core.Transfer,
 		},
 		vm.TxContext{},
-		sdb,
 		&params.ChainConfig{},
 		vm.Config{},
+		&core.Genesis{},
 	}
-	for _, o := range opts {
-		o.apply(args)
-	}
+	args = options.ApplyTo(args, opts...)
+
+	sdb := args.stateDB(tb)
 
 	return sdb, vm.NewEVM(
 		args.blockContext,
 		args.txContext,
-		args.stateDB,
+		sdb,
 		args.chainConfig,
 		args.config,
 	)
@@ -67,32 +75,52 @@ func NewZeroEVM(tb testing.TB, opts ...EVMOption) (*state.StateDB, *vm.EVM) {
 type evmConstructorArgs struct {
 	blockContext vm.BlockContext
 	txContext    vm.TxContext
-	stateDB      vm.StateDB
 	chainConfig  *params.ChainConfig
 	config       vm.Config
+	genesis      *core.Genesis
+}
+
+func (args *evmConstructorArgs) stateDB(tb testing.TB) *state.StateDB {
+	tb.Helper()
+
+	disk := rawdb.NewMemoryDatabase()
+	if args.genesis == nil {
+		return NewEmptyStateDB(tb, disk)
+	}
+
+	args.genesis.Config = args.chainConfig
+	tdb := triedb.NewDatabase(disk, nil)
+	_, root, err := core.SetupGenesisBlock(disk, tdb, args.genesis)
+	require.NoError(tb, err, "core.SetupGenesisBlock()")
+	require.NoError(tb, tdb.Commit(root, false), "%T.Commit([genesis root])", tdb)
+
+	cache := state.NewDatabase(disk)
+	sdb, err := state.New(root, cache, nil)
+	require.NoErrorf(tb, err, "state.New(%#x, ...)", root)
+	return sdb
 }
 
 // An EVMOption configures the EVM returned by [NewZeroEVM].
-type EVMOption interface {
-	apply(*evmConstructorArgs)
-}
-
-type funcOption func(*evmConstructorArgs)
-
-var _ EVMOption = funcOption(nil)
-
-func (f funcOption) apply(args *evmConstructorArgs) { f(args) }
+type EVMOption = options.Option[evmConstructorArgs]
 
 // WithBlockContext overrides the default context.
 func WithBlockContext(c vm.BlockContext) EVMOption {
-	return funcOption(func(args *evmConstructorArgs) {
+	return options.Func[evmConstructorArgs](func(args *evmConstructorArgs) {
 		args.blockContext = c
 	})
 }
 
 // WithBlockContext overrides the default context.
 func WithChainConfig(c *params.ChainConfig) EVMOption {
-	return funcOption(func(args *evmConstructorArgs) {
+	return options.Func[evmConstructorArgs](func(args *evmConstructorArgs) {
 		args.chainConfig = c
+	})
+}
+
+// WithGenesis overrides the default, empty genesis. The [params.ChainConfig]
+// will be ignored; use [WithChainConfig] if necessary.
+func WithGenesis(g *core.Genesis) EVMOption {
+	return options.Func[evmConstructorArgs](func(args *evmConstructorArgs) {
+		args.genesis = g
 	})
 }
