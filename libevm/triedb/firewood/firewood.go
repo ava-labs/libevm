@@ -53,10 +53,12 @@ var (
 	_ triedb.DBOverride    = (*Database)(nil)
 )
 
-// A Database is an implementation of [triedb.DBOverride].
+// Database is a triedb.DBOverride implementation backed by Firewood.
+// It acts as a HashDB for backwards compatibility with most of the blockchain code.
 type Database struct {
 	// The underlying Firewood database, used for storing proposals and revisions.
-	// This must be exported so other packages (e.g. state sync) can access firewood-specific methods.
+	// This is exported as read-only, with knowledge that the consumer will not close it
+	// and the latest state can be modified at any time.
 	Firewood *ffi.Database
 
 	proposals
@@ -71,7 +73,7 @@ type proposals struct {
 	// in the case of duplicate state roots.
 	// The root of the tree is stored here, and represents the top-most layer on disk.
 	tree *proposal
-	// possibleProposals temporarily holds proposals created during a trie update.
+	// possible temporarily holds proposals created during a trie update.
 	// This is cleared after the update is complete and the proposals have been sent to the database.
 	possible []*proposal
 }
@@ -95,22 +97,35 @@ type proposalMeta struct {
 	height      uint64
 }
 
+// Config provides necessary parameters for creating a Firewood database.
 type Config struct {
-	ChainDir             string
-	CleanCacheSize       int
+	DatabasePath         string
+	CacheSizeBytes       uint
 	FreeListCacheEntries uint
-	Revisions            uint
-	ReadCacheStrategy    ffi.CacheStrategy
+	MaxRevisions         uint
+	CacheStrategy        ffi.CacheStrategy
 }
 
-// Note that `FilePath` is not specified, and must always be set by the user.
-var Defaults = Config{
-	CleanCacheSize:       1024 * 1024, // 1MB
-	FreeListCacheEntries: 40_000,
-	Revisions:            100,
-	ReadCacheStrategy:    ffi.CacheAllReads,
+// DefaultConfig returns a default Config with the given directory.
+// The default config is:
+//   - CacheSizeBytes: 1MB
+//   - FreeListCacheEntries: 40,000
+//   - MaxRevisions: 100
+//   - CacheStrategy: [ffi.CacheAllReads]
+func DefaultConfig(dir string) Config {
+	return Config{
+		DatabasePath:         dir,
+		CacheSizeBytes:       1024 * 1024, // 1MB
+		FreeListCacheEntries: 40_000,
+		MaxRevisions:         100,
+		CacheStrategy:        ffi.CacheAllReads,
+	}
 }
 
+// BackendConstructor implements the [triedb.DBConstructor] interface.
+// It creates a new Firewood database with the given configuration.
+// Since Firewood uses its own on-disk format, the provided ethdb.Database is ignored.
+// Any error during creation will cause the program to exit.
 func (c Config) BackendConstructor(ethdb.Database) triedb.DBOverride {
 	db, err := New(c)
 	if err != nil {
@@ -119,26 +134,26 @@ func (c Config) BackendConstructor(ethdb.Database) triedb.DBOverride {
 	return db
 }
 
-// New creates a new Firewood database with the given disk database and configuration.
-// Any error during creation will cause the program to exit.
+// New creates a new Firewood database with the given configuration.
+// The database will not be opened on error.
 func New(config Config) (*Database, error) {
-	if err := validateDir(config.ChainDir); err != nil {
+	if err := validateDir(config.DatabasePath); err != nil {
 		return nil, err
 	}
 
-	logPath := filepath.Join(config.ChainDir, logFileName)
+	logPath := filepath.Join(config.DatabasePath, logFileName)
 	if err := ffi.StartLogs(&ffi.LogConfig{Path: logPath}); err != nil {
 		// This shouldn't be a fatal error, as this can only be called once per thread.
 		// Specifically, this will return an error in unit tests.
 		log.Warn("firewood: error starting logs", "error", err)
 	}
 
-	dbPath := filepath.Join(config.ChainDir, dbFileName)
+	dbPath := filepath.Join(config.DatabasePath, dbFileName)
 	fw, err := ffi.New(dbPath, &ffi.Config{
-		NodeCacheEntries:     uint(config.CleanCacheSize) / 256, // TODO(alarso16): 256 bytes may not be accurate
+		NodeCacheEntries:     config.CacheSizeBytes / 256, // TODO(alarso16): 256 bytes per node may not be accurate
 		FreeListCacheEntries: config.FreeListCacheEntries,
-		Revisions:            config.Revisions,
-		ReadCacheStrategy:    config.ReadCacheStrategy,
+		Revisions:            config.MaxRevisions,
+		ReadCacheStrategy:    config.CacheStrategy,
 	})
 	if err != nil {
 		return nil, err
@@ -176,7 +191,7 @@ func validateDir(dir string) error {
 	switch info, err := os.Stat(dir); {
 	case os.IsNotExist(err):
 		log.Info("Database directory not found, creating", "path", dir)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return fmt.Errorf("creating database directory: %v", err)
 		}
 		return nil
@@ -222,6 +237,8 @@ func (*Database) Size() (common.StorageSize, common.StorageSize) {
 	return 0, 0
 }
 
+// Reference is no-op because proposals are only referenced when created.
+// Additionally, internal nodes do not need tracked by consumers.
 func (*Database) Reference(common.Hash, common.Hash) {}
 
 // Dereference is no-op because unused proposals are dereferenced when no longer valid.
@@ -238,6 +255,11 @@ func (*Database) Cap(common.StorageSize) error {
 	return nil
 }
 
+// Close closes the database, freeing all associated resources.
+// This may hang for a short period while waiting for finalizers to complete.
+// If it does not close as expected, this indicates that there are still references
+// to proposals or revisions in memory, and an error will be returned.
+// The database should not be used after calling Close.
 func (db *Database) Close() error {
 	p := &db.proposals
 	p.Lock()
@@ -253,6 +275,11 @@ func (db *Database) Close() error {
 	return db.Firewood.Close(context.Background())
 }
 
+// Update updates the database to the given root at the given height.
+// The parent block hash and block hash must be provided in the options.
+// A proposal must have already been created from [AccountTrie.Commit] with the same root,
+// parent root, and height.
+// If no such proposal exists, an error will be returned.
 func (db *Database) Update(root, parent common.Hash, height uint64, _ *trienode.MergedNodeSet, _ *triestate.Set, opts ...stateconf.TrieDBUpdateOption) error {
 	// We require block hashes to be provided for all blocks in production.
 	// However, many tests cannot reasonably provide a block blockHash for genesis, so we allow it to be omitted.
@@ -360,7 +387,7 @@ func find[S ~[]E, E comparable](s S, fn func(E) bool) (E, bool) {
 // Any time this is called, we expect either:
 //  1. The root is the same as the current root of the database (empty block during bootstrapping)
 //  2. We have created a valid propsal with that root, and it is of height +1 above the proposal tree root.
-//     Additionally, this should be unique.
+//     Additionally, this will be unique.
 //
 // Afterward, we know that no other proposal at this height can be committed, so we can dereference all
 // children in the the other branches of the proposal tree.

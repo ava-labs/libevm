@@ -33,13 +33,14 @@ import (
 
 var _ state.Trie = (*AccountTrie)(nil)
 
-// AccountTrie implements state.Trie for managing account states.
-// There are a couple caveats to the current implementation:
-//  1. `Commit` is not used as expected in the state package. The `StorageTrie` doesn't return
-//     values, and we thus rely on the `AccountTrie`.
-//  2. The `Hash` method actually creates the proposal, since Firewood cannot calculate
-//     the hash of the trie without committing it. It is immediately dropped, and this
-//     can likely be optimized.
+// AccountTrie implements [state.Trie] for managing account states.
+// Although it fulfills the [state.Trie] interface, it has some important differences:
+//  1. [AccountTrie.Commit] is not used as expected in the state package. The `StorageTrie` doesn't return
+//     values, and we thus rely on the `AccountTrie`. Additionally, no [trienode.NodeSet] is
+//     actually constructed, since Firewood manages nodes internally and the list of changes
+//     is not needed externally.
+//  2. The [AccountTrie.Hash] method actually creates the [ffi.Proposal], since Firewood cannot calculate
+//     the hash of the trie without committing it.
 //
 // Note this is not concurrent safe.
 type AccountTrie struct {
@@ -207,8 +208,10 @@ func (a *AccountTrie) DeleteStorage(addr common.Address, key []byte) error {
 }
 
 // Hash returns the current hash of the state trie.
-// This will create a proposal and drop it, so it is not efficient to call for each transaction.
+// This will create the necessary proposals to guarantee that the changes can
+// later be committed. All new proposals will be tracked by the [Database].
 // If there are no changes since the last call, the cached root is returned.
+// On error, the zero hash is returned.
 func (a *AccountTrie) Hash() common.Hash {
 	hash, err := a.hash()
 	if err != nil {
@@ -231,9 +234,9 @@ func (a *AccountTrie) hash() (common.Hash, error) {
 	return a.root, nil
 }
 
-// Commit returns the new root hash of the trie and a NodeSet containing all modified accounts and storage slots.
-// The format of the NodeSet is different than in go-ethereum's trie implementation due to Firewood's design.
-// This boolean is ignored, as it is a relic of the StateTrie implementation.
+// Commit returns the new root hash of the trie and an empty [trienode.NodeSet].
+// The boolean input is ignored, as it is a relic of the StateTrie implementation.
+// If the changes are not yet already tracked by the [Database], they are created.
 func (a *AccountTrie) Commit(bool) (common.Hash, *trienode.NodeSet, error) {
 	// Get the hash of the trie.
 	hash, err := a.hash()
@@ -248,29 +251,35 @@ func (a *AccountTrie) Commit(bool) (common.Hash, *trienode.NodeSet, error) {
 }
 
 // UpdateContractCode implements state.Trie.
-// Contract code is controlled by rawdb, so we don't need to do anything here.
+// Contract code is controlled by `rawdb`, so we don't need to do anything here.
+// This always returns nil.
 func (*AccountTrie) UpdateContractCode(common.Address, common.Hash, []byte) error {
 	return nil
 }
 
 // GetKey implements state.Trie.
 // This should not be used, since any user should not be accessing by raw key.
+// It always returns nil.
 func (*AccountTrie) GetKey([]byte) []byte {
 	return nil
 }
 
 // NodeIterator implements state.Trie.
 // Firewood does not support iterating over internal nodes.
+// This always returns an error.
 func (*AccountTrie) NodeIterator([]byte) (trie.NodeIterator, error) {
 	return nil, errors.New("NodeIterator not implemented for Firewood")
 }
 
 // Prove implements state.Trie.
-// Firewood does not yet support providing key proofs.
+// Firewood does not support providing key proofs.
+// This always returns an error.
 func (*AccountTrie) Prove([]byte, ethdb.KeyValueWriter) error {
 	return errors.New("Prove not implemented for Firewood")
 }
 
+// Copy creates a deep copy of the [AccountTrie].
+// The [database.Reader] is shared, since it is read-only.
 func (a *AccountTrie) Copy() *AccountTrie {
 	// Create a new AccountTrie with the same root and reader
 	newTrie := &AccountTrie{

@@ -21,34 +21,33 @@ import (
 	"github.com/ava-labs/libevm/trie/trienode"
 )
 
+// StorageTrie is a wrapper around an AccountTrie for Firewood.
+// Firewood does not require a separate storage trie, as all storage changes
+// are managed by the account trie.
 type StorageTrie struct {
 	*AccountTrie
 }
 
-// `NewStorageTrie` returns a wrapper around an `AccountTrie` since Firewood
-// does not require a separate storage trie. All changes are managed by the account trie.
+// NewStorageTrie returns a wrapper around an [AccountTrie].
 func NewStorageTrie(accountTrie *AccountTrie) (*StorageTrie, error) {
 	return &StorageTrie{
 		AccountTrie: accountTrie,
 	}, nil
 }
 
-// Actual commit is handled by the account trie.
-// Return the old storage root as if there was no change since Firewood
-// will manage the hash calculations without it.
-// All changes are managed by the account trie.
+// Commit is a no-op for storage tries, as all changes are managed by the account trie.
+// It always returns a nil NodeSet and zero hash.
 func (*StorageTrie) Commit(bool) (common.Hash, *trienode.NodeSet, error) {
 	return common.Hash{}, nil, nil
 }
 
-// Firewood doesn't require tracking storage roots inside of an account.
-// They will be updated in place when hashing of the proposal takes place.
+// Hash returns an empty hash, as the storage roots are managed internally to Firewood.
 func (*StorageTrie) Hash() common.Hash {
 	return common.Hash{}
 }
 
-// Copy should never be called on a storage trie, as it is just a wrapper around the account trie.
-// Each storage trie should be re-opened with the account trie separately.
+// Copy returns nil, as storage tries do not need to be copied separately.
+// All usage of a copied storage trie should first ensure it is non-nil.
 func (*StorageTrie) Copy() *StorageTrie {
 	return nil
 }
