@@ -9,6 +9,8 @@ package hw.trezor.messages;
  * Messages for TREZOR communication
  */
 
+option go_package = "github.com/ava-labs/libevm/accounts/usbwallet/trezor;trezor";
+
 // Sugar for easier handling in Java
 option java_package = "com.satoshilabs.trezor.lib.protobuf";
 option java_outer_classname = "TrezorMessage";
