@@ -113,7 +113,9 @@ type NOOPHooks struct{}
 var _ Hooks = NOOPHooks{}
 
 // OverrideNewEVMArgs returns the args unchanged.
-func (NOOPHooks) OverrideNewEVMArgs(a *NewEVMArgs) *NewEVMArgs { return a }
+func (NOOPHooks) OverrideNewEVMArgs(a *NewEVMArgs) *NewEVMArgs {
+	return a
+}
 
 // OverrideEVMResetArgs returns the args unchanged.
 func (NOOPHooks) OverrideEVMResetArgs(_ params.Rules, a *EVMResetArgs) *EVMResetArgs {
