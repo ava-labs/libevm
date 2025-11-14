@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/params"
 )
 
@@ -68,9 +69,27 @@ func TestOverrideNewEVMArgs(t *testing.T) {
 	hooks := evmArgOverrider{newEVMchainID: chainID}
 	hooks.register(t)
 
-	evm := NewEVM(BlockContext{}, TxContext{}, nil, nil, Config{})
-	got := evm.ChainConfig().ChainID
-	require.Equalf(t, big.NewInt(chainID), got, "%T.ChainConfig().ChainID set by NewEVM() hook", evm)
+	assertChainID := func(t *testing.T, want int64) {
+		t.Helper()
+		evm := NewEVM(BlockContext{}, TxContext{}, nil, nil, Config{})
+		got := evm.ChainConfig().ChainID
+		require.Equalf(t, big.NewInt(want), got, "%T.ChainConfig().ChainID set by NewEVM() hook", evm)
+	}
+	assertChainID(t, chainID)
+
+	t.Run("WithTempRegisteredHooks", func(t *testing.T) {
+		err := libevm.WithTemporaryExtrasLock(func(lock libevm.ExtrasLock) error {
+			override := evmArgOverrider{newEVMchainID: 24680}
+			return WithTempRegisteredHooks(lock, &override, func() error {
+				assertChainID(t, override.newEVMchainID)
+				return nil
+			})
+		})
+		require.NoError(t, err)
+		t.Run("after", func(t *testing.T) {
+			assertChainID(t, chainID)
+		})
+	})
 }
 
 func TestOverrideEVMResetArgs(t *testing.T) {

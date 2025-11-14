@@ -18,6 +18,7 @@ package vm
 
 import (
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/params"
 )
@@ -26,6 +27,22 @@ import (
 // function and MUST NOT be called more than once.
 func RegisterHooks(h Hooks) {
 	libevmHooks.MustRegister(h)
+}
+
+// WithTempRegisteredHooks temporarily registers `h` as if calling
+// [RegisterHooks] the same type parameter. After `fn` returns, the registration
+// is returned to its former state, be that none or the types originally passed
+// to [RegisterHooks].
+//
+// This MUST NOT be used on a live chain. It is solely intended for off-chain
+// consumers that require access to extras. Said consumers SHOULD NOT, however
+// call this function directly. Use the libevm/temporary.WithRegisteredExtras()
+// function instead as it atomically overrides all possible packages.
+func WithTempRegisteredHooks(lock libevm.ExtrasLock, h Hooks, fn func() error) error {
+	if err := lock.Verify(); err != nil {
+		return err
+	}
+	return libevmHooks.TempOverride(h, fn)
 }
 
 // TestOnlyClearRegisteredHooks clears the [Hooks] previously passed to
@@ -96,7 +113,9 @@ type NOOPHooks struct{}
 var _ Hooks = NOOPHooks{}
 
 // OverrideNewEVMArgs returns the args unchanged.
-func (NOOPHooks) OverrideNewEVMArgs(a *NewEVMArgs) *NewEVMArgs { return a }
+func (NOOPHooks) OverrideNewEVMArgs(a *NewEVMArgs) *NewEVMArgs {
+	return a
+}
 
 // OverrideEVMResetArgs returns the args unchanged.
 func (NOOPHooks) OverrideEVMResetArgs(_ params.Rules, a *EVMResetArgs) *EVMResetArgs {
@@ -104,4 +123,6 @@ func (NOOPHooks) OverrideEVMResetArgs(_ params.Rules, a *EVMResetArgs) *EVMReset
 }
 
 // PreprocessingGasCharge returns (0, nil).
-func (NOOPHooks) PreprocessingGasCharge(common.Hash) (uint64, error) { return 0, nil }
+func (NOOPHooks) PreprocessingGasCharge(common.Hash) (uint64, error) {
+	return 0, nil
+}

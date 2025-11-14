@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see
 // <http://www.gnu.org/licenses/>.
+
 package params
 
 import (
@@ -23,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/libevm/register"
 )
@@ -276,4 +278,93 @@ func assertPanics(t *testing.T, fn func(), wantContains string) {
 		}
 	}()
 	fn()
+}
+
+func TestTempRegisteredExtras(t *testing.T) {
+	TestOnlyClearRegisteredExtras()
+	t.Cleanup(TestOnlyClearRegisteredExtras)
+
+	type (
+		primaryCC struct {
+			X int
+			NOOPHooks
+		}
+		primaryRules struct {
+			X int
+			NOOPHooks
+		}
+
+		overrideCC struct {
+			X string
+			NOOPHooks
+		}
+		overrideRules struct {
+			X string
+			NOOPHooks
+		}
+	)
+
+	primary := Extras[primaryCC, primaryRules]{
+		NewRules: func(_ *ChainConfig, _ *Rules, cc primaryCC, _ *big.Int, _ bool, _ uint64) primaryRules {
+			return primaryRules{
+				X: cc.X,
+			}
+		},
+	}
+	override := Extras[overrideCC, overrideRules]{
+		NewRules: func(_ *ChainConfig, _ *Rules, cc overrideCC, _ *big.Int, _ bool, _ uint64) overrideRules {
+			return overrideRules{
+				X: cc.X,
+			}
+		},
+	}
+
+	extras := RegisterExtras(primary)
+	testPrimaryExtras := func(t *testing.T) {
+		t.Helper()
+		assertRulesCopiedFromChainConfig(
+			t, extras, 42,
+			func(cc *primaryCC, x int) { cc.X = x },
+			func(r *primaryRules) int { return r.X },
+		)
+	}
+
+	t.Run("before_temp", testPrimaryExtras)
+	t.Run("WithTempRegisteredExtras", func(t *testing.T) {
+		err := libevm.WithTemporaryExtrasLock(func(lock libevm.ExtrasLock) error {
+			return WithTempRegisteredExtras(
+				lock, override,
+				func(extras ExtraPayloads[overrideCC, overrideRules]) error { // deliberately shadow `extras`
+					assertRulesCopiedFromChainConfig(
+						t, extras, "hello, world",
+						func(cc *overrideCC, x string) { cc.X = x },
+						func(r *overrideRules) string { return r.X },
+					)
+					return nil
+				},
+			)
+		})
+		require.NoError(t, err)
+	})
+	t.Run("after_temp", testPrimaryExtras)
+}
+
+func assertRulesCopiedFromChainConfig[C ChainConfigHooks, R RulesHooks, Payload any](
+	t *testing.T,
+	extras ExtraPayloads[C, R],
+	val Payload,
+	setX func(*C, Payload),
+	getX func(*R) Payload,
+) {
+	t.Helper()
+
+	cc := new(ChainConfig)
+	var ccExtra C
+	setX(&ccExtra, val)
+
+	extras.ChainConfig.Set(cc, ccExtra)
+	rules := cc.Rules(nil, false, 0)
+	rulesExtra := extras.Rules.Get(&rules)
+
+	assert.Equalf(t, val, getX(&rulesExtra), "%T.X copied from %T.X", rulesExtra, ccExtra)
 }

@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"reflect"
 
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/log"
@@ -72,14 +73,8 @@ func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPaylo
 	mustBeStructOrPointerToOne[C]()
 	mustBeStructOrPointerToOne[R]()
 
-	payloads := e.payloads()
-	registeredExtras.MustRegister(&extraConstructors{
-		newChainConfig: pseudo.NewConstructor[C]().Zero,
-		newRules:       pseudo.NewConstructor[R]().Zero,
-		reuseJSONRoot:  e.ReuseJSONRoot,
-		newForRules:    e.newForRules,
-		payloads:       payloads,
-	})
+	payloads, ctors := payloadsAndConstructors(e)
+	registeredExtras.MustRegister(ctors)
 	log.Info(
 		"Registered params extras",
 		"ChainConfig", log.TypeOf(pseudo.Zero[C]().Value.Get()),
@@ -87,6 +82,40 @@ func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPaylo
 		"ReuseJSONRoot", e.ReuseJSONRoot,
 	)
 	return payloads
+}
+
+func payloadsAndConstructors[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) (ExtraPayloads[C, R], *extraConstructors) {
+	payloads := e.payloads()
+	return payloads, &extraConstructors{
+		newChainConfig: pseudo.NewConstructor[C]().Zero,
+		newRules:       pseudo.NewConstructor[R]().Zero,
+		reuseJSONRoot:  e.ReuseJSONRoot,
+		newForRules:    e.newForRules,
+		payloads:       payloads,
+	}
+}
+
+// WithTempRegisteredExtras temporarily registers `HPtr`, `BPtr`, and `SA` as if
+// calling [RegisterExtras] the same type parameters. The [ExtraPayloads] are
+// passed to `fn` instead of being returned; the argument MUST NOT be persisted
+// beyond the life of `fn`. After `fn` returns, the registration is returned to
+// its former state, be that none or the types originally passed to
+// [RegisterExtras].
+//
+// This MUST NOT be used on a live chain. It is solely intended for off-chain
+// consumers that require access to extras. Said consumers SHOULD NOT, however
+// call this function directly. Use the libevm/temporary.WithRegisteredExtras()
+// function instead as it atomically overrides all possible packages.
+func WithTempRegisteredExtras[C ChainConfigHooks, R RulesHooks](
+	lock libevm.ExtrasLock,
+	e Extras[C, R],
+	fn func(ExtraPayloads[C, R]) error,
+) error {
+	if err := lock.Verify(); err != nil {
+		return err
+	}
+	payloads, ctors := payloadsAndConstructors(e)
+	return registeredExtras.TempOverride(ctors, func() error { return fn(payloads) })
 }
 
 // TestOnlyClearRegisteredExtras clears the [Extras] previously passed to

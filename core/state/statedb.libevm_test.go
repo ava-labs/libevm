@@ -27,6 +27,7 @@ import (
 	"github.com/ava-labs/libevm/core/state/snapshot"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/trie/trienode"
@@ -150,6 +151,12 @@ func (highByteFlipper) TransformStateKey(_ common.Address, key common.Hash) comm
 	return flipHighByte(key)
 }
 
+type noopHooks struct{}
+
+func (noopHooks) TransformStateKey(_ common.Address, key common.Hash) common.Hash {
+	return key
+}
+
 func TestTransformStateKey(t *testing.T) {
 	rawdb := rawdb.NewMemoryDatabase()
 	trie := triedb.NewDatabase(rawdb, nil)
@@ -208,6 +215,20 @@ func TestTransformStateKey(t *testing.T) {
 	assertCommittedEq(t, regularKey, regularVal, noTransform)
 	assertCommittedEq(t, flippedKey, regularVal)
 	assertCommittedEq(t, flippedKey, flippedVal, noTransform)
+
+	t.Run("WithTempRegisteredExtras", func(t *testing.T) {
+		err := libevm.WithTemporaryExtrasLock(func(lock libevm.ExtrasLock) error {
+			return WithTempRegisteredExtras(lock, noopHooks{}, func() error {
+				// No-op hooks are equivalent to using the `noTransform` option.
+				// NOTE this is NOT the intended usage of [WithTempRegisteredExtras]
+				// and is simply an easy way to test the temporary registration.
+				assertEq(t, regularKey, regularVal)
+				assertEq(t, flippedKey, flippedVal)
+				return nil
+			})
+		})
+		require.NoError(t, err)
+	})
 
 	updatedVal := common.Hash{'u', 'p', 'd', 'a', 't', 'e', 'd'}
 	sdb.SetState(addr, regularKey, updatedVal)

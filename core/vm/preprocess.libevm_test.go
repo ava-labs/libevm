@@ -123,7 +123,7 @@ func TestChargePreprocessingGas(t *testing.T) {
 		tx := types.MustSignNewTx(key, signer, &types.LegacyTx{
 			// Although nonces aren't strictly necessary, they guarantee a
 			// different tx hash for each one.
-			Nonce:    uint64(i),
+			Nonce:    uint64(i), //nolint:gosec // Known to not overflow
 			To:       tt.to,
 			GasPrice: big.NewInt(1),
 			Gas:      tt.txGas,
@@ -166,12 +166,8 @@ func TestChargePreprocessingGas(t *testing.T) {
 				}
 				assert.Equalf(t, wantStatus, receipt.Status, "%T.Status", receipt)
 
-				if got, want := gotGasUsed, tt.wantGasUsed; got != want {
-					t.Errorf("core.ApplyTransaction(..., &gotGasUsed, ...) got %d; want %d", got, want)
-				}
-				if got, want := receipt.GasUsed, tt.wantGasUsed; got != want {
-					t.Errorf("core.ApplyTransaction(...) -> %T.GasUsed = %d; want %d", receipt, got, want)
-				}
+				assert.Equal(t, tt.wantGasUsed, gotGasUsed, "core.ApplyTransaction(..., &gotGasUsed, ...)")
+				assert.Equalf(t, tt.wantGasUsed, receipt.GasUsed, "core.ApplyTransaction(...) -> %T.GasUsed", receipt)
 			})
 
 			t.Run("VM_error", func(t *testing.T) {
