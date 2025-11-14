@@ -265,8 +265,15 @@ func (db *Database) Close() error {
 	p.Lock()
 	defer p.Unlock()
 
-	// All remaining proposals must be dereferenced.
-	p.possible = nil
+	if p.tree == nil {
+		return nil // already closed
+	}
+
+	// All remaining proposals can explicitly be dropped.
+	p.cleanupPossible(nil)
+	for _, child := range p.tree.children {
+		p.removeProposalAndChildren(child)
+	}
 	p.byStateRoot = nil
 	p.tree = nil
 
@@ -297,6 +304,7 @@ func (db *Database) Update(root, parent common.Hash, height uint64, _ *trienode.
 	}
 
 	p, ok := db.proposals.findUnverified(height, parentBlockHash)
+	defer db.proposals.cleanupPossible(p)
 	if !ok {
 		return fmt.Errorf("firewood: no unverified proposal found for block %d, root %s, hash %s", height, root.Hex(), blockHash.Hex())
 	}
@@ -350,24 +358,44 @@ func (ps *proposals) exists(root, block, parentBlock common.Hash) bool {
 }
 
 func (ps *proposals) findUnverified(height uint64, parentBlock common.Hash) (*proposal, bool) {
+	// First, try to find a proposal with the correct parent block hash.
 	p, ok := find(ps.possible, func(p *proposal) bool {
 		_, ok := p.parent.blockHashes[parentBlock]
 		return ok
 	})
-	if ok { // note positive boolean
+	// The exact proposal was found.
+	if ok {
 		return p, true
 	}
 
+	// Otherwise, this may be the first block after startup, and the parent hash wasn't recorded.
 	p, ok = find(ps.possible, func(p *proposal) bool {
 		_, ok := p.parent.blockHashes[common.Hash{}]
 		return ok
 	})
-	if !ok { // note negative boolean
+	if !ok {
+		// No suitable proposal found.
 		return nil, false
 	}
+
+	// For clarity, while using this proposal, we should update the meta.
 	p.proposalMeta.height = height
 	p.proposalMeta.parent.blockHashes[parentBlock] = struct{}{}
 	return p, true
+}
+
+// cleanupPossible drops all possible proposals except the given one.
+// If nil, all possible proposals are dropped.
+func (ps *proposals) cleanupPossible(p *proposal) {
+	for _, candidate := range ps.possible {
+		if candidate == p {
+			continue
+		}
+		if err := candidate.handle.Drop(); err != nil {
+			log.Error("error dropping proposal", "root", candidate.root, "height", candidate.height, "err", err)
+		}
+	}
+	ps.possible = nil
 }
 
 // find is equivalent to [slices.IndexFunc], returning the element instead of
@@ -490,7 +518,7 @@ func (ps *proposals) cleanupCommittedProposal(p *proposal) {
 	ps.tree.parent = nil
 	ps.tree.handle = nil
 
-	ps.removeProposalFromMap(p.proposalMeta)
+	ps.removeProposalFromMap(p.proposalMeta, false)
 
 	for _, child := range oldChildren {
 		if child != p.proposalMeta {
@@ -509,18 +537,24 @@ func (ps *proposals) removeProposalAndChildren(p *proposalMeta) {
 	}
 
 	// Remove the proposal from the map.
-	ps.removeProposalFromMap(p)
+	ps.removeProposalFromMap(p, true)
 }
 
 // removeProposalFromMap removes the proposal from the proposal map.
 // The proposal lock must be held when calling this function.
-func (ps *proposals) removeProposalFromMap(meta *proposalMeta) {
+func (ps *proposals) removeProposalFromMap(meta *proposalMeta, drop bool) {
 	rootList := ps.byStateRoot[meta.root]
 	for i, p := range rootList {
 		if p.proposalMeta == meta { // pointer comparison - guaranteed to be unique
 			rootList[i] = rootList[len(rootList)-1]
 			rootList[len(rootList)-1] = nil
 			rootList = rootList[:len(rootList)-1]
+
+			if drop {
+				if err := p.handle.Drop(); err != nil {
+					log.Error("error dropping proposal", "root", meta.root, "height", meta.height, "err", err)
+				}
+			}
 			break
 		}
 	}
