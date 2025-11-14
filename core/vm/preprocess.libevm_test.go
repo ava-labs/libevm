@@ -123,7 +123,7 @@ func TestChargePreprocessingGas(t *testing.T) {
 		tx := types.MustSignNewTx(key, signer, &types.LegacyTx{
 			// Although nonces aren't strictly necessary, they guarantee a
 			// different tx hash for each one.
-			Nonce:    uint64(i),
+			Nonce:    uint64(i), //nolint:gosec // Known to not overflow
 			To:       tt.to,
 			GasPrice: big.NewInt(1),
 			Gas:      tt.txGas,
