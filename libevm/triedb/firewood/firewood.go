@@ -20,7 +20,6 @@
 package firewood
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -159,7 +158,7 @@ func New(config Config) (*Database, error) {
 		return nil, err
 	}
 
-	currentRoot, err := fw.Root()
+	intialRoot, err := fw.Root()
 	if err != nil {
 		if closeErr := fw.Close(context.Background()); closeErr != nil {
 			return nil, fmt.Errorf("%w: error while closing: %w", err, closeErr)
@@ -173,7 +172,7 @@ func New(config Config) (*Database, error) {
 			byStateRoot: make(map[common.Hash][]*proposal),
 			tree: &proposal{
 				proposalMeta: &proposalMeta{
-					root: common.Hash(currentRoot),
+					root: common.Hash(intialRoot),
 					blockHashes: map[common.Hash]struct{}{
 						{}: {}, // genesis block has empty hash
 					},
@@ -225,7 +224,7 @@ func (db *Database) Initialized(common.Hash) bool {
 
 	// If the current root isn't empty, then unless the genesis block is empty,
 	// the database is initialized.
-	return !bytes.Equal(root, types.EmptyRootHash[:])
+	return common.Hash(root) != types.EmptyRootHash
 }
 
 // Size returns the storage size of diff layer nodes above the persistent disk
@@ -437,7 +436,7 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	if err != nil {
 		return fmt.Errorf("firewood: error getting current root after commit: %w", err)
 	}
-	if !bytes.Equal(newRoot, root[:]) {
+	if common.Hash(newRoot) != root {
 		return fmt.Errorf("firewood: root after commit (%#x) does not match expected root %#x", newRoot, root)
 	}
 
@@ -501,11 +500,11 @@ func (db *Database) createProposal(parent *proposal, keys, values [][]byte) (*pr
 		},
 	}
 
-	currentRootBytes, err := handle.Root()
+	root, err := handle.Root()
 	if err != nil {
 		return nil, fmt.Errorf("firewood: error getting root of proposals: %w", err)
 	}
-	p.root = common.BytesToHash(currentRootBytes)
+	p.root = common.Hash(root)
 
 	return p, nil
 }
@@ -612,7 +611,7 @@ func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byt
 // Reader retrieves a node reader belonging to the given state root.
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(root common.Hash) (database.Reader, error) {
-	if _, err := db.Firewood.GetFromRoot(root.Bytes(), []byte{}); err != nil {
+	if _, err := db.Firewood.GetFromRoot(ffi.Hash(root), []byte{}); err != nil {
 		return nil, fmt.Errorf("firewood: unable to retrieve from root %s: %w", root.Hex(), err)
 	}
 	return &reader{db: db, root: root}, nil
@@ -629,5 +628,5 @@ type reader struct {
 func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, error) {
 	// This function relies on Firewood's internal locking to ensure concurrent reads are safe.
 	// This is safe even if a proposal is being committed concurrently.
-	return reader.db.Firewood.GetFromRoot(reader.root.Bytes(), path)
+	return reader.db.Firewood.GetFromRoot(ffi.Hash(reader.root), path)
 }
