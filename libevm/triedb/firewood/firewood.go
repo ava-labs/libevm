@@ -42,9 +42,10 @@ import (
 )
 
 const (
-	Scheme      = "firewood"
-	dbFileName  = "firewood.db"
-	logFileName = "firewood.log"
+	Scheme       = "firewood"
+	dbFileName   = "firewood.db"
+	logFileName  = "firewood.log"
+	rootStoreDir = "root_store"
 )
 
 var (
@@ -104,11 +105,12 @@ type proposalMeta struct {
 
 // Config provides necessary parameters for creating a Firewood database.
 type Config struct {
-	DatabasePath         string
+	DatabasePath         string // directory where the database files will be stored
 	CacheSizeBytes       uint
 	FreeListCacheEntries uint
-	MaxRevisions         uint
+	RevisionsInMemory    uint // must be >= 2
 	CacheStrategy        ffi.CacheStrategy
+	Archive              bool // whether to write keep all historical revisions on disk
 }
 
 // DefaultConfig returns a default Config with the given directory.
@@ -122,7 +124,7 @@ func DefaultConfig(dir string) Config {
 		DatabasePath:         dir,
 		CacheSizeBytes:       1024 * 1024, // 1MB
 		FreeListCacheEntries: 40_000,
-		MaxRevisions:         100,
+		RevisionsInMemory:    100,
 		CacheStrategy:        ffi.CacheAllReads,
 	}
 }
@@ -154,11 +156,16 @@ func New(config Config, disk ethdb.Database) (*Database, error) {
 	}
 
 	dbPath := filepath.Join(config.DatabasePath, dbFileName)
+	var rootStorePath string
+	if config.Archive {
+		rootStorePath = filepath.Join(config.DatabasePath, rootStoreDir)
+	}
 	fw, err := ffi.New(dbPath, &ffi.Config{
 		NodeCacheEntries:     config.CacheSizeBytes / 256, // TODO(alarso16): 256 bytes per node may not be accurate
 		FreeListCacheEntries: config.FreeListCacheEntries,
-		Revisions:            config.MaxRevisions,
+		Revisions:            config.RevisionsInMemory,
 		ReadCacheStrategy:    config.CacheStrategy,
+		RootStoreDir:         rootStorePath,
 	})
 	if err != nil {
 		return nil, err
@@ -582,13 +589,13 @@ func (db *Database) Reader(root common.Hash) (database.Reader, error) {
 	if _, err := db.Firewood.GetFromRoot(ffi.Hash(root), []byte{}); err != nil {
 		return nil, fmt.Errorf("firewood: unable to retrieve from root %s: %w", root.Hex(), err)
 	}
-	return &reader{db: db, root: root}, nil
+	return &reader{db: db, root: ffi.Hash(root)}, nil
 }
 
 // reader is a state reader of Database which implements the Reader interface.
 type reader struct {
 	db   *Database
-	root common.Hash // The root of the state this reader is reading.
+	root ffi.Hash // The root of the state this reader is reading.
 }
 
 // Node retrieves the trie node with the given node hash. No error will be
@@ -596,5 +603,5 @@ type reader struct {
 func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, error) {
 	// This function relies on Firewood's internal locking to ensure concurrent reads are safe.
 	// This is safe even if a proposal is being committed concurrently.
-	return reader.db.Firewood.GetFromRoot(ffi.Hash(reader.root), path)
+	return reader.db.Firewood.GetFromRoot(reader.root, path)
 }
