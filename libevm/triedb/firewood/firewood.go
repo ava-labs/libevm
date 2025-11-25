@@ -25,13 +25,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"sync"
+	"time"
 
 	"github.com/ava-labs/firewood-go-ethhash/ffi"
 
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/libevm/stateconf"
@@ -43,6 +42,7 @@ import (
 )
 
 const (
+	Scheme      = "firewood"
 	dbFileName  = "firewood.db"
 	logFileName = "firewood.log"
 )
@@ -60,6 +60,8 @@ type Database struct {
 	// and the latest state can be modified at any time.
 	Firewood *ffi.Database
 
+	kvStore ethdb.Database
+
 	proposals
 }
 
@@ -74,7 +76,11 @@ type proposals struct {
 	tree *proposal
 	// possible temporarily holds proposals created during a trie update.
 	// This is cleared after the update is complete and the proposals have been sent to the database.
-	possible []*proposal
+	possible map[unverifiedKey]*proposal
+}
+
+type unverifiedKey struct {
+	parentBlockHash, root common.Hash
 }
 
 // A proposal carries a Firewood FFI proposal (i.e. Rust-owned memory).
@@ -125,17 +131,17 @@ func DefaultConfig(dir string) Config {
 // It creates a new Firewood database with the given configuration.
 // Since Firewood uses its own on-disk format, the provided ethdb.Database is ignored.
 // Any error during creation will cause the program to exit.
-func (c Config) BackendConstructor(ethdb.Database) triedb.DBOverride {
-	db, err := New(c)
+func (c Config) BackendConstructor(disk ethdb.Database) triedb.DBOverride {
+	db, err := New(c, disk)
 	if err != nil {
-		log.Crit("firewood: error creating database", "error", err)
+		log.Crit("firewood: creating database", "error", err)
 	}
 	return db
 }
 
 // New creates a new Firewood database with the given configuration.
 // The database will not be opened on error.
-func New(config Config) (*Database, error) {
+func New(config Config, disk ethdb.Database) (*Database, error) {
 	if err := validateDir(config.DatabasePath); err != nil {
 		return nil, err
 	}
@@ -144,7 +150,7 @@ func New(config Config) (*Database, error) {
 	if err := ffi.StartLogs(&ffi.LogConfig{Path: logPath}); err != nil {
 		// This shouldn't be a fatal error, as this can only be called once per thread.
 		// Specifically, this will return an error in unit tests.
-		log.Warn("firewood: error starting logs", "error", err)
+		log.Warn("firewood: starting logs", "error", err)
 	}
 
 	dbPath := filepath.Join(config.DatabasePath, dbFileName)
@@ -154,6 +160,13 @@ func New(config Config) (*Database, error) {
 		Revisions:            config.MaxRevisions,
 		ReadCacheStrategy:    config.CacheStrategy,
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Recover necessary metadata from disk.
+	height := ReadCommittedHeight(disk)
+	blockHashes, err := ReadCommittedBlockHashes(disk)
 	if err != nil {
 		return nil, err
 	}
@@ -168,16 +181,17 @@ func New(config Config) (*Database, error) {
 
 	return &Database{
 		Firewood: fw,
+		kvStore:  disk,
 		proposals: proposals{
 			byStateRoot: make(map[common.Hash][]*proposal),
 			tree: &proposal{
 				proposalMeta: &proposalMeta{
-					root: common.Hash(intialRoot),
-					blockHashes: map[common.Hash]struct{}{
-						{}: {}, // genesis block has empty hash
-					},
+					root:        common.Hash(intialRoot),
+					blockHashes: blockHashes,
+					height:      height,
 				},
 			},
+			possible: make(map[unverifiedKey]*proposal),
 		},
 	}, nil
 }
@@ -204,21 +218,15 @@ func validateDir(dir string) error {
 }
 
 // Scheme returns the scheme of the database.
-// This is only used in some API calls
-// and in StateDB to avoid iterating through deleted storage tries.
-// WARNING: If anything from go-ethereum uses this,
-// it must be overwritten to use something like:
-// `_, ok := db.(*Database); if !ok { return "" }`
-// to recognize the Firewood database.
 func (*Database) Scheme() string {
-	return rawdb.HashScheme
+	return Scheme
 }
 
 // Initialized checks whether a non-empty genesis block has been written.
 func (db *Database) Initialized(common.Hash) bool {
 	root, err := db.Firewood.Root()
 	if err != nil {
-		log.Error("firewood: error getting current root", "error", err)
+		log.Error("firewood: get current root", "error", err)
 		return false
 	}
 
@@ -240,13 +248,8 @@ func (*Database) Size() (common.StorageSize, common.StorageSize) {
 // Additionally, internal nodes do not need tracked by consumers.
 func (*Database) Reference(common.Hash, common.Hash) {}
 
-// Dereference is no-op because unused proposals are dereferenced when no longer valid.
-// We cannot dereference at this call. Consider the following case:
-// Chain 1 has root A and root C
-// Chain 2 has root B and root C
-// We commit root A, and immediately dereference root B and its child.
-// Root C is Rejected, (which is intended to be 2C) but there's now only one record of root C in the proposal map.
-// Thus, we recognize the single root C as the only proposal, and dereference it.
+// Dereference is no-op because proposals will be removed automatically.
+// Additionally, internal nodes do not need tracked by consumers.
 func (*Database) Dereference(common.Hash) {}
 
 // Cap is a no-op because it isn't supported by Firewood.
@@ -258,7 +261,7 @@ func (*Database) Cap(common.StorageSize) error {
 // This may hang for a short period while waiting for finalizers to complete.
 // If it does not close as expected, this indicates that there are still references
 // to proposals or revisions in memory, and an error will be returned.
-// The database should not be used after calling Close.
+// The database should not be used after calling Close, but it is safe to call multiple times.
 func (db *Database) Close() error {
 	p := &db.proposals
 	p.Lock()
@@ -269,16 +272,17 @@ func (db *Database) Close() error {
 	}
 
 	// All remaining proposals can explicitly be dropped.
-	p.cleanupPossible(nil)
 	for _, child := range p.tree.children {
 		p.removeProposalAndChildren(child)
 	}
-	p.byStateRoot = nil
 	p.tree = nil
+	p.byStateRoot = nil
+	p.possible = nil
 
-	// Close the database
-	// We must provide a context since it may hang while waiting for the finalizers to complete.
-	return db.Firewood.Close(context.Background())
+	// We must provide a context to close since it may hang while waiting for the finalizers to complete.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return db.Firewood.Close(ctx)
 }
 
 // Update updates the database to the given root at the given height.
@@ -291,7 +295,7 @@ func (db *Database) Update(root, parent common.Hash, height uint64, _ *trienode.
 	// However, many tests cannot reasonably provide a block blockHash for genesis, so we allow it to be omitted.
 	parentBlockHash, blockHash, ok := stateconf.ExtractTrieDBUpdatePayload(opts...)
 	if !ok {
-		log.Error("firewood: no block hash provided for block %d", height)
+		return fmt.Errorf("firewood: no block hash provided for block %d", height)
 	}
 
 	// The rest of the operations except key-value arranging must occur with a lock
@@ -302,8 +306,11 @@ func (db *Database) Update(root, parent common.Hash, height uint64, _ *trienode.
 		return nil
 	}
 
-	p, ok := db.proposals.findUnverified(height, parentBlockHash)
-	defer db.proposals.cleanupPossible(p)
+	p, ok := db.possible[unverifiedKey{parentBlockHash: parentBlockHash, root: root}]
+	// Now, all unused proposals have no other references, since we didn't store them
+	// in the proposal map or tree, so they will be garbage collected.
+	// Any proposals with a different root were mistakenly created, so they can be freed as well.
+	db.proposals.possible = make(map[unverifiedKey]*proposal)
 	if !ok {
 		return fmt.Errorf("firewood: no unverified proposal found for block %d, root %s, hash %s", height, root.Hex(), blockHash.Hex())
 	}
@@ -322,9 +329,6 @@ func (db *Database) Update(root, parent common.Hash, height uint64, _ *trienode.
 	db.proposals.byStateRoot[root] = append(db.proposals.byStateRoot[root], p)
 	p.blockHashes[blockHash] = struct{}{}
 
-	// Now, all unused proposals have no other references, since we didn't store them
-	// in the proposal map or tree, so they will be garbage collected.
-	db.proposals.possible = nil
 	return nil
 }
 
@@ -356,59 +360,6 @@ func (ps *proposals) exists(root, block, parentBlock common.Hash) bool {
 	return false
 }
 
-func (ps *proposals) findUnverified(height uint64, parentBlock common.Hash) (*proposal, bool) {
-	// First, try to find a proposal with the correct parent block hash.
-	p, ok := find(ps.possible, func(p *proposal) bool {
-		_, ok := p.parent.blockHashes[parentBlock]
-		return ok
-	})
-	// The exact proposal was found.
-	if ok {
-		return p, true
-	}
-
-	// Otherwise, this may be the first block after startup, and the parent hash wasn't recorded.
-	p, ok = find(ps.possible, func(p *proposal) bool {
-		_, ok := p.parent.blockHashes[common.Hash{}]
-		return ok
-	})
-	if !ok {
-		// No suitable proposal found.
-		return nil, false
-	}
-
-	// For clarity, while using this proposal, we should update the meta.
-	p.proposalMeta.height = height
-	p.proposalMeta.parent.blockHashes[parentBlock] = struct{}{}
-	return p, true
-}
-
-// cleanupPossible drops all possible proposals except the given one.
-// If nil, all possible proposals are dropped.
-func (ps *proposals) cleanupPossible(p *proposal) {
-	for _, candidate := range ps.possible {
-		if candidate == p {
-			continue
-		}
-		if err := candidate.handle.Drop(); err != nil {
-			log.Error("error dropping proposal", "root", candidate.root, "height", candidate.height, "err", err)
-		}
-	}
-	ps.possible = nil
-}
-
-// find is equivalent to [slices.IndexFunc], returning the element instead of
-// the index. The returned boolean indicates whether a suitable element was
-// found.
-func find[S ~[]E, E comparable](s S, fn func(E) bool) (E, bool) {
-	idx := slices.IndexFunc(s, fn)
-	if idx == -1 {
-		var zero E
-		return zero, false
-	}
-	return s[idx], true
-}
-
 // Commit persists a proposal as a revision to the database.
 //
 // Any time this is called, we expect either:
@@ -428,13 +379,13 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	}
 
 	if err := p.handle.Commit(); err != nil {
-		return fmt.Errorf("firewood: error committing proposal %s: %w", root.Hex(), err)
+		return fmt.Errorf("firewood: commit proposal %s: %w", root.Hex(), err)
 	}
 	p.handle = nil // The proposal has been committed.
 
 	newRoot, err := db.Firewood.Root()
 	if err != nil {
-		return fmt.Errorf("firewood: error getting current root after commit: %w", err)
+		return fmt.Errorf("firewood: getting current root after commit: %w", err)
 	}
 	if common.Hash(newRoot) != root {
 		return fmt.Errorf("firewood: root after commit (%#x) does not match expected root %#x", newRoot, root)
@@ -450,6 +401,14 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	// By removing all uncommittable proposals from the tree and map,
 	// we ensure that there are no more references.
 	db.cleanupCommittedProposal(p)
+
+	// Update the committed block hashes and height on disk to enable recovery.
+	if err := WriteCommittedBlockHashes(db.kvStore, p.blockHashes); err != nil {
+		return err
+	}
+	if err := WriteCommittedHeight(db.kvStore, p.height); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -482,7 +441,7 @@ func (db *Database) createProposal(parent *proposal, keys, values [][]byte) (*pr
 	}
 	handle, err := propose(keys, values)
 	if err != nil {
-		return nil, fmt.Errorf("firewood: unable to create proposal from parent root %s: %w", parent.root.Hex(), err)
+		return nil, fmt.Errorf("firewood: create proposal from parent root %s: %w", parent.root.Hex(), err)
 	}
 
 	// Edge case: genesis block
@@ -502,7 +461,7 @@ func (db *Database) createProposal(parent *proposal, keys, values [][]byte) (*pr
 
 	root, err := handle.Root()
 	if err != nil {
-		return nil, fmt.Errorf("firewood: error getting root of proposals: %w", err)
+		return nil, fmt.Errorf("firewood: getting root of proposal: %w", err)
 	}
 	p.root = common.Hash(root)
 
@@ -528,7 +487,6 @@ func (ps *proposals) cleanupCommittedProposal(p *proposal) {
 
 // Internally removes all references of the proposal from the database.
 // Should only be accessed with the proposal lock held.
-// Consumer must not be iterating the proposal map at this root.
 func (ps *proposals) removeProposalAndChildren(p *proposalMeta) {
 	// Base case: if there are children, we need to dereference them as well.
 	for _, child := range p.children {
@@ -551,7 +509,7 @@ func (ps *proposals) removeProposalFromMap(meta *proposalMeta, drop bool) {
 
 			if drop {
 				if err := p.handle.Drop(); err != nil {
-					log.Error("error dropping proposal", "root", meta.root, "height", meta.height, "err", err)
+					log.Error("while dropping proposal", "root", meta.root, "height", meta.height, "err", err)
 				}
 			}
 			break
@@ -575,14 +533,21 @@ func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byt
 	db.proposals.RLock()
 	defer db.proposals.RUnlock()
 
-	var handles []*proposal
+	var (
+		count int         // number of proposals created.
+		root  common.Hash // The resulting root hash, should match between proposals
+	)
 	if db.proposals.tree.root == parentRoot {
 		// Propose from the database root.
 		p, err := db.createProposal(db.proposals.tree, keys, values)
+		root = p.root
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("firewood: error proposing from root %s: %w", parentRoot.Hex(), err)
 		}
-		handles = append(handles, p)
+		for parentHash := range db.proposals.tree.blockHashes {
+			db.possible[unverifiedKey{parentBlockHash: parentHash, root: p.root}] = p
+		}
+		count++
 	}
 
 	// Find any proposal with the given parent root.
@@ -593,18 +558,21 @@ func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byt
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("firewood: error proposing from parent root %s: %w", parentRoot.Hex(), err)
 		}
-		handles = append(handles, p)
+		if root != (common.Hash{}) && p.root != root {
+			return common.Hash{}, fmt.Errorf("firewood: inconsistent proposal roots found for parent root %s: %#x and %#x", parentRoot.Hex(), root, p.root)
+		}
+		root = p.root
+		for parentHash := range parent.blockHashes {
+			db.possible[unverifiedKey{parentBlockHash: parentHash, root: root}] = p
+		}
+		count++
 	}
 
-	if len(handles) == 0 {
+	// This should never occur, as to process a block, there must be a revision to read from.
+	if count == 0 {
 		return common.Hash{}, fmt.Errorf("firewood: no proposals found with parent root %s", parentRoot.Hex())
 	}
 
-	// Store the proposals for later
-	db.proposals.possible = handles
-
-	// Get the root of the first proposal - they should all match.
-	root := handles[0].root
 	return root, nil
 }
 

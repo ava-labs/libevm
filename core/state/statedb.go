@@ -1096,7 +1096,7 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.A
 	// considerable time and storage deletion isn't supported in hash mode, thus
 	// preemptively avoiding unnecessary expenses.
 	incomplete := make(map[common.Address]struct{})
-	if s.db.TrieDB().Scheme() == rawdb.HashScheme {
+	if s.db.TrieDB().Scheme() != rawdb.PathScheme {
 		return incomplete, nil
 	}
 	for addr, prev := range s.stateObjectsDestruct {
