@@ -14,14 +14,13 @@
 // along with the go-ethereum library. If not, see
 // <http://www.gnu.org/licenses/>.
 
-// Package parallel provides functionality for precompiled contracts that can
-// pre-process their results in an embarrassingly parallel fashion.
+// Package parallel provides functionality for precompiled contracts with
+// lifespans of an entire block.
 package parallel
 
 import (
 	"errors"
 	"fmt"
-	"iter"
 	"sync"
 
 	"github.com/ava-labs/libevm/common"
@@ -30,83 +29,67 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
-	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/params"
 )
 
-// A Handler is responsible for processing [types.Transactions] in an
-// embarrassingly parallel fashion. It is the responsibility of the Handler to
-// determine whether this is possible, typically only so if one of the following
-// is true with respect to a precompile associated with the Handler:
-//
-// 1. The destination address is that of the precompile; or
-//
-// 2. At least one [types.AccessTuple] references the precompile's address.
-//
-// Scenario (2) allows precompile access to be determined through inspection of
-// the [types.Transaction] alone, without the need for execution.
-//
-// All [libevm.StateReader] instances are opened to the state at the beginning
-// of the block. The [StateDB] is the same one used to execute the block,
-// before being committed, and MAY be written to.
-type Handler[Data, Result, Aggregated any] interface {
-	BeforeBlock(libevm.StateReader, *types.Block)
+// A handler is the non-generic equivalent of a [Handler], exposed by [wrapper].
+type handler interface {
 	Gas(*types.Transaction) (gas uint64, process bool)
-	Prefetch(sdb libevm.StateReader, index int, tx *types.Transaction) Data
-	Process(sdb libevm.StateReader, index int, tx *types.Transaction, data Data) Result
-	PostProcess(iter.Seq2[int, Result]) Aggregated
-	AfterBlock(StateDB, Aggregated, *types.Block, types.Receipts)
+
+	beforeBlock(libevm.StateReader, *types.Block)
+	beforeWork(jobs int)
+	prefetch(libevm.StateReader, *job)
+	nullResult(*job)
+	process(libevm.StateReader, *job)
+	postProcess()
+	finishBlock(vm.StateDB, *types.Block, types.Receipts)
 }
 
-// StateDB is the subset of [state.StateDB] methods that MAY be called by
-// [Handler.AfterBlock].
-type StateDB interface {
-	libevm.StateReader
-	SetState(_ common.Address, key, val common.Hash, _ ...stateconf.StateDBStateOption)
-}
+// A Processor orchestrates dispatch and collection of results from one or more
+// [Handler] instances.
+type Processor struct {
+	handlers []handler
 
-// A Processor orchestrates dispatch and collection of results from a [Handler].
-type Processor[D, R, A any] struct {
-	handler Handler[D, R, A]
-	workers sync.WaitGroup
-
-	stateShare stateDBSharer
-	txGas      map[common.Hash]uint64
-
+	workers           sync.WaitGroup
+	stateShare        stateDBSharer
 	prefetch, process chan *job
-	data              [](chan D)
-	results           [](chan result[R])
-	aggregated        chan A
+
+	txGas map[common.Hash]uint64
 }
 
 type job struct {
-	index int
-	tx    *types.Transaction
+	handler handler
+	tx      IndexedTx
 }
 
 type result[T any] struct {
-	tx  common.Hash
+	tx  IndexedTx
 	val *T
 }
 
 // New constructs a new [Processor] with the specified number of concurrent
-// workers. [Processor.Close] must be called after the final call to
+// prefetching and processing workers. As prefetching is typically IO-bound, it
+// is reasonable to have more prefetchers than processors. The number of
+// processors SHOULD be determined from GOMAXPROCS. Pipelining in such a fashion
+// stops prefetching for later transactions being blocked by earlier,
+// long-running processing; see the respective methods on [Handler] for more
+// context.
+//
+// [Processor.Close] MUST be called after the final call to
 // [Processor.FinishBlock] to avoid leaking goroutines.
-func New[D, R, A any](h Handler[D, R, A], prefetchers, processors int) *Processor[D, R, A] {
+func New(prefetchers, processors int) *Processor {
 	prefetchers = max(prefetchers, 1)
 	processors = max(processors, 1)
 	workers := prefetchers + processors
 
-	p := &Processor[D, R, A]{
-		handler: h,
+	p := &Processor{
 		stateShare: stateDBSharer{
 			workers:       workers,
 			nextAvailable: make(chan struct{}),
 		},
-		txGas:      make(map[common.Hash]uint64),
-		prefetch:   make(chan *job),
-		process:    make(chan *job),
-		aggregated: make(chan A),
+		prefetch: make(chan *job),
+		process:  make(chan *job),
+		txGas:    make(map[common.Hash]uint64),
 	}
 
 	p.workers.Add(workers)       // for shutdown via [Processor.Close]
@@ -128,10 +111,12 @@ func New[D, R, A any](h Handler[D, R, A], prefetchers, processors int) *Processo
 // channel is replaced for each round of distribution.
 type stateDBSharer struct {
 	nextAvailable chan struct{}
-	primary       *state.StateDB
-	mu            sync.Mutex
-	workers       int
-	wg            sync.WaitGroup
+
+	mu      sync.Mutex
+	primary *state.StateDB
+
+	workers int
+	wg      sync.WaitGroup
 }
 
 func (s *stateDBSharer) distribute(sdb *state.StateDB) {
@@ -145,7 +130,7 @@ func (s *stateDBSharer) distribute(sdb *state.StateDB) {
 	s.wg.Wait()
 }
 
-func (p *Processor[D, R, A]) worker(prefetch, process chan *job) {
+func (p *Processor) worker(prefetch, process chan *job) {
 	defer p.workers.Done()
 
 	var sdb *state.StateDB
@@ -159,6 +144,8 @@ func (p *Processor[D, R, A]) worker(prefetch, process chan *job) {
 	for {
 		select {
 		case <-stateAvailable: // guaranteed at the beginning of each block
+			// [state.StateDB.Copy] is a complex method that isn't explicitly
+			// documented as being threadsafe.
 			share.mu.Lock()
 			sdb = share.primary.Copy()
 			share.mu.Unlock()
@@ -170,74 +157,76 @@ func (p *Processor[D, R, A]) worker(prefetch, process chan *job) {
 			if !ok {
 				return
 			}
-			p.data[job.index] <- p.handler.Prefetch(sdb, job.index, job.tx)
+			job.handler.prefetch(sdb, job)
 
 		case job, ok := <-process:
 			if !ok {
 				return
 			}
-
-			r := p.handler.Process(sdb, job.index, job.tx, <-p.data[job.index])
-			p.results[job.index] <- result[R]{
-				tx:  job.tx.Hash(),
-				val: &r,
-			}
+			job.handler.process(sdb, job)
 		}
 	}
 }
 
 // Close shuts down the [Processor], after which it can no longer be used.
-func (p *Processor[D, R, A]) Close() {
+func (p *Processor) Close() {
 	close(p.prefetch)
 	close(p.process)
 	p.workers.Wait()
 }
 
-// StartBlock dispatches transactions to the [Handler] and returns immediately.
-// It MUST be paired with a call to [Processor.FinishBlock], without overlap of
-// blocks.
-func (p *Processor[D, R, A]) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.Block) error {
+// StartBlock dispatches transactions to every [Handler] but returns immediately
+// after performing preliminary setup. It MUST be paired with a call to
+// [Processor.FinishBlock], without overlap of blocks.
+func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.Block) error {
 	// The distribution mechanism copies the StateDB so we don't need to do it
-	// here, but the [Handler] is called directly so we do copy.
+	// here, but [wrapper.beforeBlock] doesn't make its own copy. Note that even
+	// reading from a [state.StateDB] is not threadsafe.
 	p.stateShare.distribute(sdb)
-	p.handler.BeforeBlock(
-		sdb.Copy(),
-		types.NewBlockWithHeader(
-			b.Header(),
-		).WithBody(
-			*b.Body(),
-		),
-	)
-
-	txs := b.Transactions()
-	jobs := make([]*job, 0, len(txs))
-
-	// We can reuse the channels already in the data and results slices because
-	// they're emptied by [Processor.FinishBlock].
-	for i, n := len(p.results), len(txs); i < n; i++ {
-		p.data = append(p.data, make(chan D, 1))
-		p.results = append(p.results, make(chan result[R], 1))
+	for _, h := range p.handlers {
+		h.beforeBlock(
+			sdb.Copy(),
+			types.NewBlockWithHeader(
+				b.Header(),
+			).WithBody(
+				*b.Body(),
+			),
+		)
 	}
 
-	for i, tx := range txs {
-		switch do, err := p.shouldProcess(tx, rules); {
-		case err != nil:
+	txs := b.Transactions()
+	jobs := make([]*job, 0, len(p.handlers)*len(txs))
+	workloads := make([]int, len(p.handlers))
+
+	for txIdx, tx := range txs {
+		do, err := p.shouldProcess(tx, rules)
+		if err != nil {
 			return err
-
-		case do:
-			jobs = append(jobs, &job{
-				index: i,
-				tx:    tx,
-			})
-
-		default:
-			p.results[i] <- result[R]{
-				tx:  tx.Hash(),
-				val: nil,
+		}
+		for i, h := range p.handlers {
+			j := &job{
+				tx: IndexedTx{
+					Index:       txIdx,
+					Transaction: tx,
+				},
+				handler: h,
 			}
+			if !do[i] {
+				h.nullResult(j)
+				continue
+			}
+			workloads[i]++
+			jobs = append(jobs, j)
 		}
 	}
 
+	for i, w := range workloads {
+		p.handlers[i].beforeWork(w)
+	}
+	// All of the following goroutines are dependent on the one(s) preceding
+	// them, while [wrapper.finishBlock] is dependent on [wrapper.postProcess].
+	// The return of [Processor.FinishBlock] is therefore a guarantee of the end
+	// of the lifespans of all of these goroutines.
 	go func() {
 		for _, j := range jobs {
 			p.prefetch <- j
@@ -248,97 +237,65 @@ func (p *Processor[D, R, A]) StartBlock(sdb *state.StateDB, rules params.Rules, 
 			p.process <- j
 		}
 	}()
-	go func() {
-		n := len(b.Transactions())
-		p.aggregated <- p.handler.PostProcess(p.resultIter(n))
-	}()
+	for _, h := range p.handlers {
+		go h.postProcess()
+	}
 	return nil
 }
 
-func (p *Processor[D, R, A]) resultIter(n int) iter.Seq2[int, R] {
-	return func(yield func(int, R) bool) {
-		for i := range n {
-			r, ok := p.Result(i)
-			if !ok {
-				continue
-			}
-			if !yield(i, r) {
-				return
-			}
-		}
+// FinishBlock propagates its arguments to every [Handler] and resets the
+// [Processor] to a state ready for the next block. A return from FinishBlock
+// guarantees that all dispatched work from the respective call to
+// [Processor.StartBlock] has been completed.
+func (p *Processor) FinishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipts) {
+	// [Handler.FinishBlock] is allowed to write to state, so these MUST NOT be
+	// concurrent.
+	for _, h := range p.handlers {
+		h.finishBlock(sdb, b, rs)
 	}
-}
-
-// FinishBlock returns the [Processor] to a state ready for the next block. A
-// return from FinishBlock guarantees that all dispatched work from the
-// respective call to [Processor.StartBlock] has been completed.
-func (p *Processor[D, R, A]) FinishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipts) {
-	p.handler.AfterBlock(sdb, <-p.aggregated, b, rs)
-
-	for i := range len(b.Transactions()) {
-		// Every result channel is guaranteed to have some value in its buffer
-		// because [Processor.BeforeBlock] either sends a nil *R or it
-		// dispatches a job, which will send a non-nil *R.
-		tx := (<-p.results[i]).tx
+	for tx := range p.txGas {
 		delete(p.txGas, tx)
 	}
 }
 
-// Result blocks until the i'th transaction passed to [Processor.StartBlock] has
-// had its result processed, and then returns the value returned by the
-// [Handler]. The returned boolean will be false if no processing occurred,
-// either because the [Handler] indicated as such or because the transaction
-// supplied insufficient gas.
-//
-// Multiple calls to Result with the same argument are allowed. Callers MUST NOT
-// charge the gas price for preprocessing as this is handled by
-// [Processor.PreprocessingGasCharge] if registered as a [vm.Preprocessor].
-//
-// The same value will be returned by each call with the same argument, such
-// that if R is a pointer then modifications will persist between calls. The
-// caller does NOT have mutually exclusive access to R, which MUST carry a mutex
-// if thread safety is required.
-func (p *Processor[D, R, A]) Result(i int) (R, bool) {
-	ch := p.results[i]
-	r := <-ch
-	defer func() {
-		ch <- r
-	}()
-
-	if r.val == nil {
-		// TODO(arr4n) if we're here then the implementoor might have a bug in
-		// their [Handler], so logging a warning is probably a good idea.
-		var zero R
-		return zero, false
-	}
-	return *r.val, true
-}
-
-func (p *Processor[R, D, S]) shouldProcess(tx *types.Transaction, rules params.Rules) (process bool, retErr error) {
+func (p *Processor) shouldProcess(tx *types.Transaction, rules params.Rules) (process []bool, retErr error) {
 	// An explicit 0 is necessary to avoid [Processor.PreprocessingGasCharge]
 	// returning [ErrTxUnknown].
 	p.txGas[tx.Hash()] = 0
 
-	cost, ok := p.handler.Gas(tx)
-	if !ok {
-		return false, nil
+	process = make([]bool, len(p.handlers))
+	var totalCost uint64
+	for i, h := range p.handlers {
+		cost, ok := h.Gas(tx)
+		if !ok {
+			continue
+		}
+		process[i] = true
+		totalCost += cost
 	}
+
 	defer func() {
-		if process && retErr == nil {
-			p.txGas[tx.Hash()] = cost
+		if retErr == nil {
+			p.txGas[tx.Hash()] = totalCost
 		}
 	}()
 
 	spent, err := txIntrinsicGas(tx, &rules)
 	if err != nil {
-		return false, fmt.Errorf("calculating intrinsic gas of %v: %v", tx.Hash(), err)
+		return nil, fmt.Errorf("calculating intrinsic gas of %#x: %v", tx.Hash(), err)
 	}
 	if spent > tx.Gas() {
 		// If this happens then consensus has a bug because the tx shouldn't
-		// have been included. We include the check, however, for completeness.
-		return false, core.ErrIntrinsicGas
+		// have been included. We include the check, however, for completeness
+		// as we would otherwise underflow below.
+		return nil, core.ErrIntrinsicGas
 	}
-	return tx.Gas()-spent >= cost, nil
+	if remain := tx.Gas() - spent; remain < totalCost {
+		for i := range process {
+			process[i] = false
+		}
+	}
+	return process, nil
 }
 
 func txIntrinsicGas(tx *types.Transaction, rules *params.Rules) (uint64, error) {
@@ -364,7 +321,7 @@ var ErrTxUnknown = errors.New("transaction unknown by parallel preprocessor")
 
 // PreprocessingGasCharge implements the [vm.Preprocessor] interface and MUST be
 // registered via [vm.RegisterHooks] to ensure proper gas accounting.
-func (p *Processor[R, D, S]) PreprocessingGasCharge(tx common.Hash) (uint64, error) {
+func (p *Processor) PreprocessingGasCharge(tx common.Hash) (uint64, error) {
 	g, ok := p.txGas[tx]
 	if !ok {
 		return 0, fmt.Errorf("%w: %v", ErrTxUnknown, tx)
@@ -372,4 +329,4 @@ func (p *Processor[R, D, S]) PreprocessingGasCharge(tx common.Hash) (uint64, err
 	return g, nil
 }
 
-var _ vm.Preprocessor = (*Processor[any, any, any])(nil)
+var _ vm.Preprocessor = (*Processor)(nil)
