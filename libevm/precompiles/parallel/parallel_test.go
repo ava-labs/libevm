@@ -18,8 +18,6 @@ package parallel
 
 import (
 	"encoding/binary"
-	"iter"
-	"maps"
 	"math"
 	"math/big"
 	"math/rand/v2"
@@ -56,12 +54,22 @@ type recorder struct {
 	gotHeaderExtra []byte
 	gotBlockVal    common.Hash
 	gotReceipts    types.Receipts
-	gotPerTx       map[int]recorded
+	gotAggregated  aggregated
 }
 
-func (r *recorder) BeforeBlock(sdb libevm.StateReader, b *types.Block) {
+type aggregated struct {
+	txOrder, processOrder []TxResult[recorded]
+}
+
+type recorded struct {
+	HeaderExtra, TxData      []byte
+	Block, Prefetch, Process common.Hash
+}
+
+func (r *recorder) BeforeBlock(sdb libevm.StateReader, b *types.Block) any {
 	r.gotHeaderExtra = slices.Clone(b.Header().Extra)
 	r.gotBlockVal = sdb.GetState(r.addr, r.blockKey)
+	return nil
 }
 
 func (r *recorder) Gas(tx *types.Transaction) (uint64, bool) {
@@ -71,16 +79,11 @@ func (r *recorder) Gas(tx *types.Transaction) (uint64, bool) {
 	return 0, false
 }
 
-func (r *recorder) Prefetch(sdb libevm.StateReader, i int, tx *types.Transaction) common.Hash {
+func (r *recorder) Prefetch(sdb libevm.StateReader, tx IndexedTx, _ any) common.Hash {
 	return sdb.GetState(r.addr, r.prefetchKey)
 }
 
-type recorded struct {
-	HeaderExtra, TxData      []byte
-	Block, Prefetch, Process common.Hash
-}
-
-func (r *recorder) Process(sdb libevm.StateReader, i int, tx *types.Transaction, prefetched common.Hash) recorded {
+func (r *recorder) Process(sdb libevm.StateReader, tx IndexedTx, _ any, prefetched common.Hash) recorded {
 	return recorded{
 		HeaderExtra: slices.Clone(r.gotHeaderExtra),
 		TxData:      slices.Clone(tx.Data()),
@@ -99,13 +102,23 @@ func (r *recorded) asLog() *types.Log {
 	}
 }
 
-func (r *recorder) PostProcess(results iter.Seq2[int, recorded]) map[int]recorded {
-	return maps.Collect(results)
+func (r *recorder) PostProcess(res Results[recorded]) aggregated {
+	defer res.WaitForAll()
+
+	var out aggregated
+	for res := range res.TxOrder {
+		out.txOrder = append(out.txOrder, res)
+	}
+	for res := range res.ProcessOrder {
+		out.processOrder = append(out.processOrder, res)
+	}
+
+	return out
 }
 
-func (r *recorder) AfterBlock(_ StateDB, perTx map[int]recorded, _ *types.Block, rs types.Receipts) {
+func (r *recorder) AfterBlock(_ StateDB, agg aggregated, _ *types.Block, rs types.Receipts) {
 	r.gotReceipts = slices.Clone(rs)
-	r.gotPerTx = perTx
+	r.gotAggregated = agg
 }
 
 func asHash(s string) (h common.Hash) {
@@ -121,7 +134,8 @@ func TestProcessor(t *testing.T) {
 		prefetchKey: asHash("prefetch"),
 		processKey:  asHash("process"),
 	}
-	p := New(handler, 8, 8)
+	p := New(8, 8)
+	getResult := AddHandler(p, handler)
 	t.Cleanup(p.Close)
 
 	type blockParams struct {
@@ -218,7 +232,7 @@ func TestProcessor(t *testing.T) {
 			block := types.NewBlock(&types.Header{Extra: extra}, txs, nil, nil, trie.NewStackTrie(nil))
 			require.NoError(t, p.StartBlock(sdb, rules, block), "StartBlock()")
 
-			wantPerTx := make(map[int]recorded)
+			var wantPerTx []TxResult[recorded]
 			for i, tx := range txs {
 				wantOK := wantProcessed[i]
 
@@ -231,22 +245,55 @@ func TestProcessor(t *testing.T) {
 						Process:     processVal,
 						TxData:      tx.Data(),
 					}
-					wantPerTx[i] = want
+					wantPerTx = append(wantPerTx, TxResult[recorded]{
+						Tx: IndexedTx{
+							Index:       i,
+							Transaction: tx,
+						},
+						Result: want,
+					})
 				}
 
-				got, gotOK := p.Result(i)
+				got, gotOK := getResult(i)
 				if gotOK != wantOK {
 					t.Errorf("Result(%d) got ok %t; want %t", i, gotOK, wantOK)
 					continue
 				}
-				if diff := cmp.Diff(want, got); diff != "" {
+				if diff := cmp.Diff(want, got.Result); diff != "" {
 					t.Errorf("Result(%d) diff (-want +got):\n%s", i, diff)
 				}
 			}
 
 			p.FinishBlock(sdb, block, nil)
-			if diff := cmp.Diff(wantPerTx, h.gotPerTx); diff != "" {
-				t.Errorf("handler.PostProcess() argument diff (-want +got):\n%s", diff)
+			tests := []struct {
+				name string
+				got  []TxResult[recorded]
+				opt  cmp.Option
+			}{
+				{
+					name: "in_transaction_order",
+					got:  h.gotAggregated.txOrder,
+				},
+				{
+					name: "in_process_order",
+					got:  h.gotAggregated.processOrder,
+					opt: cmpopts.SortSlices(func(a, b TxResult[recorded]) bool {
+						return a.Tx.Index < b.Tx.Index
+					}),
+				},
+			}
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					opts := cmp.Options{
+						tt.opt,
+						cmp.Comparer(func(a, b *types.Transaction) bool {
+							return a.Hash() == b.Hash()
+						}),
+					}
+					if diff := cmp.Diff(wantPerTx, tt.got, opts); diff != "" {
+						t.Errorf("handler.PostProcess() argument diff (-want +got):\n%s", diff)
+					}
+				})
 			}
 		})
 
@@ -271,7 +318,8 @@ func TestIntegration(t *testing.T) {
 		addr: common.Address{'c', 'o', 'n', 'c', 'a', 't'},
 		gas:  handlerGas,
 	}
-	sut := New(handler, 8, 8)
+	sut := New(8, 8)
+	getResult := AddHandler(sut, handler)
 	t.Cleanup(sut.Close)
 
 	vm.RegisterHooks(&vmHooks{Preprocessor: sut})
@@ -285,11 +333,11 @@ func TestIntegration(t *testing.T) {
 
 				// Precompiles MUST NOT charge gas for the preprocessing as it
 				// would then be double-counted.
-				got, ok := sut.Result(txi)
+				got, ok := getResult(txi)
 				if !ok {
 					t.Errorf("no result for tx[%d] %v", txi, txh)
 				}
-				sdb.AddLog(got.asLog())
+				sdb.AddLog(got.Result.asLog())
 				return nil, nil
 			}),
 		},
