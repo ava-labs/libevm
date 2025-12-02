@@ -111,16 +111,25 @@ func (r *recorder) Process(sdb libevm.StateReader, tx IndexedTx, cd commonData, 
 	}
 }
 
-func (r *recorded) asLog() *types.Log {
+var _ PrecompileResult = recorded{}
+
+func (r recorded) PrecompileOutput(env vm.PrecompileEnvironment, input []byte) ([]byte, []*types.Log, error) {
+	return r.precompileReturnData(), []*types.Log{r.asLog()}, nil
+}
+
+func (r recorded) precompileReturnData() []byte {
+	return slices.Concat(r.HeaderExtra, []byte("|"), r.TxData)
+}
+
+func (r recorded) asLog() *types.Log {
 	return &types.Log{
-		Topics: []common.Hash{
-			r.Block, r.Prefetch, r.Process,
-		},
-		Data: slices.Concat(r.HeaderExtra, []byte("|"), r.TxData),
+		Topics: []common.Hash{r.Block, r.Prefetch, r.Process},
 	}
 }
 
 func (r *recorder) PostProcess(res Results[recorded]) aggregated {
+	// Although unnecessary because of the ranging over both channels, this just
+	// demonstrates that it's non-blocking.
 	defer res.WaitForAll()
 
 	var out aggregated
@@ -339,7 +348,7 @@ func TestIntegration(t *testing.T) {
 		gas:  handlerGas,
 	}
 	sut := New(8, 8)
-	getResult := AddHandler(sut, handler)
+	precompile := AddAsPrecompile(sut, handler)
 	t.Cleanup(sut.Close)
 
 	vm.RegisterHooks(&vmHooks{Preprocessor: sut})
@@ -347,19 +356,7 @@ func TestIntegration(t *testing.T) {
 
 	stub := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
-			handler.addr: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
-				sdb := env.StateDB()
-				txi, txh := sdb.TxIndex(), sdb.TxHash()
-
-				// Precompiles MUST NOT charge gas for the preprocessing as it
-				// would then be double-counted.
-				got, ok := getResult(txi)
-				if !ok {
-					t.Errorf("no result for tx[%d] %v", txi, txh)
-				}
-				sdb.AddLog(got.Result.asLog())
-				return nil, nil
-			}),
+			handler.addr: vm.NewStatefulPrecompile(precompile),
 		},
 	}
 	stub.Register(t)
@@ -373,8 +370,9 @@ func TestIntegration(t *testing.T) {
 	state.SetBalance(eoa, new(uint256.Int).SetAllOne())
 
 	var (
-		txs  types.Transactions
-		want types.Receipts
+		txs            types.Transactions
+		wantReturnData [][]byte
+		wantReceipts   types.Receipts
 	)
 	ignore := cmp.Options{
 		cmpopts.IgnoreFields(
@@ -419,17 +417,24 @@ func TestIntegration(t *testing.T) {
 			GasUsed:          gas,
 			TransactionIndex: ui,
 		}
-		if addr == handler.addr {
-			want := (&recorded{
-				TxData: tx.Data(),
-			}).asLog()
+		if addr != handler.addr {
+			wantReturnData = append(wantReturnData, []byte{})
+		} else {
+			rec := &recorded{
+				HeaderExtra: slices.Clone(header.Extra),
+				TxData:      tx.Data(),
+			}
+			wantReturnData = append(wantReturnData, rec.precompileReturnData())
 
+			want := rec.asLog()
+
+			want.Address = handler.addr
 			want.TxHash = tx.Hash()
 			want.TxIndex = ui
 
 			wantR.Logs = []*types.Log{want}
 		}
-		want = append(want, wantR)
+		wantReceipts = append(wantReceipts, wantR)
 	}
 
 	block := types.NewBlock(header, txs, nil, nil, trie.NewStackTrie(nil))
@@ -439,6 +444,26 @@ func TestIntegration(t *testing.T) {
 	var receipts types.Receipts
 	for i, tx := range txs {
 		state.SetTxContext(tx.Hash(), i)
+
+		t.Run("precompile_return_data", func(t *testing.T) {
+			// Although [core.ApplyTransaction] is used to get receipts, it
+			// doesn't provide access to return data. We therefore *also* use
+			// [core.ApplyMessage] but MUST avoid repeating the same state
+			// transition as it would fail the second time.
+			id := evm.StateDB.Snapshot()
+			t.Cleanup(func() {
+				evm.StateDB.RevertToSnapshot(id)
+			})
+
+			msg, err := core.TransactionToMessage(tx, signer, big.NewInt(0))
+			require.NoError(t, err, "core.TransactionToMessage()")
+
+			got, err := core.ApplyMessage(evm, msg, &pool)
+			require.NoError(t, err, "core.ApplyMessage()")
+			if diff := cmp.Diff(wantReturnData[i], got.ReturnData, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("Return data from precompile (-want +got):\n%s", diff)
+			}
+		})
 
 		var usedGas uint64
 		receipt, err := core.ApplyTransaction(
@@ -457,7 +482,9 @@ func TestIntegration(t *testing.T) {
 	}
 	sut.FinishBlock(state, block, receipts)
 
-	if diff := cmp.Diff(want, handler.gotReceipts, ignore); diff != "" {
+	if diff := cmp.Diff(wantReceipts, handler.gotReceipts, ignore); diff != "" {
 		t.Errorf("%T diff (-want +got):\n%s", receipts, diff)
 	}
 }
+
+// TODO(arr4n) unit test for [AddPrecompile] unhappy paths.
