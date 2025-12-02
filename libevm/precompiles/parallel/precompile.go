@@ -16,31 +16,22 @@
 
 package parallel
 
-import (
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/core/vm"
-)
+import "github.com/ava-labs/libevm/core/vm"
 
 // PrecompileResult is the interface required for a [Handler] to be converted
 // into a [vm.PrecompiledStatefulContract].
 type PrecompileResult interface {
 	// PrecompileOutput's arguments match those of
-	// [vm.PrecompiledStatefulContract], except for the addition of logs to be
-	// recorded in the event of non-reverting output. Although the
-	// implementation MAY manage logging, it SHOULD prefer the return argument
-	// as this ensures proper R/W and address management.
-	//
-	// PrecompileOutput MUST NOT re-charge the `Gas()` amount returned by the
-	// [Handler], but MAY charge for other computation if necessary.
-	PrecompileOutput(vm.PrecompileEnvironment, []byte) ([]byte, []*types.Log, error)
+	// [vm.PrecompiledStatefulContract]. It MUST NOT re-charge the `Gas()`
+	// amount returned by the [Handler], but MAY charge for other computation as
+	// necessary.
+	PrecompileOutput(vm.PrecompileEnvironment, []byte) ([]byte, error)
 }
 
 // AddAsPrecompile is equivalent to [AddHandler] except that the returned
 // function is a [vm.PrecompiledStatefulContract] instead of a raw result
 // fetcher. If the function returned by [AddHandler] returns `false` then the
-// precompile returns [vm.ErrExecutionReverted]. All logs returned by the
-// [PrecompileResult] have their address field populated automatically before
-// being logged.
+// precompile returns [vm.ErrExecutionReverted].
 func AddAsPrecompile[CD, D any, R PrecompileResult, A any](p *Processor, h Handler[CD, D, R, A]) vm.PrecompiledStatefulContract {
 	results := AddHandler(p, h)
 
@@ -50,23 +41,6 @@ func AddAsPrecompile[CD, D any, R PrecompileResult, A any](p *Processor, h Handl
 			// TODO(arr4n) add revert data to match a Solidity-style error
 			return nil, vm.ErrExecutionReverted
 		}
-
-		ret, logs, err := res.Result.PrecompileOutput(env, input)
-		if err != nil {
-			// This MUST NOT be `nil, err` as the EVM uses the returned buffer
-			// for both successful and reverting paths.
-			return ret, err
-		}
-
-		if env.ReadOnly() && len(logs) > 0 {
-			return nil, vm.ErrWriteProtection
-		}
-		sdb := env.StateDB()
-		self := env.Addresses().EVMSemantic.Self
-		for _, l := range logs {
-			l.Address = self
-			sdb.AddLog(l)
-		}
-		return ret, nil
+		return res.Result.PrecompileOutput(env, input)
 	}
 }

@@ -113,8 +113,11 @@ func (r *recorder) Process(sdb libevm.StateReader, tx IndexedTx, cd commonData, 
 
 var _ PrecompileResult = recorded{}
 
-func (r recorded) PrecompileOutput(env vm.PrecompileEnvironment, input []byte) ([]byte, []*types.Log, error) {
-	return r.precompileReturnData(), []*types.Log{r.asLog()}, nil
+func (r recorded) PrecompileOutput(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
+	l := r.asLog()
+	l.Address = env.Addresses().EVMSemantic.Self
+	env.StateDB().AddLog(l)
+	return r.precompileReturnData(), nil
 }
 
 func (r recorded) precompileReturnData() []byte {
