@@ -70,7 +70,7 @@ type Handler[CommonData, Data, Result, Aggregated any] interface {
 	Gas(*types.Transaction) (gas uint64, process bool)
 	// BeforeBlock is called before all calls to Prefetch() on this Handler,
 	// all of which receive the returned value.
-	BeforeBlock(libevm.StateReader, *types.Block) CommonData
+	BeforeBlock(libevm.StateReader, *types.Header) CommonData
 	// Prefetch is called before the respective call to Process() on this
 	// Handler. It MUST NOT perform any meaningful computation beyond what is
 	// necessary to determine the necessary state to propagate to Process().
@@ -187,7 +187,7 @@ func (w *wrapper[CD, D, R, A]) beforeBlock(sdb libevm.StateReader, b *types.Bloc
 	go func() {
 		// goroutine guaranteed to have completed by the time a respective
 		// getter unblocks (i.e. in any call to [wrapper.prefetch]).
-		w.common.set(w.BeforeBlock(sdb, b))
+		w.common.set(w.BeforeBlock(sdb, types.CopyHeader(b.Header())))
 	}()
 }
 

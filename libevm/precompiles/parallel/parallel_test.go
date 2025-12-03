@@ -71,9 +71,9 @@ type commonData struct {
 	BeforeBlockStateVal common.Hash
 }
 
-func (r *recorder) BeforeBlock(sdb libevm.StateReader, b *types.Block) commonData {
+func (r *recorder) BeforeBlock(sdb libevm.StateReader, h *types.Header) commonData {
 	return commonData{
-		HeaderExtra:         slices.Clone(b.Header().Extra),
+		HeaderExtra:         slices.Clone(h.Extra),
 		BeforeBlockStateVal: sdb.GetState(r.addr, r.blockKey),
 	}
 }

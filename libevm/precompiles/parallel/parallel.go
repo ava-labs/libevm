@@ -184,14 +184,7 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 	// reading from a [state.StateDB] is not threadsafe.
 	p.stateShare.distribute(sdb)
 	for _, h := range p.handlers {
-		h.beforeBlock(
-			sdb.Copy(),
-			types.NewBlockWithHeader(
-				b.Header(),
-			).WithBody(
-				*b.Body(),
-			),
-		)
+		h.beforeBlock(sdb.Copy(), b)
 	}
 
 	txs := b.Transactions()
