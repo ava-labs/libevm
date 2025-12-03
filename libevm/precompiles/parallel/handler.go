@@ -31,42 +31,55 @@ import (
 // determine whether this is possible, typically only so if one of the following
 // is true with respect to a precompile associated with the Handler:
 //
-// 1. The destination address is that of the precompile; or
-//
-// 2. At least one [types.AccessTuple] references the precompile's address.
+//  1. The destination address is that of the precompile; or
+//  2. At least one [types.AccessTuple] references the precompile's address.
 //
 // Scenario (2) allows precompile access to be determined through inspection of
 // the [types.Transaction] alone, without the need for execution.
 //
-// All [libevm.StateReader] instances are opened to the state at the beginning
-// of the block. The [StateDB] is the same one used to execute the block,
-// before being committed, and MAY be written to.
+// A [Processor] will orchestrate calling of Handler methods as follows:
 //
-// NOTE: other than [Handler.AfterBlock], all methods MAY be called concurrently
-// with one another and with other [Handler] implementations, unless otherwise
-// specified. AfterBlock() methods are called in the same order as they were
-// registered with [AddHandler].
+//	|                - Prefetch(i) - Process(i)
+//	|              /                        /
+//	| BeforeBlock()                         - PostProcess() - AfterBlock()
+//	|              \                        \
+//	|                - Prefetch(j) - Process(j)
+//
+// IntRA-Handler guarantees:
+//
+//  1. BeforeBlock() precedes all Prefetch() calls.
+//  2. Prefetch() precedes the respective Process() call.
+//  3. PostProcess() precedes AfterBlock().
+//
+// Note that PostProcess() MAY be called at any time, and implementations MUST
+// synchronise using the [Results]. There are no intER-Handler guarantees except
+// that AfterBlock() methods are called sequentially, in the same order as they
+// were registered with [AddHandler].
+//
+// All [libevm.StateReader] instances are opened to the state at the beginning
+// of the block. The [StateDB] is the same one used to execute the block, before
+// being committed, and MAY be written to.
 type Handler[CommonData, Data, Result, Aggregated any] interface {
-	// Gas reports whether the [Handler] SHOULD receive the transaction for
+	// Gas reports whether the Handler SHOULD receive the transaction for
 	// processing and, if so, how much gas to charge. Processing is performed
 	// i.f.f. the returned boolean is true and there is sufficient gas limit to
-	// cover intrinsic gas and all [Handler]s that returned true. If there is
+	// cover intrinsic gas and all Handlers that returned true. If there is
 	// insufficient gas for processing then the transaction will result in
 	// [vm.ErrOutOfGas] as long as the [Processor] is registered with
 	// [vm.RegisterHooks] as a [vm.Preprocessor].
 	Gas(*types.Transaction) (gas uint64, process bool)
-	// BeforeBlock is called before all calls to Prefetch() on this [Handler],
+	// BeforeBlock is called before all calls to Prefetch() on this Handler,
 	// all of which receive the returned value.
 	BeforeBlock(libevm.StateReader, *types.Block) CommonData
 	// Prefetch is called before the respective call to Process() on this
-	// [Handler]. It MUST NOT perform any meaningful computation beyond what is
-	// necessary to determine that necessary state to propagate to Process().
+	// Handler. It MUST NOT perform any meaningful computation beyond what is
+	// necessary to determine the necessary state to propagate to Process().
 	Prefetch(libevm.StateReader, IndexedTx, CommonData) Data
-	// Process is responsible for performing all meaningful computation. It
-	// receives the common data returned by the single call to BeforeBlock() as
-	// well as the data from the respective call to Prefetch(). The returned
-	// result is propagated to PostProcess() and any calls to the function
-	// returned by [AddHandler].
+	// Process is responsible for performing all meaningful, per-transaction
+	// computation. It receives the common data returned by the single call to
+	// BeforeBlock() as well as the data from the respective call to Prefetch().
+	// The returned result is propagated to PostProcess() and any calls to the
+	// function returned by [AddHandler].
 	//
 	// NOTE: if the result is exposed to the EVM via a precompile then said
 	// precompile will block until Process() returns. While this guarantees the
@@ -76,9 +89,14 @@ type Handler[CommonData, Data, Result, Aggregated any] interface {
 	// PostProcess is called concurrently with all calls to Process(). It allows
 	// for online aggregation of results into a format ready for writing to
 	// state.
+	//
+	// NOTE: although PostProcess() MAY perform computation, it will block the
+	// calling of AfterBlock() and hence also the execution of the next block.
 	PostProcess(Results[Result]) Aggregated
 	// AfterBlock is called after PostProcess() returns and all regular EVM
-	// transaction processing is complete.
+	// transaction processing is complete. It MUST NOT perform any meaningful
+	// computation beyond what is necessary to (a) parse receipts, and (b)
+	// persist aggregated results.
 	AfterBlock(StateDB, Aggregated, *types.Block, types.Receipts)
 }
 
