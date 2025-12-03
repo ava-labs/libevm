@@ -62,8 +62,9 @@ type aggregated struct {
 }
 
 type recorded struct {
-	HeaderExtra, TxData      []byte
-	Block, Prefetch, Process common.Hash
+	TxData            []byte
+	Prefetch, Process common.Hash
+	Common            commonData
 }
 
 type commonData struct {
@@ -103,11 +104,10 @@ func (r *recorder) Process(sdb libevm.StateReader, tx IndexedTx, cd commonData, 
 	}
 
 	return recorded{
-		HeaderExtra: slices.Clone(cd.HeaderExtra),
-		TxData:      slices.Clone(tx.Data()),
-		Block:       cd.BeforeBlockStateVal,
-		Prefetch:    data.prefetchStateVal,
-		Process:     sdb.GetState(r.addr, r.processKey),
+		TxData:   slices.Clone(tx.Data()),
+		Prefetch: data.prefetchStateVal,
+		Process:  sdb.GetState(r.addr, r.processKey),
+		Common:   cd,
 	}
 }
 
@@ -121,16 +121,16 @@ func (r recorded) PrecompileOutput(env vm.PrecompileEnvironment, input []byte) (
 }
 
 func (r recorded) precompileReturnData() []byte {
-	return slices.Concat(r.HeaderExtra, []byte("|"), r.TxData)
+	return slices.Concat(r.Common.HeaderExtra, []byte("|"), r.TxData)
 }
 
 func (r recorded) asLog() *types.Log {
 	return &types.Log{
-		Topics: []common.Hash{r.Block, r.Prefetch, r.Process},
+		Topics: []common.Hash{r.Common.BeforeBlockStateVal, r.Prefetch, r.Process},
 	}
 }
 
-func (r *recorder) PostProcess(res Results[recorded]) aggregated {
+func (r *recorder) PostProcess(cd commonData, res Results[recorded]) aggregated {
 	// Although unnecessary because of the ranging over both channels, this just
 	// demonstrates that it's non-blocking.
 	defer res.WaitForAll()
@@ -141,6 +141,12 @@ func (r *recorder) PostProcess(res Results[recorded]) aggregated {
 	}
 	for res := range res.ProcessOrder {
 		out.processOrder = append(out.processOrder, res)
+	}
+
+	if len(out.txOrder) > 0 {
+		if diff := cmp.Diff(cd, out.txOrder[0].Result.Common); diff != "" {
+			r.tb.Errorf("Mismatched CommonData propagation to Handler methods; diff (-PostProcess, +Process):\n%s", diff)
+		}
 	}
 
 	return out
@@ -270,11 +276,13 @@ func TestProcessor(t *testing.T) {
 				var want recorded
 				if wantOK {
 					want = recorded{
-						HeaderExtra: extra,
-						Block:       blockVal,
-						Prefetch:    prefetchVal,
-						Process:     processVal,
-						TxData:      tx.Data(),
+						Common: commonData{
+							HeaderExtra:         extra,
+							BeforeBlockStateVal: blockVal,
+						},
+						Prefetch: prefetchVal,
+						Process:  processVal,
+						TxData:   tx.Data(),
 					}
 					wantPerTx = append(wantPerTx, TxResult[recorded]{
 						Tx: IndexedTx{
@@ -424,8 +432,10 @@ func TestIntegration(t *testing.T) {
 			wantReturnData = append(wantReturnData, []byte{})
 		} else {
 			rec := &recorded{
-				HeaderExtra: slices.Clone(header.Extra),
-				TxData:      tx.Data(),
+				Common: commonData{
+					HeaderExtra: slices.Clone(header.Extra),
+				},
+				TxData: tx.Data(),
 			}
 			wantReturnData = append(wantReturnData, rec.precompileReturnData())
 

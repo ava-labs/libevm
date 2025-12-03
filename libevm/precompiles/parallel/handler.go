@@ -51,10 +51,10 @@ import (
 //  2. Prefetch() precedes the respective Process() call.
 //  3. PostProcess() precedes AfterBlock().
 //
-// Note that PostProcess() MAY be called at any time, and implementations MUST
-// synchronise using the [Results]. There are no intER-Handler guarantees except
-// that AfterBlock() methods are called sequentially, in the same order as they
-// were registered with [AddHandler].
+// Note that PostProcess() MAY be called at any time after BeforeBlock(), and
+// implementations MUST synchronise with Process() by using the [Results]. There
+// are no intER-Handler guarantees except that AfterBlock() methods are called
+// sequentially, in the same order as they were registered with [AddHandler].
 //
 // All [libevm.StateReader] instances are opened to the state at the beginning
 // of the block. The [StateDB] is the same one used to execute the block, before
@@ -92,7 +92,7 @@ type Handler[CommonData, Data, Result, Aggregated any] interface {
 	//
 	// NOTE: although PostProcess() MAY perform computation, it will block the
 	// calling of AfterBlock() and hence also the execution of the next block.
-	PostProcess(Results[Result]) Aggregated
+	PostProcess(CommonData, Results[Result]) Aggregated
 	// AfterBlock is called after PostProcess() returns and all regular EVM
 	// transaction processing is complete. It MUST NOT perform any meaningful
 	// computation beyond what is necessary to (a) parse receipts, and (b)
@@ -191,7 +191,7 @@ func (w *wrapper[CD, D, R, A]) beforeBlock(sdb libevm.StateReader, b *types.Bloc
 	}()
 }
 
-func (w *wrapper[SD, D, R, A]) beforeWork(jobs int) {
+func (w *wrapper[CD, D, R, A]) beforeWork(jobs int) {
 	w.txsBeingProcessed.Add(jobs)
 	w.whenProcessed = make(chan TxResult[R], jobs)
 	go func() {
@@ -200,11 +200,11 @@ func (w *wrapper[SD, D, R, A]) beforeWork(jobs int) {
 	}()
 }
 
-func (w *wrapper[SD, D, R, A]) prefetch(sdb libevm.StateReader, job *job) {
+func (w *wrapper[CD, D, R, A]) prefetch(sdb libevm.StateReader, job *job) {
 	w.data[job.tx.Index].set(w.Prefetch(sdb, job.tx, w.common.getAndReplace()))
 }
 
-func (w *wrapper[SD, D, R, A]) process(sdb libevm.StateReader, job *job) {
+func (w *wrapper[CD, D, R, A]) process(sdb libevm.StateReader, job *job) {
 	defer w.txsBeingProcessed.Done()
 
 	idx := job.tx.Index
@@ -220,14 +220,14 @@ func (w *wrapper[SD, D, R, A]) process(sdb libevm.StateReader, job *job) {
 	}
 }
 
-func (w *wrapper[SD, D, R, A]) nullResult(job *job) {
+func (w *wrapper[CD, D, R, A]) nullResult(job *job) {
 	w.results[job.tx.Index].set(result[R]{
 		tx:  job.tx,
 		val: nil,
 	})
 }
 
-func (w *wrapper[SD, D, R, A]) result(i int) (TxResult[R], bool) {
+func (w *wrapper[CD, D, R, A]) result(i int) (TxResult[R], bool) {
 	r := w.results[i].getAndReplace()
 
 	txr := TxResult[R]{
@@ -242,7 +242,7 @@ func (w *wrapper[SD, D, R, A]) result(i int) (TxResult[R], bool) {
 	return txr, true
 }
 
-func (w *wrapper[SD, D, R, A]) postProcess() {
+func (w *wrapper[CD, D, R, A]) postProcess() {
 	txOrder := make(chan TxResult[R], w.totalTxsInBLock)
 	go func() {
 		defer close(txOrder)
@@ -255,17 +255,18 @@ func (w *wrapper[SD, D, R, A]) postProcess() {
 		}
 	}()
 
-	w.aggregated.set(w.PostProcess(Results[R]{
+	res := Results[R]{
 		WaitForAll:   w.txsBeingProcessed.Wait,
 		TxOrder:      txOrder,
 		ProcessOrder: w.whenProcessed,
-	}))
+	}
+	w.aggregated.set(w.PostProcess(w.common.getAndReplace(), res))
 }
 
-func (p *wrapper[SD, D, R, A]) finishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipts) {
-	p.AfterBlock(sdb, p.aggregated.getAndKeep(), b, rs)
-	p.common.getAndKeep()
-	for _, v := range p.results[:p.totalTxsInBLock] {
+func (w *wrapper[CD, D, R, A]) finishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipts) {
+	w.AfterBlock(sdb, w.aggregated.getAndKeep(), b, rs)
+	w.common.getAndKeep()
+	for _, v := range w.results[:w.totalTxsInBLock] {
 		// Every result channel is guaranteed to have some value in its buffer
 		// because [Processor.BeforeBlock] either sends a nil *R or it
 		// dispatches a job, which will send a non-nil *R.
