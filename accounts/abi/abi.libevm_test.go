@@ -22,9 +22,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/libevm/common"
 )
 
 const TestABI = `[{"type":"function","name":"receive","inputs":[{"name":"sender","type":"address"},{"name":"amount","type":"uint256"},{"name":"memo","type":"bytes"}],"outputs":[{"internalType":"bool","name":"isAllowed","type":"bool"}]}]`
@@ -214,5 +215,8 @@ func TestPackOutput(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, vals, 1)
-	require.True(t, vals[0].(bool))
+
+	boolVal, ok := vals[0].(bool)
+	require.True(t, ok)
+	require.True(t, boolVal)
 }
