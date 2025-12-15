@@ -24,12 +24,13 @@ import (
 
 // PackEvent packs the given `args` to conform with the ABI for the specified
 // event. Arguments MUST match the order specified in the event ABI. Indexed
-// arguments are returned as topics, as described in the [Solidity docs], while
-// the rest are packed into `data`.
+// arguments are returned as topics (the slice of which MAY be nil),as described
+// in the [Solidity docs], while the rest are packed into `data`.
 //
 // Struct, slice, and array arguments are not supported except for `[]byte`.
 //
-// [Solidity docs]: https://docs.soliditylang.org/en/latest/abi-spec.html#encoding-of-indexed-event-parameters
+// [Solidity docs]:
+// https://docs.soliditylang.org/en/latest/abi-spec.html#encoding-of-indexed-event-parameters
 func (abi ABI) PackEvent(name string, args ...any) (topics []common.Hash, data []byte, _ error) {
 	event, ok := abi.Events[name]
 	if !ok {
@@ -87,9 +88,11 @@ func (abi ABI) PackOutput(method string, args ...any) ([]byte, error) {
 	return m.Outputs.Pack(args...)
 }
 
-// UnpackInputIntoInterface is equivalent to [ABI.UnpackIntoInterface] except
-// that it treats `data` as input when processing a method; all of the same
-// caveats apply.
+// UnpackInputIntoInterface is equivalent to [ABI.UnpackIntoInterface], with all
+// the same caveats, except that it treats `data` as:
+//
+//  1. Input when handling a method; or
+//  2. Unindexed data when handling an event.
 func (abi ABI) UnpackInputIntoInterface(v any, methodOrEventName string, data []byte) error {
 	in, err := abi.methodOrEventInputs(methodOrEventName)
 	if err != nil {

@@ -18,6 +18,7 @@ package abi
 
 import (
 	"math/big"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -29,14 +30,15 @@ import (
 	"github.com/ava-labs/libevm/crypto"
 )
 
-func TestPackEvent(t *testing.T) {
+func TestEventPackingRoundTrip(t *testing.T) {
 	tests := []struct {
-		name       string
-		abiJSON    string
-		eventName  string
-		args       []any
-		wantTopics []common.Hash
-		wantData   []byte
+		name         string
+		abiJSON      string
+		eventName    string
+		args         []any
+		wantTopics   []common.Hash
+		wantData     []byte
+		wantUnpacked any // MUST be a pointer
 	}{
 		{
 			name: "received",
@@ -60,6 +62,15 @@ func TestPackEvent(t *testing.T) {
 				crypto.Keccak256Hash([]byte("received(address,uint256,bytes)")),
 			},
 			wantData: common.Hex2Bytes("000000000000000000000000376c47978271565f56deb45495afa69e59c16ab20000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000018800000000000000000000000000000000000000000000000000000000000000"),
+			wantUnpacked: &struct {
+				Sender common.Address
+				Amount *big.Int
+				Memo   []byte
+			}{
+				common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
+				big.NewInt(1),
+				[]byte{0x88},
+			},
 		},
 		{
 			name: "anonymous",
@@ -79,9 +90,19 @@ func TestPackEvent(t *testing.T) {
 				big.NewInt(1),
 				[]byte{0x88},
 			},
-			wantTopics: nil, // TODO(arr4n) this was originally a non-nil, empty slice; does this matter?
+			wantTopics: nil,
 			wantData:   common.Hex2Bytes("000000000000000000000000376c47978271565f56deb45495afa69e59c16ab20000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000018800000000000000000000000000000000000000000000000000000000000000"),
-		}, {
+			wantUnpacked: &struct {
+				Sender common.Address
+				Amount *big.Int
+				Memo   []byte
+			}{
+				common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
+				big.NewInt(1),
+				[]byte{0x88},
+			},
+		},
+		{
 			name: "Transfer",
 			abiJSON: `[{
 				"type": "event",
@@ -105,6 +126,11 @@ func TestPackEvent(t *testing.T) {
 				common.HexToHash("0x000000000000000000000000376c47978271565f56deb45495afa69e59c16ab2"),
 			},
 			wantData: common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000064"),
+			wantUnpacked: &struct {
+				Value *big.Int
+			}{
+				big.NewInt(100),
+			},
 		},
 	}
 
@@ -113,11 +139,25 @@ func TestPackEvent(t *testing.T) {
 			abi, err := JSON(strings.NewReader(test.abiJSON))
 			require.NoErrorf(t, err, "JSON(%s)", test.abiJSON)
 
-			topics, data, err := abi.PackEvent(test.eventName, test.args...)
-			require.NoErrorf(t, err, "%T.PackEvent(%q, %v...)", abi, test.eventName, test.args)
+			t.Run("pack", func(t *testing.T) {
+				topics, data, err := abi.PackEvent(test.eventName, test.args...)
+				require.NoErrorf(t, err, "%T.PackEvent(%q, %v...)", abi, test.eventName, test.args)
 
-			assert.Equal(t, test.wantTopics, topics, "topics")
-			assert.Equal(t, test.wantData, data, "data")
+				assert.Equal(t, test.wantTopics, topics, "topics")
+				assert.Equal(t, test.wantData, data, "data")
+			})
+
+			t.Run("unpack", func(t *testing.T) {
+				typ := reflect.TypeOf(test.wantUnpacked)
+				require.Equal(t, reflect.Pointer, typ.Kind(), "unpacking type MUST be a pointer")
+
+				got := reflect.New(typ.Elem()).Interface()
+				require.NoError(t, abi.UnpackInputIntoInterface(got, test.eventName, test.wantData))
+
+				if diff := cmp.Diff(test.wantUnpacked, got, compareBigInts()); diff != "" {
+					t.Errorf("%T.UnpackInputIntoInterface(%T) diff (-want +got):\n%s", abi, got, diff)
+				}
+			})
 		})
 	}
 }
@@ -212,17 +252,7 @@ func TestUnpackInputIntoInterface(t *testing.T) {
 			var got receiveFuncInput
 			require.NoErrorf(t, abi.UnpackInputIntoInterface(&got, method, data), "%T.UnpackInputIntoInterface()", abi)
 
-			opt := cmp.Comparer(func(a, b *big.Int) bool {
-				switch aN, bN := a == nil, b == nil; {
-				case aN != bN:
-					return false
-				case aN && bN:
-					return true
-				default:
-					return a.Cmp(b) == 0
-				}
-			})
-			if diff := cmp.Diff(input, got, opt); diff != "" {
+			if diff := cmp.Diff(input, got, compareBigInts()); diff != "" {
 				t.Errorf("%T.Pack() -> %T.UnpackInputIntoInterface(%T, ...) round-trip diff (-want +got):\n%s", abi, abi, got, diff)
 			}
 		})
@@ -248,4 +278,17 @@ func TestPackOutput(t *testing.T) {
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("%T.PackOutput() -> %T.Outputs.Unpack() round-trip diff (-want +got):\n%s", abi, m, diff)
 	}
+}
+
+func compareBigInts() cmp.Option {
+	return cmp.Comparer(func(a, b *big.Int) bool {
+		switch aN, bN := a == nil, b == nil; {
+		case aN != bN:
+			return false
+		case aN && bN:
+			return true
+		default:
+			return a.Cmp(b) == 0
+		}
+	})
 }
