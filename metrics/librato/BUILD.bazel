@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "librato",
+    srcs = [
+        "client.go",
+        "librato.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/metrics/librato",
+    visibility = ["//visibility:public"],
+    deps = ["//metrics"],
+)
