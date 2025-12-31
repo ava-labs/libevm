@@ -11,6 +11,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+env:
+  # See build/checksums.txt for the latest version and checksum
+  EXECUTION_SPEC_TESTS_VERSION: v2.1.0
+  EXECUTION_SPEC_TESTS_CHECKSUM: ca89c76851b0900bfcc3cbb9a26cbece1f3d7c64a3bed38723e914713290df6c
+  EXECUTION_SPEC_TESTS_PATH: saexec/ethtests/spec-tests
+
 jobs:
   # If adding a new job, add it to the `needs` list of the `go` job as this is
   # what gates PRs.
@@ -26,10 +32,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
+      - name: Download and extract execution spec tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "${EXECUTION_SPEC_TESTS_PATH}"
+          # Download the archive
+          curl -L -o /tmp/fixtures_develop.tar.gz https://github.com/ethereum/execution-spec-tests/releases/download/${EXECUTION_SPEC_TESTS_VERSION}/fixtures_develop.tar.gz
+          # Verify checksum (replace EXPECTED_CHECKSUM with actual value)
+          ACTUAL_CHECKSUM=$(sha256sum /tmp/fixtures_develop.tar.gz | cut -d' ' -f1)
+          if [ "$ACTUAL_CHECKSUM" != "$EXECUTION_SPEC_TESTS_CHECKSUM" ]; then
+            echo "Checksum mismatch! Expected: $EXPECTED_CHECKSUM, Got: $ACTUAL_CHECKSUM"
+            exit 1
+          fi
+          # Extract if verification passes
+          tar -xz -f /tmp/fixtures_develop.tar.gz -C "${EXECUTION_SPEC_TESTS_PATH}"
       - name: Run flaky tests sequentially
         run:
           | # Upstream flakes are race conditions exacerbated by concurrent tests
