@@ -15,7 +15,7 @@ env:
   # See build/checksums.txt for the latest version and checksum
   EXECUTION_SPEC_TESTS_VERSION: v2.1.0
   EXECUTION_SPEC_TESTS_CHECKSUM: ca89c76851b0900bfcc3cbb9a26cbece1f3d7c64a3bed38723e914713290df6c
-  EXECUTION_SPEC_TESTS_PATH: saexec/ethtests/spec-tests
+  EXECUTION_SPEC_TESTS_PATH: tests/spec-tests
 
 jobs:
   # If adding a new job, add it to the `needs` list of the `go` job as this is
