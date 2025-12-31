@@ -39,17 +39,18 @@ import (
 //
 // A [Processor] will orchestrate calling of Handler methods as follows:
 //
-//	|                - Prefetch(i) - Process(i)
-//	|              /                        /
-//	| BeforeBlock()                         - PostProcess() - AfterBlock()
-//	|              \                        \
-//	|                - Prefetch(j) - Process(j)
+//	|                                      - Prefetch(i) - Process(i)
+//	|                                    /                        /
+//	| BeforeBlock() - ShouldProcess(0..n)                         - PostProcess() - AfterBlock()
+//	|                                    \                        \
+//	|                                      - Prefetch(j) - Process(j)
 //
 // IntRA-Handler guarantees:
 //
-//  1. BeforeBlock() precedes all Prefetch() calls.
-//  2. Prefetch() precedes the respective Process() call.
-//  3. PostProcess() precedes AfterBlock().
+//  1. BeforeBlock() precedes all ShouldProcess() calls.
+//  2. ShouldProcess() calls are sequential, in the same order as transactions in the block.
+//  3. Prefetch() precedes the respective Process() call. Not called if ShouldProcess() returns false.
+//  4. PostProcess() precedes AfterBlock().
 //
 // Note that PostProcess() MAY be called at any time after BeforeBlock(), and
 // implementations MUST synchronise with Process() by using the [Results]. There
@@ -60,17 +61,21 @@ import (
 // of the block. The [StateDB] is the same one used to execute the block, before
 // being committed, and MAY be written to.
 type Handler[CommonData, Data, Result, Aggregated any] interface {
-	// Gas reports whether the Handler SHOULD receive the transaction for
-	// processing and, if so, how much gas to charge. Processing is performed
-	// i.f.f. the returned boolean is true and there is sufficient gas limit to
-	// cover intrinsic gas and all Handlers that returned true. If there is
-	// insufficient gas for processing then the transaction will result in
-	// [vm.ErrOutOfGas] as long as the [Processor] is registered with
-	// [vm.RegisterHooks] as a [vm.Preprocessor].
-	Gas(*types.Transaction) (gas uint64, process bool)
-	// BeforeBlock is called before all calls to Prefetch() on this Handler,
-	// all of which receive the returned value.
+	// BeforeBlock is called before all calls to ShouldProcess() on this
+	// Handler.
 	BeforeBlock(libevm.StateReader, *types.Header) CommonData
+	// ShouldProcess reports whether the Handler SHOULD receive the transaction
+	// for processing and, if so, how much gas to charge. Processing is
+	// performed i.f.f. the returned boolean is true and there is sufficient gas
+	// limit to cover intrinsic gas for all Handlers that returned true. If
+	// there is insufficient gas for processing then the transaction will result
+	// in [vm.ErrOutOfGas] as long as the [Processor] is registered with
+	// [vm.RegisterHooks] as a [vm.Preprocessor].
+	//
+	// Implementations MUST NOT perform any meaningful computation
+	// but MAY perform inter-transaction checks such as, for example,
+	// deduplication of work.
+	ShouldProcess(*types.Transaction) (do bool, gas uint64)
 	// Prefetch is called before the respective call to Process() on this
 	// Handler. It MUST NOT perform any meaningful computation beyond what is
 	// necessary to determine the necessary state to propagate to Process().

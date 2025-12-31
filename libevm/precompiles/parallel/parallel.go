@@ -34,7 +34,7 @@ import (
 
 // A handler is the non-generic equivalent of a [Handler], exposed by [wrapper].
 type handler interface {
-	Gas(*types.Transaction) (gas uint64, process bool)
+	ShouldProcess(*types.Transaction) (do bool, gas uint64)
 
 	beforeBlock(libevm.StateReader, *types.Block)
 	beforeWork(jobs int)
@@ -192,7 +192,7 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 	workloads := make([]int, len(p.handlers))
 
 	for txIdx, tx := range txs {
-		do, err := p.shouldProcess(tx, rules)
+		do, err := p.shouldProcess(tx, rules) // MUST NOT be concurrent within a Handler
 		if err != nil {
 			return err
 		}
@@ -259,8 +259,8 @@ func (p *Processor) shouldProcess(tx *types.Transaction, rules params.Rules) (pr
 	process = make([]bool, len(p.handlers))
 	var totalCost uint64
 	for i, h := range p.handlers {
-		cost, ok := h.Gas(tx)
-		if !ok {
+		do, cost := h.ShouldProcess(tx)
+		if !do {
 			continue
 		}
 		process[i] = true

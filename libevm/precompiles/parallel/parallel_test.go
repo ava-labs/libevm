@@ -79,11 +79,11 @@ func (r *recorder) BeforeBlock(sdb libevm.StateReader, h *types.Header) commonDa
 	}
 }
 
-func (r *recorder) Gas(tx *types.Transaction) (uint64, bool) {
+func (r *recorder) ShouldProcess(tx *types.Transaction) (bool, uint64) {
 	if to := tx.To(); to != nil && *to == r.addr {
-		return r.gas, true
+		return true, r.gas
 	}
-	return 0, false
+	return false, 0
 }
 
 type prefetched struct {
