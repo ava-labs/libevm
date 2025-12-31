@@ -75,7 +75,7 @@ type Handler[CommonData, Data, Result, Aggregated any] interface {
 	// Implementations MUST NOT perform any meaningful computation
 	// but MAY perform inter-transaction checks such as, for example,
 	// deduplication of work.
-	ShouldProcess(*types.Transaction) (do bool, gas uint64)
+	ShouldProcess(IndexedTx, CommonData) (do bool, gas uint64)
 	// Prefetch is called before the respective call to Process() on this
 	// Handler. It MUST NOT perform any meaningful computation beyond what is
 	// necessary to determine the necessary state to propagate to Process().
@@ -194,6 +194,10 @@ func (w *wrapper[CD, D, R, A]) beforeBlock(sdb libevm.StateReader, b *types.Bloc
 		// getter unblocks (i.e. in any call to [wrapper.prefetch]).
 		w.common.set(w.BeforeBlock(sdb, types.CopyHeader(b.Header())))
 	}()
+}
+
+func (w *wrapper[CD, D, R, A]) shouldProcess(tx IndexedTx) (do bool, gas uint64) {
+	return w.Handler.ShouldProcess(tx, w.common.getAndReplace())
 }
 
 func (w *wrapper[CD, D, R, A]) beforeWork(jobs int) {

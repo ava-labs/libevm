@@ -79,7 +79,9 @@ func (r *recorder) BeforeBlock(sdb libevm.StateReader, h *types.Header) commonDa
 	}
 }
 
-func (r *recorder) ShouldProcess(tx *types.Transaction) (bool, uint64) {
+func (r *recorder) ShouldProcess(tx IndexedTx, _ commonData) (bool, uint64) {
+	// TODO(arr4n) test that the [commonData] received here is the same as that
+	// returned by [recorder.BeforeBlock].
 	if to := tx.To(); to != nil && *to == r.addr {
 		return true, r.gas
 	}

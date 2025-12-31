@@ -34,9 +34,8 @@ import (
 
 // A handler is the non-generic equivalent of a [Handler], exposed by [wrapper].
 type handler interface {
-	ShouldProcess(*types.Transaction) (do bool, gas uint64)
-
 	beforeBlock(libevm.StateReader, *types.Block)
+	shouldProcess(IndexedTx) (do bool, gas uint64)
 	beforeWork(jobs int)
 	prefetch(libevm.StateReader, *job)
 	nullResult(*job)
@@ -191,17 +190,19 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 	jobs := make([]*job, 0, len(p.handlers)*len(txs))
 	workloads := make([]int, len(p.handlers))
 
-	for txIdx, tx := range txs {
+	for txIdx, rawTx := range txs {
+		tx := IndexedTx{
+			Index:       txIdx,
+			Transaction: rawTx,
+		}
+
 		do, err := p.shouldProcess(tx, rules) // MUST NOT be concurrent within a Handler
 		if err != nil {
 			return err
 		}
 		for i, h := range p.handlers {
 			j := &job{
-				tx: IndexedTx{
-					Index:       txIdx,
-					Transaction: tx,
-				},
+				tx:      tx,
 				handler: h,
 			}
 			if !do[i] {
@@ -251,7 +252,7 @@ func (p *Processor) FinishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipt
 	}
 }
 
-func (p *Processor) shouldProcess(tx *types.Transaction, rules params.Rules) (process []bool, retErr error) {
+func (p *Processor) shouldProcess(tx IndexedTx, rules params.Rules) (process []bool, retErr error) {
 	// An explicit 0 is necessary to avoid [Processor.PreprocessingGasCharge]
 	// returning [ErrTxUnknown].
 	p.txGas[tx.Hash()] = 0
@@ -259,7 +260,7 @@ func (p *Processor) shouldProcess(tx *types.Transaction, rules params.Rules) (pr
 	process = make([]bool, len(p.handlers))
 	var totalCost uint64
 	for i, h := range p.handlers {
-		do, cost := h.ShouldProcess(tx)
+		do, cost := h.shouldProcess(tx)
 		if !do {
 			continue
 		}
@@ -273,7 +274,7 @@ func (p *Processor) shouldProcess(tx *types.Transaction, rules params.Rules) (pr
 		}
 	}()
 
-	spent, err := txIntrinsicGas(tx, &rules)
+	spent, err := txIntrinsicGas(tx.Transaction, &rules)
 	if err != nil {
 		return nil, fmt.Errorf("calculating intrinsic gas of %#x: %v", tx.Hash(), err)
 	}
