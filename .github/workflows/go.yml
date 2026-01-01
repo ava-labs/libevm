@@ -44,9 +44,12 @@ jobs:
       - name: Extract spec tests
         run: mkdir -p tests/spec-tests && tar -xz -f "${EXECUTION_SPEC_TESTS_FILE}" -C tests/spec-tests
       - name: Run flaky tests sequentially
-        run: go list ./... | grep -P "${FLAKY_REGEX}" | xargs -n 1 go test -short;
+        run:
+          | # Upstream flakes are race conditions exacerbated by concurrent tests
+          go list ./... | grep -P "${FLAKY_REGEX}" | xargs -n 1 go test -short;
       - name: Run non-flaky tests concurrently
-        run: go test -short $(go list ./... | grep -Pv "${FLAKY_REGEX}");
+        run: |
+          go test -short $(go list ./... | grep -Pv "${FLAKY_REGEX}");
 
   go_test_tooling:
     runs-on: ubuntu-latest
