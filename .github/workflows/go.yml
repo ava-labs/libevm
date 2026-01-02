@@ -24,7 +24,6 @@ jobs:
     env:
       # See build/checksums.txt for the latest version and checksum
       EXECUTION_SPEC_TESTS_VERSION: v2.1.0
-      EXECUTION_SPEC_TESTS_PATH: tests/spec-tests
       EXECUTION_SPEC_TESTS_FILE: fixtures_develop.tar.gz
       FLAKY_REGEX: "ava-labs/libevm/(triedb/pathdb|eth|eth/tracers/js|eth/tracers/logger|eth/tracers/internal/tracetest|accounts/abi/bind|accounts/keystore|eth/downloader|miner|ethclient|ethclient/gethclient|eth/catalyst)$"
     runs-on: ubuntu-latest
