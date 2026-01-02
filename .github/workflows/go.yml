@@ -43,6 +43,8 @@ jobs:
             sha256sum --ignore-missing --check build/checksums.txt | grep "${EXECUTION_SPEC_TESTS_FILE}: OK"
       - name: Extract spec tests
         run: mkdir -p tests/spec-tests && tar -xz -f "${EXECUTION_SPEC_TESTS_FILE}" -C tests/spec-tests
+      - name: Run spec tests
+        run: go test -test.v ./tests -run ^TestExecutionSpec
       - name: Run flaky tests sequentially
         run:
           | # Upstream flakes are race conditions exacerbated by concurrent tests
