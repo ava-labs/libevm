@@ -30,7 +30,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -88,7 +87,7 @@ func TestLegacyState(t *testing.T) {
 
 // TestExecutionSpecState runs the test fixtures from execution-spec-tests.
 func TestExecutionSpecState(t *testing.T) {
-	if !common.FileExist(executionSpecStateTestDir) {
+	if !executionSpecTestDirExists(t, executionSpecStateTestDir) {
 		t.Skipf("directory %s does not exist", executionSpecStateTestDir)
 	}
 	st := new(testMatcher)

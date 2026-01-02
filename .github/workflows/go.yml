@@ -36,7 +36,7 @@ jobs:
           go list ./... | grep -P "${FLAKY_REGEX}" | xargs -n 1 go test -short;
       - name: Run non-flaky tests concurrently
         run: |
-          go test -short $(go list ./... | grep -Pv "${FLAKY_REGEX}");
+          go test -short -libevm.fail_without_execution_spec_tests $(go list ./... | grep -Pv "${FLAKY_REGEX}");
 
   go_test_tooling:
     runs-on: ubuntu-latest
