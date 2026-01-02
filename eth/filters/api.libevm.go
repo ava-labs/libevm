@@ -1,4 +1,4 @@
-// Copyright 2024-2025 the libevm authors.
+// Copyright 2026 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -16,19 +16,18 @@
 
 package filters
 
-import "github.com/ava-labs/libevm/libevm/options"
-
-// A NewFilterAPIOption configures the behaviour of [NewFilterAPI].
-type NewFilterAPIOption = options.Option[newFilterAPIConfig]
-
-type newFilterAPIConfig struct {
-	quit chan struct{}
+// Close releases resources held by the API.
+func (api *FilterAPI) Close() {
+	quit(api.quit)
 }
 
-// WithQuitter sets a channel that can be closed to signal the FilterAPI to
-// quit.
-func WithQuitter(quit chan struct{}) NewFilterAPIOption {
-	return options.Func[newFilterAPIConfig](func(c *newFilterAPIConfig) {
-		c.quit = quit
-	})
+// Close releases resources held by the system.
+func (es *EventSystem) Close() {
+	quit(es.quit)
+}
+
+func quit(ch chan chan struct{}) {
+	done := make(chan struct{})
+	ch <- done
+	<-done
 }

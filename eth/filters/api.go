@@ -30,7 +30,6 @@ import (
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/internal/ethapi"
-	"github.com/ava-labs/libevm/libevm/options"
 	"github.com/ava-labs/libevm/rpc"
 )
 
@@ -65,17 +64,18 @@ type FilterAPI struct {
 	filtersMu sync.Mutex
 	filters   map[rpc.ID]*filter
 	timeout   time.Duration
-	quit      chan struct{}
+
+	quit chan chan struct{}
 }
 
 // NewFilterAPI returns a new FilterAPI instance.
-func NewFilterAPI(system *FilterSystem, lightMode bool, opts ...NewFilterAPIOption) *FilterAPI {
+func NewFilterAPI(system *FilterSystem, lightMode bool) *FilterAPI {
 	api := &FilterAPI{
 		sys:     system,
 		events:  NewEventSystem(system, lightMode),
 		filters: make(map[rpc.ID]*filter),
 		timeout: system.cfg.Timeout,
-		quit:    options.As(opts...).quit,
+		quit:    make(chan chan struct{}),
 	}
 	go api.timeoutLoop(system.cfg.Timeout)
 
@@ -91,7 +91,9 @@ func (api *FilterAPI) timeoutLoop(timeout time.Duration) {
 	for {
 		select {
 		case <-ticker.C:
-		case <-api.quit:
+		case done := <-api.quit: // libevm
+			api.events.Close()
+			defer close(done)
 			return
 		}
 		api.filtersMu.Lock()
