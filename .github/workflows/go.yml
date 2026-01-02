@@ -35,7 +35,7 @@ jobs:
           | # Upstream flakes are race conditions exacerbated by concurrent tests
           go list ./... | grep -P "${FLAKY_REGEX}" | xargs -n 1 go test -short;
       - name: Run ./tests directory tests
-        run: | # Without the flag these would silently skip if test cases aren't found
+        run: |
           go test -short ./tests -libevm.fail_instead_of_skip;
       - name: Run non-flaky tests concurrently
         run: | # The ./tests directory is run separetely to allow use of a specific flag
