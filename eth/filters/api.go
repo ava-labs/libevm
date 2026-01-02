@@ -25,11 +25,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/libevm"
+	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/internal/ethapi"
+	"github.com/ava-labs/libevm/libevm/options"
 	"github.com/ava-labs/libevm/rpc"
 )
 
@@ -64,15 +65,17 @@ type FilterAPI struct {
 	filtersMu sync.Mutex
 	filters   map[rpc.ID]*filter
 	timeout   time.Duration
+	quit      chan struct{}
 }
 
 // NewFilterAPI returns a new FilterAPI instance.
-func NewFilterAPI(system *FilterSystem, lightMode bool) *FilterAPI {
+func NewFilterAPI(system *FilterSystem, lightMode bool, opts ...NewFilterAPIOption) *FilterAPI {
 	api := &FilterAPI{
 		sys:     system,
 		events:  NewEventSystem(system, lightMode),
 		filters: make(map[rpc.ID]*filter),
 		timeout: system.cfg.Timeout,
+		quit:    options.As(opts...).quit,
 	}
 	go api.timeoutLoop(system.cfg.Timeout)
 
@@ -86,7 +89,11 @@ func (api *FilterAPI) timeoutLoop(timeout time.Duration) {
 	ticker := time.NewTicker(timeout)
 	defer ticker.Stop()
 	for {
-		<-ticker.C
+		select {
+		case <-ticker.C:
+		case <-api.quit:
+			return
+		}
 		api.filtersMu.Lock()
 		for id, f := range api.filters {
 			select {
