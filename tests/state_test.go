@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -87,8 +88,8 @@ func TestLegacyState(t *testing.T) {
 
 // TestExecutionSpecState runs the test fixtures from execution-spec-tests.
 func TestExecutionSpecState(t *testing.T) {
-	if !executionSpecTestDirExists(t, executionSpecStateTestDir) {
-		t.Skipf("directory %s does not exist", executionSpecStateTestDir)
+	if !common.FileExist(executionSpecStateTestDir) {
+		failOrSkip(t, "directory %s does not exist", executionSpecStateTestDir)
 	}
 	st := new(testMatcher)
 
@@ -197,7 +198,7 @@ func BenchmarkEVM(b *testing.B) {
 	dirinfo, err := os.Stat(dir)
 	if os.IsNotExist(err) || !dirinfo.IsDir() {
 		fmt.Fprintf(os.Stderr, "can't find test files in %s, did you clone the evm-benchmarks submodule?\n", dir)
-		b.Skip("missing test files")
+		failOrSkip(b, "missing test files")
 	}
 	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if info.IsDir() {

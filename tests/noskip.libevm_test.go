@@ -19,37 +19,30 @@ package tests
 import (
 	"flag"
 	"testing"
-
-	"github.com/ava-labs/libevm/common"
 )
 
 func TestMain(m *testing.M) {
 	flag.BoolVar(
-		&fatalIfNoSpecTestDir,
-		"libevm.fail_without_execution_spec_tests",
+		&failInsteadOfSkip,
+		"libevm.fail_instead_of_skip",
 		false,
-		"If true and no execution spec tests are found then respective tests will fail",
+		"If true and test cases are missing then respective tests fail instead of skipping",
 	)
 	flag.Parse()
 
 	m.Run()
 }
 
-var fatalIfNoSpecTestDir bool
+var failInsteadOfSkip bool
 
-// executionSpecTestDirExists is equivalent to [common.FileExist] except that if
-// it were to return false and [fatalIfNoSpecTestDir] is true then it results in
-// a fatal error. See the flag in [TestMain].
-//
-// Without this, the block and state execution spec tests fail silently when not
-// present. This resulted in them not being run on libevm for over a year.
-func executionSpecTestDirExists(t *testing.T, dirPath string) bool {
-	t.Helper()
-	if common.FileExist(dirPath) {
-		return true
+// failOrSkip propagates its arguments to Skipf or Fatalf, depending on the
+// value of [failInsteadOfSkip], defaulting to skipping for backwards
+// compatibility. See [TestMain] for the respective flag.
+func failOrSkip(tb testing.TB, format string, args ...any) {
+	tb.Helper()
+	fn := tb.Skipf
+	if failInsteadOfSkip {
+		fn = tb.Fatalf
 	}
-	if fatalIfNoSpecTestDir {
-		t.Fatalf("directory %q does not exist", dirPath)
-	}
-	return false
+	fn(format, args...)
 }

@@ -36,9 +36,9 @@ jobs:
           go list ./... | grep -P "${FLAKY_REGEX}" | xargs -n 1 go test -short;
       - name: Run ./tests directory tests
         run: | # Without the flag these would silently skip if test cases aren't found
-          go test -short ./tests -libevm.fail_without_execution_spec_tests;
+          go test -short ./tests -libevm.fail_instead_of_skip;
       - name: Run non-flaky tests concurrently
-        run: | # The ./tests directory is run above to allow use of a specific flag
+        run: | # The ./tests directory is run separetely to allow use of a specific flag
           go test -short $(go list ./... | grep -Pv "${FLAKY_REGEX}" | grep -Pv "ava-labs/libevm/tests$");
 
   go_test_tooling:

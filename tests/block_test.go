@@ -21,6 +21,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 )
 
@@ -62,8 +63,8 @@ func TestBlockchain(t *testing.T) {
 
 // TestExecutionSpecBlocktests runs the test fixtures from execution-spec-tests.
 func TestExecutionSpecBlocktests(t *testing.T) {
-	if !executionSpecTestDirExists(t, executionSpecBlockchainTestDir) {
-		t.Skipf("directory %s does not exist", executionSpecBlockchainTestDir)
+	if !common.FileExist(executionSpecBlockchainTestDir) {
+		failOrSkip(t, "directory %s does not exist", executionSpecBlockchainTestDir)
 	}
 	bt := new(testMatcher)
 
