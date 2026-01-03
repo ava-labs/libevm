@@ -26,6 +26,8 @@ import (
 	"github.com/ava-labs/libevm/event"
 )
 
+// A closeableTestBackend tracks all subscriptions that it produces, allowing
+// them to be cleaned up to avoid the leak of [EventSystem.eventLoop].
 type closeableTestBackend struct {
 	testBackend
 	subs event.SubscriptionScope
