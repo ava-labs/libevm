@@ -33,8 +33,7 @@ type closeableTestBackend struct {
 
 func (b *closeableTestBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
 	sub := b.testBackend.SubscribeNewTxsEvent(ch)
-	b.subs.Track(sub)
-	return sub
+	return b.subs.Track(sub)
 }
 
 func (b *closeableTestBackend) Close() {
