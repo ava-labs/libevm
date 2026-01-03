@@ -65,7 +65,7 @@ type FilterAPI struct {
 	filters   map[rpc.ID]*filter
 	timeout   time.Duration
 
-	quit chan chan struct{}
+	quit chan struct{}
 }
 
 // NewFilterAPI returns a new FilterAPI instance.
@@ -75,7 +75,7 @@ func NewFilterAPI(system *FilterSystem, lightMode bool) *FilterAPI {
 		events:  NewEventSystem(system, lightMode),
 		filters: make(map[rpc.ID]*filter),
 		timeout: system.cfg.Timeout,
-		quit:    make(chan chan struct{}),
+		quit:    make(chan struct{}),
 	}
 	go api.timeoutLoop(system.cfg.Timeout)
 
@@ -91,9 +91,7 @@ func (api *FilterAPI) timeoutLoop(timeout time.Duration) {
 	for {
 		select {
 		case <-ticker.C:
-		case done := <-api.quit: // libevm
-			api.events.Close()
-			defer close(done)
+		case <-api.quit:
 			return
 		}
 		api.filtersMu.Lock()

@@ -21,13 +21,36 @@ import (
 
 	"go.uber.org/goleak"
 
+	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/event"
 )
+
+type closeableTestBackend struct {
+	testBackend
+	subs event.SubscriptionScope
+}
+
+func (b *closeableTestBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+	sub := b.testBackend.SubscribeNewTxsEvent(ch)
+	b.subs.Track(sub)
+	return sub
+}
+
+func (b *closeableTestBackend) Close() {
+	b.subs.Close()
+}
 
 func TestClose(t *testing.T) {
 	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 
-	_, sys := newTestFilterSystem(t, rawdb.NewMemoryDatabase(), Config{})
+	backend := &closeableTestBackend{
+		testBackend: testBackend{
+			db: rawdb.NewMemoryDatabase(),
+		},
+	}
+	defer backend.Close()
+	sys := NewFilterSystem(backend, Config{})
 	api := NewFilterAPI(sys, false)
 	api.Close()
 }

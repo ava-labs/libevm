@@ -212,8 +212,6 @@ type EventSystem struct {
 	pendingLogsCh chan []*types.Log          // Channel to receive new log event
 	rmLogsCh      chan core.RemovedLogsEvent // Channel to receive removed log event
 	chainCh       chan core.ChainEvent       // Channel to receive new chain event
-
-	quit chan chan struct{}
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -234,7 +232,6 @@ func NewEventSystem(sys *FilterSystem, lightMode bool) *EventSystem {
 		rmLogsCh:      make(chan core.RemovedLogsEvent, rmLogsChanSize),
 		pendingLogsCh: make(chan []*types.Log, logsChanSize),
 		chainCh:       make(chan core.ChainEvent, chainEvChanSize),
-		quit:          make(chan chan struct{}),
 	}
 
 	// Subscribe events
@@ -603,10 +600,6 @@ func (es *EventSystem) eventLoop() {
 		case <-es.rmLogsSub.Err():
 			return
 		case <-es.chainSub.Err():
-			return
-
-		case done := <-es.quit: // libevm
-			defer close(done)
 			return
 		}
 	}

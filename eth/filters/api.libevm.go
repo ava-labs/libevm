@@ -18,16 +18,5 @@ package filters
 
 // Close releases resources held by the API.
 func (api *FilterAPI) Close() {
-	quit(api.quit)
-}
-
-// Close releases resources held by the system.
-func (es *EventSystem) Close() {
-	quit(es.quit)
-}
-
-func quit(ch chan chan struct{}) {
-	done := make(chan struct{})
-	ch <- done
-	<-done
+	close(api.quit)
 }
