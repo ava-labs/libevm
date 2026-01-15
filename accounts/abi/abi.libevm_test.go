@@ -209,7 +209,7 @@ func init() {
 	}
 }
 
-func TestUnpackInputIntoInterface(t *testing.T) {
+func TestUnpackWithPadding(t *testing.T) {
 	tests := []struct {
 		name              string
 		extraPaddingBytes int
@@ -249,12 +249,37 @@ func TestUnpackInputIntoInterface(t *testing.T) {
 			// skip 4 byte selector
 			data := append(packed[4:], make([]byte, test.extraPaddingBytes)...)
 
-			var got receiveFuncInput
-			require.NoErrorf(t, abi.UnpackInputIntoInterface(&got, method, data), "%T.UnpackInputIntoInterface()", abi)
+			t.Run("UnpackInputIntoInterface", func(t *testing.T) {
+				var got receiveFuncInput
 
-			if diff := cmp.Diff(input, got, compareBigInts()); diff != "" {
-				t.Errorf("%T.Pack() -> %T.UnpackInputIntoInterface(%T, ...) round-trip diff (-want +got):\n%s", abi, abi, got, diff)
-			}
+				require.NoErrorf(t, abi.UnpackInputIntoInterface(&got, method, data), "%T.UnpackInputIntoInterface()", abi)
+
+				if diff := cmp.Diff(input, got, compareBigInts()); diff != "" {
+					t.Errorf("%T.Pack() -> %T.UnpackInputIntoInterface(%T, ...) round-trip diff (-want +got):\n%s", abi, abi, got, diff)
+				}
+			})
+
+			t.Run("UnpackInput", func(t *testing.T) {
+				res, err := abi.UnpackInput(method, data)
+				require.NoErrorf(t, err, "%T.UnpackInput()", abi)
+
+				s, ok := res[0].(common.Address)
+				require.True(t, ok, "expected arg 0 to be common.Address")
+				a, ok := res[1].(*big.Int)
+				require.True(t, ok, "expected arg 1 to be *big.Int")
+				m, ok := res[2].([]byte)
+				require.True(t, ok, "expected arg 2 to be []byte")
+
+				got := receiveFuncInput{
+					Sender: s,
+					Amount: a,
+					Memo:   m,
+				}
+
+				if diff := cmp.Diff(input, got, compareBigInts()); diff != "" {
+					t.Errorf("%T.Pack() -> %T.UnpackInput(%T, ...) round-trip diff (-want +got):\n%s", abi, abi, got, diff)
+				}
+			})
 		})
 	}
 }
