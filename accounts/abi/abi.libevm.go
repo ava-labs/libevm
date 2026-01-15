@@ -105,6 +105,19 @@ func (abi ABI) UnpackInputIntoInterface(v any, methodOrEventName string, data []
 	return in.Copy(v, unpacked)
 }
 
+// UnpackInput is equivalent to [ABI.Unpack], with all the same caveats, except
+// that it treats `data` as:
+//
+//  1. Input when handling a method; or
+//  2. Unindexed data when handling an event.
+func (abi ABI) UnpackInput(methodOrEventName string, data []byte) ([]any, error) {
+	in, err := abi.methodOrEventInputs(methodOrEventName)
+	if err != nil {
+		return nil, err
+	}
+	return in.Unpack(data)
+}
+
 func (abi ABI) methodOrEventInputs(name string) (Arguments, error) {
 	if m, ok := abi.Methods[name]; ok {
 		return m.Inputs, nil
