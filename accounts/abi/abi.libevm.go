@@ -93,8 +93,10 @@ func (abi ABI) PackOutput(method string, args ...any) ([]byte, error) {
 //
 //  1. Input when handling a method; or
 //  2. Unindexed data when handling an event.
-func (abi ABI) UnpackInputIntoInterface(v any, methodOrEventName string, data []byte) error {
-	in, err := abi.methodOrEventInputs(methodOrEventName)
+//  3. If useStrictLength is true, an error is returned if the length of data
+//     does not exactly match the expected length of 32.
+func (abi ABI) UnpackInputIntoInterface(v any, methodOrEventName string, data []byte, useStrictLength bool) error {
+	in, err := abi.methodOrEventInputs(methodOrEventName, data, useStrictLength)
 	if err != nil {
 		return err
 	}
@@ -110,16 +112,21 @@ func (abi ABI) UnpackInputIntoInterface(v any, methodOrEventName string, data []
 //
 //  1. Input when handling a method; or
 //  2. Unindexed data when handling an event.
-func (abi ABI) UnpackInput(methodOrEventName string, data []byte) ([]any, error) {
-	in, err := abi.methodOrEventInputs(methodOrEventName)
+//  3. If useStrictLength is true, an error is returned if the length of data
+//     does not exactly match the expected length of 32.
+func (abi ABI) UnpackInput(methodOrEventName string, data []byte, useStrictLength bool) ([]any, error) {
+	in, err := abi.methodOrEventInputs(methodOrEventName, data, useStrictLength)
 	if err != nil {
 		return nil, err
 	}
 	return in.Unpack(data)
 }
 
-func (abi ABI) methodOrEventInputs(name string) (Arguments, error) {
+func (abi ABI) methodOrEventInputs(name string, data []byte, useStrictLength bool) (Arguments, error) {
 	if m, ok := abi.Methods[name]; ok {
+		if useStrictLength && len(data)%32 != 0 {
+			return nil, fmt.Errorf("method %q input data length %d is not a multiple of 32", name, len(data))
+		}
 		return m.Inputs, nil
 	}
 	if ev, ok := abi.Events[name]; ok {
