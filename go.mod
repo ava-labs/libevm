@@ -12,6 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/route53 v1.30.2
 	github.com/btcsuite/btcd/btcec/v2 v2.2.0
 	github.com/cespare/cp v0.1.0
+	github.com/cloudflare/backoff v0.0.0-20240920015135-e46b80a3a7d0
 	github.com/cloudflare/cloudflare-go v0.79.0
 	github.com/cockroachdb/pebble v0.0.0-20230928194634-aa077af62593
 	github.com/consensys/gnark-crypto v0.12.1
@@ -73,6 +74,7 @@ require (
 	golang.org/x/text v0.30.0
 	golang.org/x/time v0.3.0
 	golang.org/x/tools v0.38.0
+	google.golang.org/grpc v1.31.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v3 v3.0.1
 )
