@@ -209,7 +209,7 @@ func init() {
 	}
 }
 
-func TestUnpackWithPadding(t *testing.T) {
+func TestUnpackInputWithPadding(t *testing.T) {
 	tests := []struct {
 		name              string
 		extraPaddingBytes int
@@ -262,6 +262,7 @@ func TestUnpackWithPadding(t *testing.T) {
 			t.Run("UnpackInput", func(t *testing.T) {
 				res, err := abi.UnpackInput(method, data)
 				require.NoErrorf(t, err, "%T.UnpackInput()", abi)
+				require.Len(t, res, 3, "expected 3 unpacked arguments")
 
 				s, ok := res[0].(common.Address)
 				require.True(t, ok, "expected arg 0 to be common.Address")
