@@ -152,7 +152,7 @@ func TestEventPackingRoundTrip(t *testing.T) {
 				require.Equal(t, reflect.Pointer, typ.Kind(), "unpacking type MUST be a pointer")
 
 				got := reflect.New(typ.Elem()).Interface()
-				require.NoError(t, abi.UnpackInputIntoInterface(got, test.eventName, test.wantData, true))
+				require.NoError(t, abi.UnpackInputIntoInterface(got, test.eventName, test.wantData))
 
 				if diff := cmp.Diff(test.wantUnpacked, got, compareBigInts()); diff != "" {
 					t.Errorf("%T.UnpackInputIntoInterface(%T) diff (-want +got):\n%s", abi, got, diff)
@@ -252,7 +252,7 @@ func TestUnpackWithPadding(t *testing.T) {
 			t.Run("UnpackInputIntoInterface", func(t *testing.T) {
 				var got receiveFuncInput
 
-				require.NoErrorf(t, abi.UnpackInputIntoInterface(&got, method, data, false), "%T.UnpackInputIntoInterface()", abi)
+				require.NoErrorf(t, abi.UnpackInputIntoInterface(&got, method, data), "%T.UnpackInputIntoInterface()", abi)
 
 				if diff := cmp.Diff(input, got, compareBigInts()); diff != "" {
 					t.Errorf("%T.Pack() -> %T.UnpackInputIntoInterface(%T, ...) round-trip diff (-want +got):\n%s", abi, abi, got, diff)
@@ -260,7 +260,7 @@ func TestUnpackWithPadding(t *testing.T) {
 			})
 
 			t.Run("UnpackInput", func(t *testing.T) {
-				res, err := abi.UnpackInput(method, data, false)
+				res, err := abi.UnpackInput(method, data)
 				require.NoErrorf(t, err, "%T.UnpackInput()", abi)
 
 				s, ok := res[0].(common.Address)
