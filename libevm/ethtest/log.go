@@ -8,13 +8,13 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-// NewTBHandler constructs a [slog.Handler] that propagates logs to [testing.TB].
+// NewTBLogHandler constructs a [slog.Handler] that propagates logs to [testing.TB].
 // Logs at [log.LevelWarn] or above go to [testing.TB.Errorf], except
 // [log.LevelCrit] which goes to [testing.TB.Fatalf]. All other logs go to
 // [testing.TB.Logf].
 //
 //nolint:thelper // The outputs include the logging site while the TB site is most useful if here
-func NewTBHandler(tb testing.TB) slog.Handler {
+func NewTBLogHandler(tb testing.TB) slog.Handler {
 	return &tbHandler{tb: tb}
 }
 
