@@ -21,8 +21,9 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/ava-labs/libevm/log"
 	"golang.org/x/exp/slog"
+
+	"github.com/ava-labs/libevm/log"
 )
 
 // NewTBLogHandler constructs a [slog.Handler] that propagates logs to [testing.TB].
