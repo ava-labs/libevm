@@ -27,14 +27,12 @@ func (h *tbHandler) Enabled(_ context.Context, level slog.Level) bool {
 }
 
 func (h *tbHandler) Handle(_ context.Context, r slog.Record) error {
-	var to func(string, ...any)
+	to := h.tb.Logf
 	switch {
 	case r.Level >= log.LevelCrit:
 		to = h.tb.Fatalf
 	case r.Level >= log.LevelWarn:
 		to = h.tb.Errorf
-	default:
-		to = h.tb.Logf
 	}
 	to("[%s] %s", log.LevelAlignedString(r.Level), r.Message)
 	return nil
