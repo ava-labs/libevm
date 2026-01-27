@@ -19,6 +19,7 @@ package ethtest
 import (
 	"context"
 	"runtime"
+	"slices"
 	"testing"
 
 	"golang.org/x/exp/slog"
