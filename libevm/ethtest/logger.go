@@ -52,24 +52,24 @@ func (h *tbHandler) Enabled(_ context.Context, level slog.Level) bool {
 func (h *tbHandler) Handle(_ context.Context, rec slog.Record) error {
 	to := h.tb.Logf
 	switch {
-	case r.Level >= log.LevelCrit:
+	case rec.Level >= log.LevelCrit:
 		to = h.tb.Fatalf
-	case r.Level >= log.LevelWarn:
+	case rec.Level >= log.LevelWarn:
 		to = h.tb.Errorf
 	}
 
 	_, file, line, _ := runtime.Caller(3)
 
-	fields := make(map[string]any, len(h.attrs)+r.NumAttrs())
-	for _, attr := range h.attrs {
-		fields[attr.Key] = attr.Value.Any()
+	fields := make(map[string]any, len(h.attrs)+rec.NumAttrs())
+	for _, a := range h.attrs {
+		fields[a.Key] = a.Value.Any()
 	}
-	r.Attrs(func(attr slog.Attr) bool {
-		fields[attr.Key] = attr.Value.Any()
+	rec.Attrs(func(a slog.Attr) bool {
+		fields[a.Key] = a.Value.Any()
 		return true
 	})
 
-	to("[%s] %s %v - %s:%d", log.LevelAlignedString(r.Level), r.Message, fields, file, line)
+	to("[%s] %s %v - %s:%d", log.LevelAlignedString(rec.Level), rec.Message, fields, file, line)
 	return nil
 }
 
