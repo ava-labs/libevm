@@ -77,7 +77,7 @@ func (h *tbHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &tbHandler{
 		tb:    h.tb,
 		level: h.level,
-		attrs: append(h.attrs[:len(h.attrs):len(h.attrs)], attrs...),
+		attrs: slices.Concat(slices.Clone(h.attrs), attrs),
 	}
 }
 
