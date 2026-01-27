@@ -49,7 +49,7 @@ func (h *tbHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= min(h.level, slog.LevelWarn)
 }
 
-func (h *tbHandler) Handle(_ context.Context, r slog.Record) error {
+func (h *tbHandler) Handle(_ context.Context, rec slog.Record) error {
 	to := h.tb.Logf
 	switch {
 	case r.Level >= log.LevelCrit:
