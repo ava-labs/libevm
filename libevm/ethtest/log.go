@@ -46,7 +46,7 @@ type tbHandler struct {
 }
 
 func (h *tbHandler) Enabled(_ context.Context, level slog.Level) bool {
-	return level >= h.level
+	return level >= min(h.level, slog.LevelWarn)
 }
 
 func (h *tbHandler) Handle(_ context.Context, r slog.Record) error {
