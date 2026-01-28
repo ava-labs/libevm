@@ -24,7 +24,7 @@ import (
 	"github.com/ava-labs/libevm/params"
 )
 
-// NewRPCTransaction exports the newRPCTransaction function.
+// NewRPCTransaction exports the [newRPCTransaction] function.
 func NewRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, blockTime uint64, index uint64, baseFee *big.Int, config *params.ChainConfig) *RPCTransaction {
 	return newRPCTransaction(tx, blockHash, blockNumber, blockTime, index, baseFee, config)
 }
