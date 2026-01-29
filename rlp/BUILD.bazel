@@ -1,0 +1,49 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "rlp",
+    srcs = [
+        "decode.go",
+        "doc.go",
+        "encbuffer.go",
+        "encode.go",
+        "fields.libevm.go",
+        "iterator.go",
+        "list.libevm.go",
+        "raw.go",
+        "safe.go",
+        "typecache.go",
+        "unsafe.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/rlp",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//rlp/internal/rlpstruct",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)
+
+go_test(
+    name = "rlp_test",
+    srcs = [
+        "decode_tail_test.go",
+        "decode_test.go",
+        "encbuffer_example_test.go",
+        "encode_test.go",
+        "encoder_example_test.go",
+        "fields.libevm_test.go",
+        "iterator_test.go",
+        "list.libevm_test.go",
+        "raw_test.go",
+    ],
+    embed = [":rlp"],
+    deps = [
+        "//common",
+        "//common/hexutil",
+        "//common/math",
+        "@com_github_holiman_uint256//:uint256",
+        "@com_github_kr_pretty//:pretty",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)
