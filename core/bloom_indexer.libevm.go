@@ -12,22 +12,28 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see
-// <http://www.gnu.org/licenses/>.
+// <http://www.gnu.org/licenses/>
 
-package filters
+package core
 
-import "github.com/ava-labs/libevm/core/types"
+import (
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/ethdb"
+)
 
-// BloomFromHeader represents backends that can retrieve a header's bloom.
-// This is optional; if the backend does not implement it, the bloom is taken
-// directly from the header.
-type BloomFromHeader interface {
-	HeaderBloom(*types.Header) types.Bloom
+// BloomThrottling is the time to wait between processing two consecutive index sections.
+const BloomThrottling = bloomThrottling
+
+func NewBloomIndexerBackend(db ethdb.Database, size uint64) *BloomIndexer {
+	return &BloomIndexer{
+		db:   db,
+		size: size,
+	}
 }
 
-func getBloomFromHeader(header *types.Header, backend Backend) types.Bloom {
-	if bh, ok := backend.(BloomFromHeader); ok {
-		return bh.HeaderBloom(header)
-	}
-	return header.Bloom
+// ProcessBloom is the same as Process, but takes the header and bloom separately.
+func (b *BloomIndexer) ProcessBloom(header *types.Header, bloom types.Bloom) error {
+	b.gen.AddBloom(uint(header.Number.Uint64()-b.section*b.size), bloom)
+	b.head = header.Hash()
+	return nil
 }

@@ -14,20 +14,17 @@
 // along with the go-ethereum library. If not, see
 // <http://www.gnu.org/licenses/>.
 
-package filters
+package eth
 
-import "github.com/ava-labs/libevm/core/types"
+import (
+	"github.com/ava-labs/libevm/core/bloombits"
+	"github.com/ava-labs/libevm/ethdb"
+)
 
-// BloomFromHeader represents backends that can retrieve a header's bloom.
-// This is optional; if the backend does not implement it, the bloom is taken
-// directly from the header.
-type BloomFromHeader interface {
-	HeaderBloom(*types.Header) types.Bloom
-}
-
-func getBloomFromHeader(header *types.Header, backend Backend) types.Bloom {
-	if bh, ok := backend.(BloomFromHeader); ok {
-		return bh.HeaderBloom(header)
-	}
-	return header.Bloom
+func StartBloomHandlers(db ethdb.Database, bloomRequests chan chan *bloombits.Retrieval, closeBloomHandler chan struct{}, sectionSize uint64) {
+	(&Ethereum{
+		bloomRequests:     bloomRequests,
+		closeBloomHandler: closeBloomHandler,
+		chainDb:           db,
+	}).startBloomHandlers(sectionSize)
 }
