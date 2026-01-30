@@ -21,6 +21,9 @@ import (
 	"github.com/ava-labs/libevm/ethdb"
 )
 
+// StartBloomHandlers starts a batch of goroutines to accept bloom bit database
+// retrievals from possibly a range of filters and serving the data to satisfy.
+// This is identical to [Ethereum.startBloomHandlers], but exposed for use separately.
 func StartBloomHandlers(db ethdb.Database, bloomRequests chan chan *bloombits.Retrieval, closeBloomHandler chan struct{}, sectionSize uint64) {
 	(&Ethereum{
 		bloomRequests:     bloomRequests,

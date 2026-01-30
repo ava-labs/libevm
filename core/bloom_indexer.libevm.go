@@ -24,6 +24,8 @@ import (
 // BloomThrottling is the time to wait between processing two consecutive index sections.
 const BloomThrottling = bloomThrottling
 
+// NewBloomIndexerBackend creates a [BloomIndexer] instance for the given database and section size,
+// allowing users to provide custom functionality to the bloom indexer.
 func NewBloomIndexerBackend(db ethdb.Database, size uint64) *BloomIndexer {
 	return &BloomIndexer{
 		db:   db,
@@ -33,7 +35,7 @@ func NewBloomIndexerBackend(db ethdb.Database, size uint64) *BloomIndexer {
 
 // ProcessBloom is the same as Process, but takes the header and bloom separately.
 func (b *BloomIndexer) ProcessBloom(header *types.Header, bloom types.Bloom) error {
-	b.gen.AddBloom(uint(header.Number.Uint64()-b.section*b.size), bloom)
+	b.gen.AddBloom(uint(header.Number.Uint64()-b.section*b.size), bloom) //nolint:errcheck,gosec // match original
 	b.head = header.Hash()
 	return nil
 }
