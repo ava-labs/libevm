@@ -18,16 +18,16 @@ package filters
 
 import "github.com/ava-labs/libevm/core/types"
 
-// BloomFromHeader represents backends that can retrieve a header's bloom.
-// This is optional; if the backend does not implement it, the bloom is taken
-// directly from the header.
-type BloomFromHeader interface {
-	HeaderBloom(*types.Header) types.Bloom
+// BloomOverrider is an optional extension to [Backend], allowing arbitrary
+// bloom filters to be returned for a header. If not implemented,
+// [types.Header.Bloom] is used instead.
+type BloomOverrider interface {
+	OverrideHeaderBloom(*types.Header) types.Bloom
 }
 
-func getBloomFromHeader(header *types.Header, backend Backend) types.Bloom {
-	if bh, ok := backend.(BloomFromHeader); ok {
-		return bh.HeaderBloom(header)
+func maybeOverrideBloom(header *types.Header, backend Backend) types.Bloom {
+	if bo, ok := backend.(BloomOverrider); ok {
+		return bo.OverrideHeaderBloom(header)
 	}
 	return header.Bloom
 }

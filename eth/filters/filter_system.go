@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ava-labs/libevm"
+	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/lru"
 	"github.com/ava-labs/libevm/core"
@@ -508,7 +508,7 @@ func (es *EventSystem) lightFilterNewHead(newHeader *types.Header, callBack func
 
 // filter logs of a single header in light client mode
 func (es *EventSystem) lightFilterLogs(header *types.Header, addresses []common.Address, topics [][]common.Hash, remove bool) []*types.Log {
-	if !bloomFilter(getBloomFromHeader(header, es.backend), addresses, topics) {
+	if !bloomFilter(maybeOverrideBloom(header, es.backend), addresses, topics) {
 		return nil
 	}
 	// Get the logs of the block
