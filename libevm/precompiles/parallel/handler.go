@@ -144,8 +144,8 @@ type wrapper[CD, D, R, A any] struct {
 	common eventual[CD]
 	data   []eventual[D]
 
-	results       []eventual[result[R]]
-	whenProcessed chan TxResult[R]
+	results                []eventual[result[R]]
+	whenProcessed, txOrder chan TxResult[R]
 
 	aggregated eventual[A]
 }
@@ -203,6 +203,7 @@ func (w *wrapper[CD, D, R, A]) shouldProcess(tx IndexedTx) (do bool, gas uint64)
 func (w *wrapper[CD, D, R, A]) beforeWork(jobs int) {
 	w.txsBeingProcessed.Add(jobs)
 	w.whenProcessed = make(chan TxResult[R], jobs)
+	w.txOrder = make(chan TxResult[R], jobs)
 	go func() {
 		w.txsBeingProcessed.Wait()
 		close(w.whenProcessed)
@@ -243,8 +244,6 @@ func (w *wrapper[CD, D, R, A]) result(i int) (TxResult[R], bool) {
 		Tx: r.tx,
 	}
 	if r.val == nil {
-		// TODO(arr4n) if we're here then the implementoor might have a bug in
-		// their [Handler], so logging a warning is probably a good idea.
 		return txr, false
 	}
 	txr.Result = *r.val
@@ -252,21 +251,20 @@ func (w *wrapper[CD, D, R, A]) result(i int) (TxResult[R], bool) {
 }
 
 func (w *wrapper[CD, D, R, A]) postProcess() {
-	txOrder := make(chan TxResult[R], w.totalTxsInBLock)
 	go func() {
-		defer close(txOrder)
+		defer close(w.txOrder)
 		for i := range w.totalTxsInBLock {
 			r, ok := w.result(i)
 			if !ok {
 				continue
 			}
-			txOrder <- r
+			w.txOrder <- r
 		}
 	}()
 
 	res := Results[R]{
 		WaitForAll:   w.txsBeingProcessed.Wait,
-		TxOrder:      txOrder,
+		TxOrder:      w.txOrder,
 		ProcessOrder: w.whenProcessed,
 	}
 	w.aggregated.set(w.PostProcess(w.common.getAndReplace(), res))
@@ -274,6 +272,21 @@ func (w *wrapper[CD, D, R, A]) postProcess() {
 
 func (w *wrapper[CD, D, R, A]) finishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipts) {
 	w.AfterBlock(sdb, w.aggregated.getAndKeep(), b, rs)
+
+	// [wrapper.postProcess] is guaranteed to have finished because it sets
+	// [wrapper.aggregated], from which we have just read. However
+	// [Handler.PostProcess] is under no obligation to block on anything, and
+	// the goroutine filling [wrapper.txOrder] might still be reading results.
+	// We therefore guarantee its completion before "getting and keeping" all of
+	// [wrapper.results] otherwise said goroutine can leak.
+	for range w.txOrder {
+		// Nobody needs these anymore, but we need to know that the channel has
+		// been closed.
+	}
+	// Although we know this will unblock effectively immediately, it's safer to
+	// verify the intuition than to rely on complex reasoning.
+	w.txsBeingProcessed.Wait()
+
 	w.common.getAndKeep()
 	for _, v := range w.results[:w.totalTxsInBLock] {
 		// Every result channel is guaranteed to have some value in its buffer
