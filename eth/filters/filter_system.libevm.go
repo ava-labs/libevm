@@ -25,7 +25,6 @@ import (
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/eth"
-	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/internal/ethapi"
 	"github.com/ava-labs/libevm/params"
 )
@@ -63,7 +62,6 @@ func NewBloomIndexerService(b IndexerServiceProvider, size uint64) *BloomIndexer
 	backend := &bloomBackend{
 		BloomIndexer: core.NewBloomIndexerBackend(b.ChainDb(), size),
 		b:            b,
-		db:           b.ChainDb(),
 	}
 	table := rawdb.NewTable(b.ChainDb(), string(rawdb.BloomBitsIndexPrefix))
 	s := &BloomIndexerService{
@@ -112,8 +110,7 @@ var _ core.ChainIndexerBackend = (*bloomBackend)(nil)
 // overrides the bloom filter retrieval to allow for custom bloom filter generation.
 type bloomBackend struct {
 	*core.BloomIndexer
-	b  Backend
-	db ethdb.Database
+	b Backend
 }
 
 // Process adds a new header's bloom into the index, possibly overriding

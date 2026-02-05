@@ -19,7 +19,6 @@ package filters
 import (
 	"context"
 	"math/big"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -45,14 +44,12 @@ var (
 type overrideBloomsTestBackend struct {
 	*testBackend
 
-	blockFeed      event.Feed
-	s              *BloomIndexerService
-	blooms         map[uint64]types.Bloom
-	overrideCalled atomic.Bool
+	blockFeed event.Feed
+	s         *BloomIndexerService
+	blooms    map[uint64]types.Bloom
 }
 
-// SubscribeChainHeadEvent implements IndexerServiceProvider.
-// CAN ONLY BE CALLED ONCE!
+// SubscribeChainHeadEvent forwards accepted blocks to the [core.ChainIndexer].
 func (o *overrideBloomsTestBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return o.blockFeed.Subscribe(ch)
 }
@@ -65,9 +62,9 @@ func (o *overrideBloomsTestBackend) ServiceFilter(ctx context.Context, session *
 	o.s.ServiceFilter(ctx, session)
 }
 
-// OverrideHeaderBloom implements BloomOverrider.
+// OverrideHeaderBloom replaces the bloom of the given header if we know a custom one for its block number.
+// This is because [core.GenerateChainWithGenesis] doesn't let us set blooms directly.
 func (o *overrideBloomsTestBackend) OverrideHeaderBloom(hdr *types.Header) types.Bloom {
-	o.overrideCalled.Store(true)
 	bloom, ok := o.blooms[hdr.Number.Uint64()]
 	if !ok {
 		return hdr.Bloom
@@ -150,7 +147,6 @@ func TestOverrideBlooms(t *testing.T) {
 	defer func() {
 		require.NoError(t, backend.s.Close())
 	}()
-	time.Sleep(100 * time.Millisecond) // give the indexer some time to start
 
 	for i, block := range blocks {
 		writeBlock(block)
