@@ -138,7 +138,7 @@ var _ handler = (*wrapper[any, any, any, any])(nil)
 type wrapper[CD, D, R, A any] struct {
 	Handler[CD, D, R, A]
 
-	totalTxsInBLock   int
+	totalTxsInBlock   int
 	txsBeingProcessed sync.WaitGroup
 
 	common eventual[CD]
@@ -180,11 +180,11 @@ func AddHandler[CD, D, R, A any](p *Processor, h Handler[CD, D, R, A]) func(txIn
 }
 
 func (w *wrapper[CD, D, R, A]) beforeBlock(sdb libevm.StateReader, b *types.Block) {
-	w.totalTxsInBLock = len(b.Transactions())
+	w.totalTxsInBlock = len(b.Transactions())
 	// We can reuse the channels already in the data and results slices because
 	// they're emptied by [wrapper.process] and [wrapper.finishBlock]
 	// respectively.
-	for i := len(w.results); i < w.totalTxsInBLock; i++ {
+	for i := len(w.results); i < w.totalTxsInBlock; i++ {
 		w.data = append(w.data, eventually[D]())
 		w.results = append(w.results, eventually[result[R]]())
 	}
@@ -253,7 +253,7 @@ func (w *wrapper[CD, D, R, A]) result(i int) (TxResult[R], bool) {
 func (w *wrapper[CD, D, R, A]) postProcess() {
 	go func() {
 		defer close(w.txOrder)
-		for i := range w.totalTxsInBLock {
+		for i := range w.totalTxsInBlock {
 			r, ok := w.result(i)
 			if !ok {
 				continue
@@ -288,7 +288,7 @@ func (w *wrapper[CD, D, R, A]) finishBlock(sdb vm.StateDB, b *types.Block, rs ty
 	w.txsBeingProcessed.Wait()
 
 	w.common.getAndKeep()
-	for _, v := range w.results[:w.totalTxsInBLock] {
+	for _, v := range w.results[:w.totalTxsInBlock] {
 		// Every result channel is guaranteed to have some value in its buffer
 		// because [Processor.BeforeBlock] either sends a nil *R or it
 		// dispatches a job, which will send a non-nil *R.
