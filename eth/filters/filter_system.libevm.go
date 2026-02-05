@@ -30,13 +30,18 @@ import (
 	"github.com/ava-labs/libevm/params"
 )
 
-var _ Backend = ethapi.Backend(nil)
+var _ IndexerServiceProvider = ethapi.Backend(nil)
+
+type IndexerServiceProvider interface {
+	Backend
+	core.ChainIndexerChain
+}
 
 // BloomIndexerService tracks all necessary components to run a bloom indexer
 // service alongside the Ethereum node, independent of the [eth.Ethereum] struct.
 // The methods returned can be used to implement the [Backend] interface, but
 // this CANNOT be embedded into the backend struct directly, as it would
-// expose the [Close] method publicly. This method must be called once
+// expose the [BloomIndexerService.Close] method publicly. The Close method must be called once
 // the service is no longer needed to gracefully terminate all goroutines.
 type BloomIndexerService struct {
 	indexer  *core.ChainIndexer
@@ -51,7 +56,7 @@ type BloomIndexerService struct {
 // The returned service immediately starts indexing the canonical chain and
 // servicing bloom filter retrieval requests.
 // Once done, the service should be closed with [BloomIndexerService.Close].
-func NewBloomIndexerService(b ethapi.Backend, size uint64) *BloomIndexerService {
+func NewBloomIndexerService(b IndexerServiceProvider, size uint64) *BloomIndexerService {
 	if size == 0 || size > math.MaxInt32 {
 		size = params.BloomBitsBlocks
 	}
