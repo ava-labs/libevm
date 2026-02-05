@@ -256,7 +256,7 @@ func TestProcessor(t *testing.T) {
 					wantProcessed[i] = false
 				}
 
-				data := binary.BigEndian.AppendUint64(nil, uint64(i))
+				data := binary.BigEndian.AppendUint64(nil, uint64(i)) //nolint:gosec // Known to be positive
 				gas, err := intrinsicGas(data, types.AccessList{}, &handler.addr, &rules)
 				require.NoError(t, err, "core.IntrinsicGas(%#x, nil, false, ...)", data)
 
@@ -407,7 +407,7 @@ func TestIntegration(t *testing.T) {
 		{'o', 't', 'h', 'e', 'r'},
 		handler.addr,
 	} {
-		ui := uint(i)
+		ui := uint(i) //nolint:gosec // Known to be positive
 		data := []byte("hello, world")
 
 		gas, err := intrinsicGas(data, types.AccessList{}, &addr, &rules)
