@@ -88,8 +88,9 @@ func New(prefetchers, processors int) *Processor {
 
 	p := &Processor{
 		stateShare: stateDBSharer{
-			workers:       workers,
-			nextAvailable: make(chan struct{}),
+			workers:   workers,
+			available: make(chan struct{}),
+			sdb:       make(chan *state.StateDB, 1),
 		},
 		prefetch: make(chan *prefetch),
 		process:  make(chan *process),
@@ -110,28 +111,25 @@ func New(prefetchers, processors int) *Processor {
 }
 
 // A stateDBSharer allows concurrent workers to make copies of a primary
-// database. When the `nextAvailable` channel is closed, all workers call
+// database. When the `available` channel is closed, all workers call
 // [state.StateDB.Copy] then signal completion on the [sync.WaitGroup]. The
 // channel is replaced for each round of distribution.
 type stateDBSharer struct {
-	nextAvailable chan struct{}
-
-	mu      sync.Mutex
-	primary *state.StateDB
-
-	workers int
-	wg      sync.WaitGroup
+	available chan struct{}
+	sdb       chan *state.StateDB
+	workers   int
+	wg        sync.WaitGroup
 }
 
 func (s *stateDBSharer) distribute(sdb *state.StateDB) {
-	s.primary = sdb // no need to Copy() as each worker does it
+	ch := s.available                 // already copied by [Processor.worker], which is waiting for it to close
+	s.available = make(chan struct{}) // will be copied, ready for the next distribution
 
-	ch := s.nextAvailable                 // already copied by [Processor.worker], which is waiting for it to close
-	s.nextAvailable = make(chan struct{}) // will be copied, ready for the next distribution
-
+	s.sdb <- sdb
 	s.wg.Add(s.workers)
-	close(ch)
+	close(ch) // Take a moment to enjoy the symmetry :)
 	s.wg.Wait()
+	<-s.sdb
 }
 
 func (p *Processor) worker(prefetch chan *prefetch, process chan *process) {
@@ -139,7 +137,7 @@ func (p *Processor) worker(prefetch chan *prefetch, process chan *process) {
 
 	var sdb *state.StateDB
 	share := &p.stateShare
-	stateAvailable := share.nextAvailable
+	stateAvailable := share.available
 	// Without this signal of readiness, a premature call to
 	// [Processor.StartBlock] could replace `share.nextAvailable` before we've
 	// copied it.
@@ -150,11 +148,10 @@ func (p *Processor) worker(prefetch chan *prefetch, process chan *process) {
 		case <-stateAvailable: // guaranteed at the beginning of each block
 			// [state.StateDB.Copy] is a complex method that isn't explicitly
 			// documented as being threadsafe.
-			share.mu.Lock()
-			sdb = share.primary.Copy()
-			share.mu.Unlock()
+			sdb = (<-share.sdb).Copy()
+			share.sdb <- sdb // no need to return the original as each worker copies
 
-			stateAvailable = share.nextAvailable
+			stateAvailable = share.available
 			share.wg.Done()
 
 		case job, ok := <-prefetch:
