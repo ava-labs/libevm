@@ -21,6 +21,7 @@ package parallel
 import (
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/ava-labs/libevm/common"
@@ -267,7 +268,10 @@ func (p *Processor) shouldProcess(tx IndexedTx, rules params.Rules) (process []b
 			continue
 		}
 		process[i] = true
-		totalCost += cost
+		// It's safe to cap total cost at [math.MaxUint64] because intrinsic gas
+		// is always non-zero and the tx would therefore OOG. Not that we could
+		// reasonably expect such high gas consumption though ¯\_(ツ)_/¯
+		totalCost += min(cost, math.MaxUint64-totalCost)
 	}
 
 	defer func() {

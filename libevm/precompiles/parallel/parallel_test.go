@@ -18,6 +18,7 @@ package parallel
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/big"
 	"math/rand/v2"
@@ -499,6 +500,76 @@ func TestIntegration(t *testing.T) {
 
 	if diff := cmp.Diff(wantReceipts, handler.gotReceipts, ignore); diff != "" {
 		t.Errorf("%T diff (-want +got):\n%s", receipts, diff)
+	}
+}
+
+type expensive struct {
+	gasCost uint64
+}
+
+func (expensive) BeforeBlock(libevm.StateReader, *types.Header) int     { return 0 }
+func (e expensive) ShouldProcess(IndexedTx, int) (do bool, gas uint64)  { return true, e.gasCost }
+func (expensive) Prefetch(libevm.StateReader, IndexedTx, int) int       { return 0 }
+func (expensive) Process(libevm.StateReader, IndexedTx, int, int) int   { return 0 }
+func (expensive) PostProcess(int, Results[int]) int                     { return 0 }
+func (expensive) AfterBlock(StateDB, int, *types.Block, types.Receipts) {}
+
+func TestTotalCost(t *testing.T) {
+	tx := types.NewTx(&types.LegacyTx{
+		To:  &common.Address{},
+		Gas: params.TxGas,
+	})
+	b := types.NewBlock(
+		&types.Header{Number: big.NewInt(0)},
+		types.Transactions{tx},
+		nil, nil,
+		trie.NewStackTrie(nil),
+	)
+	rules := params.MergedTestChainConfig.Rules(big.NewInt(0), true, 0)
+	_, _, sdb := ethtest.NewEmptyStateDB(t)
+
+	tests := []struct {
+		costs []uint64
+		want  uint64
+	}{
+		{
+			costs: []uint64{1},
+			want:  1,
+		},
+		{
+			costs: []uint64{1, 0},
+			want:  1,
+		},
+		{
+			costs: []uint64{1, 1},
+			want:  2,
+		},
+		{
+			costs: []uint64{math.MaxUint64 - 42, 41},
+			want:  math.MaxUint64 - 1,
+		},
+		{
+			costs: []uint64{math.MaxUint64 - 42, 43},
+			want:  math.MaxUint64,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%d", tt.costs), func(t *testing.T) {
+			p := New(1, 1)
+			t.Cleanup(p.Close)
+
+			for _, c := range tt.costs {
+				AddHandler(p, expensive{gasCost: c})
+			}
+			require.NoError(t, p.StartBlock(sdb, rules, b), "StartBlock()")
+			t.Cleanup(func() { p.FinishBlock(sdb, b, nil) })
+
+			got, err := p.PreprocessingGasCharge(tx.Hash())
+			if err != nil || got != tt.want {
+				t.Errorf("PreprocessingGasCharge() got (%d, %v); want (%d, nil)", got, err, tt.want)
+			}
+		})
 	}
 }
 
