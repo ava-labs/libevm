@@ -210,11 +210,11 @@ func (w *wrapper[CD, D, R, A]) beforeWork(jobs int) {
 	}()
 }
 
-func (w *wrapper[CD, D, R, A]) prefetch(sdb libevm.StateReader, job *job) {
+func (w *wrapper[CD, D, R, A]) prefetch(sdb libevm.StateReader, job *prefetch) {
 	w.data[job.tx.Index].put(w.Prefetch(sdb, job.tx, w.common.peek()))
 }
 
-func (w *wrapper[CD, D, R, A]) process(sdb libevm.StateReader, job *job) {
+func (w *wrapper[CD, D, R, A]) process(sdb libevm.StateReader, job *process) {
 	defer w.txsBeingProcessed.Done()
 
 	idx := job.tx.Index

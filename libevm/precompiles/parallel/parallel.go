@@ -37,9 +37,9 @@ type handler interface {
 	beforeBlock(libevm.StateReader, *types.Block)
 	shouldProcess(IndexedTx) (do bool, gas uint64)
 	beforeWork(jobs int)
-	prefetch(libevm.StateReader, *job)
+	prefetch(libevm.StateReader, *prefetch)
 	nullResult(*job)
-	process(libevm.StateReader, *job)
+	process(libevm.StateReader, *process)
 	postProcess()
 	finishBlock(vm.StateDB, *types.Block, types.Receipts)
 }
@@ -49,17 +49,22 @@ type handler interface {
 type Processor struct {
 	handlers []handler
 
-	workers           sync.WaitGroup
-	stateShare        stateDBSharer
-	prefetch, process chan *job
+	workers    sync.WaitGroup
+	stateShare stateDBSharer
+	prefetch   chan *prefetch
+	process    chan *process
 
 	txGas map[common.Hash]uint64
 }
 
-type job struct {
-	handler handler
-	tx      IndexedTx
-}
+type (
+	job struct {
+		handler handler
+		tx      IndexedTx
+	}
+	prefetch job
+	process  job
+)
 
 type result[T any] struct {
 	tx  IndexedTx
@@ -86,8 +91,8 @@ func New(prefetchers, processors int) *Processor {
 			workers:       workers,
 			nextAvailable: make(chan struct{}),
 		},
-		prefetch: make(chan *job),
-		process:  make(chan *job),
+		prefetch: make(chan *prefetch),
+		process:  make(chan *process),
 		txGas:    make(map[common.Hash]uint64),
 	}
 
@@ -129,7 +134,7 @@ func (s *stateDBSharer) distribute(sdb *state.StateDB) {
 	s.wg.Wait()
 }
 
-func (p *Processor) worker(prefetch, process chan *job) {
+func (p *Processor) worker(prefetch chan *prefetch, process chan *process) {
 	defer p.workers.Done()
 
 	var sdb *state.StateDB
@@ -223,12 +228,12 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 	// of the lifespans of all of these goroutines.
 	go func() {
 		for _, j := range jobs {
-			p.prefetch <- j
+			p.prefetch <- (*prefetch)(j)
 		}
 	}()
 	go func() {
 		for _, j := range jobs {
-			p.process <- j
+			p.process <- (*process)(j)
 		}
 	}()
 	for _, h := range p.handlers {
