@@ -17,8 +17,8 @@
 package parallel
 
 // An eventual type holds a value that is set at some unknown point in the
-// future and used, possibly concurrently, by one or more receivers. The zero
-// value is NOT ready for use.
+// future and used, possibly concurrently, by one or more peekers or a single
+// taker (together, "getters"). The zero value is NOT ready for use.
 type eventual[T any] struct {
 	ch chan T
 }
@@ -30,24 +30,23 @@ func eventually[T any]() eventual[T] {
 	}
 }
 
-// set sets the value, unblocking any current and future getters. set itself is
+// put sets the value, unblocking any current and future getters. put itself is
 // non-blocking, however it is NOT possible to overwrite the value without an
-// intervening call to [eventual.getAndKeep].
-func (e eventual[T]) set(v T) {
+// intervening call to [eventual.take].
+func (e eventual[T]) put(v T) {
 	e.ch <- v
 }
 
-// getAndReplace returns the value after making it available for other getters.
-// Although the act of getting and replacing is threadsafe, the returned value
-// might not be.
-func (e eventual[T]) getAndReplace() T {
+// peek returns the value after making it available for other getters. Although
+// the act of peeking is threadsafe, the returned value might not be.
+func (e eventual[T]) peek() T {
 	v := <-e.ch
 	e.ch <- v
 	return v
 }
 
-// getAndKeep returns the value and resets e to its default state as if
-// immediately after construction.
-func (e eventual[T]) getAndKeep() T {
+// take returns the value and resets e to its default state as if immediately
+// after construction.
+func (e eventual[T]) take() T {
 	return <-e.ch
 }

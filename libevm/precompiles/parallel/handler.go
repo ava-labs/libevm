@@ -192,12 +192,12 @@ func (w *wrapper[CD, D, R, A]) beforeBlock(sdb libevm.StateReader, b *types.Bloc
 	go func() {
 		// goroutine guaranteed to have completed by the time a respective
 		// getter unblocks (i.e. in any call to [wrapper.prefetch]).
-		w.common.set(w.BeforeBlock(sdb, types.CopyHeader(b.Header())))
+		w.common.put(w.BeforeBlock(sdb, types.CopyHeader(b.Header())))
 	}()
 }
 
 func (w *wrapper[CD, D, R, A]) shouldProcess(tx IndexedTx) (do bool, gas uint64) {
-	return w.Handler.ShouldProcess(tx, w.common.getAndReplace())
+	return w.Handler.ShouldProcess(tx, w.common.peek())
 }
 
 func (w *wrapper[CD, D, R, A]) beforeWork(jobs int) {
@@ -211,19 +211,19 @@ func (w *wrapper[CD, D, R, A]) beforeWork(jobs int) {
 }
 
 func (w *wrapper[CD, D, R, A]) prefetch(sdb libevm.StateReader, job *job) {
-	w.data[job.tx.Index].set(w.Prefetch(sdb, job.tx, w.common.getAndReplace()))
+	w.data[job.tx.Index].put(w.Prefetch(sdb, job.tx, w.common.peek()))
 }
 
 func (w *wrapper[CD, D, R, A]) process(sdb libevm.StateReader, job *job) {
 	defer w.txsBeingProcessed.Done()
 
 	idx := job.tx.Index
-	val := w.Process(sdb, job.tx, w.common.getAndReplace(), w.data[idx].getAndKeep())
+	val := w.Process(sdb, job.tx, w.common.peek(), w.data[idx].take())
 	r := result[R]{
 		tx:  job.tx,
 		val: &val,
 	}
-	w.results[idx].set(r)
+	w.results[idx].put(r)
 	w.whenProcessed <- TxResult[R]{
 		Tx:     job.tx,
 		Result: val,
@@ -231,14 +231,14 @@ func (w *wrapper[CD, D, R, A]) process(sdb libevm.StateReader, job *job) {
 }
 
 func (w *wrapper[CD, D, R, A]) nullResult(job *job) {
-	w.results[job.tx.Index].set(result[R]{
+	w.results[job.tx.Index].put(result[R]{
 		tx:  job.tx,
 		val: nil,
 	})
 }
 
 func (w *wrapper[CD, D, R, A]) result(i int) (TxResult[R], bool) {
-	r := w.results[i].getAndReplace()
+	r := w.results[i].peek()
 
 	txr := TxResult[R]{
 		Tx: r.tx,
@@ -267,11 +267,11 @@ func (w *wrapper[CD, D, R, A]) postProcess() {
 		TxOrder:      w.txOrder,
 		ProcessOrder: w.whenProcessed,
 	}
-	w.aggregated.set(w.PostProcess(w.common.getAndReplace(), res))
+	w.aggregated.put(w.PostProcess(w.common.peek(), res))
 }
 
 func (w *wrapper[CD, D, R, A]) finishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipts) {
-	w.AfterBlock(sdb, w.aggregated.getAndKeep(), b, rs)
+	w.AfterBlock(sdb, w.aggregated.take(), b, rs)
 
 	// [wrapper.postProcess] is guaranteed to have finished because it sets
 	// [wrapper.aggregated], from which we have just read. However
@@ -287,11 +287,11 @@ func (w *wrapper[CD, D, R, A]) finishBlock(sdb vm.StateDB, b *types.Block, rs ty
 	// verify the intuition than to rely on complex reasoning.
 	w.txsBeingProcessed.Wait()
 
-	w.common.getAndKeep()
+	w.common.take()
 	for _, v := range w.results[:w.totalTxsInBlock] {
 		// Every result channel is guaranteed to have some value in its buffer
 		// because [Processor.BeforeBlock] either sends a nil *R or it
 		// dispatches a job, which will send a non-nil *R.
-		v.getAndKeep()
+		v.take()
 	}
 }
