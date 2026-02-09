@@ -36,17 +36,10 @@ import (
 	"github.com/ava-labs/libevm/params"
 )
 
-var (
-	_ BloomOverrider         = (*overrideBloomsTestBackend)(nil)
-	_ IndexerServiceProvider = (*overrideBloomsTestBackend)(nil)
-)
-
 type overrideBloomsTestBackend struct {
 	*testBackend
-
-	blockFeed event.Feed
+	blockFeed event.FeedOf[core.ChainHeadEvent]
 	s         *BloomIndexerService
-	blooms    map[uint64]types.Bloom
 }
 
 // SubscribeChainHeadEvent forwards accepted blocks to the [core.ChainIndexer].
@@ -62,9 +55,13 @@ func (o *overrideBloomsTestBackend) ServiceFilter(ctx context.Context, session *
 	o.s.ServiceFilter(ctx, session)
 }
 
+type bloomOverrider struct {
+	blooms map[uint64]types.Bloom
+}
+
 // OverrideHeaderBloom replaces the bloom of the given header if we know a custom one for its block number.
 // This is because [core.GenerateChainWithGenesis] doesn't let us set blooms directly.
-func (o *overrideBloomsTestBackend) OverrideHeaderBloom(hdr *types.Header) types.Bloom {
+func (o *bloomOverrider) OverrideHeaderBloom(hdr *types.Header) types.Bloom {
 	bloom, ok := o.blooms[hdr.Number.Uint64()]
 	if !ok {
 		return hdr.Bloom
@@ -81,14 +78,8 @@ func TestOverrideBlooms(t *testing.T) {
 	)
 
 	var (
-		db      = rawdb.NewMemoryDatabase()
-		backend = &overrideBloomsTestBackend{
-			testBackend: &testBackend{db: db},
-		}
-		sys = NewFilterSystem(backend, Config{})
-		api = NewFilterAPI(sys, true)
+		db = rawdb.NewMemoryDatabase()
 	)
-	defer CloseAPI(api)
 
 	var (
 		signer  = types.HomesteadSigner{}
@@ -119,7 +110,6 @@ func TestOverrideBlooms(t *testing.T) {
 		receipt.Bloom = bloom
 		receipts = append(receipts, receipt)
 	}
-	backend.blooms = blooms
 
 	// Doesn't set the bloom
 	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), numBlocks, func(i int, b *core.BlockGen) {
@@ -143,9 +133,19 @@ func TestOverrideBlooms(t *testing.T) {
 
 	// Write genesis block to start bloom indexer from there
 	writeBlock(genesis.ToBlock())
-	backend.s = NewBloomIndexerService(backend, sectionSize)
+
+	var (
+		backend = &overrideBloomsTestBackend{
+			testBackend: &testBackend{db: db},
+		}
+		sys = NewFilterSystem(backend, Config{})
+		api = NewFilterAPI(sys, true)
+	)
+	// TODO(arr4n): DO NOT MERGE: this circular dependency needs to be addressed.
+	backend.s = NewBloomIndexerService(db, backend, &bloomOverrider{blooms}, sectionSize)
 	defer func() {
-		require.NoError(t, backend.s.Close())
+		CloseAPI(api)
+		require.NoError(t, CloseBloomIndexerService(backend.s))
 	}()
 
 	for i, block := range blocks {

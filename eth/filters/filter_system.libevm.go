@@ -25,16 +25,9 @@ import (
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/eth"
-	"github.com/ava-labs/libevm/internal/ethapi"
+	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/params"
 )
-
-var _ IndexerServiceProvider = ethapi.Backend(nil)
-
-type IndexerServiceProvider interface {
-	Backend
-	core.ChainIndexerChain
-}
 
 // BloomIndexerService tracks all necessary components to run a bloom indexer
 // service alongside the Ethereum node, independent of the [eth.Ethereum] struct.
@@ -54,26 +47,28 @@ type BloomIndexerService struct {
 // to [params.BloomBitsBlocks].
 // The returned service immediately starts indexing the canonical chain and
 // servicing bloom filter retrieval requests.
-// Once done, the service should be closed with [BloomIndexerService.Close].
-func NewBloomIndexerService(b IndexerServiceProvider, size uint64) *BloomIndexerService {
+// Once done, the service should be closed with [CloseBloomIndexerService].
+// The [BloomOverrider] MAY be nil, in which case the [types.Header] bloom is
+// always used.
+func NewBloomIndexerService(db ethdb.Database, chain core.ChainIndexerChain, override BloomOverrider, size uint64) *BloomIndexerService {
 	if size == 0 || size > math.MaxInt32 {
 		size = params.BloomBitsBlocks
 	}
 	backend := &bloomBackend{
-		BloomIndexer: core.NewBloomIndexerBackend(b.ChainDb(), size),
-		b:            b,
+		BloomIndexer: core.NewBloomIndexerBackend(db, size),
+		override:     override,
 	}
-	table := rawdb.NewTable(b.ChainDb(), string(rawdb.BloomBitsIndexPrefix))
+	table := rawdb.NewTable(db, string(rawdb.BloomBitsIndexPrefix))
 	s := &BloomIndexerService{
-		indexer:  core.NewChainIndexer(b.ChainDb(), table, backend, size, 0, core.BloomThrottling, "bloombits"),
+		indexer:  core.NewChainIndexer(db, table, backend, size, 0, core.BloomThrottling, "bloombits"),
 		size:     size,
 		requests: make(chan chan *bloombits.Retrieval),
 		quit:     make(chan struct{}),
 	}
 
-	s.indexer.Start(b)
+	s.indexer.Start(chain)
 	eth.StartBloomHandlers(
-		b.ChainDb(),
+		db,
 		s.requests,
 		s.quit,
 		size,
@@ -98,26 +93,12 @@ func (s *BloomIndexerService) ServiceFilter(ctx context.Context, session *bloomb
 }
 
 // Close terminates the bloom indexer, current bloom filter retrieval requests,
-// and the bloom retrieval server.
-func (s *BloomIndexerService) Close() error {
+// and the bloom retrieval server. It is defined as a function instead of a
+// method to allow embedding of a [BloomIndexerService] without exposing it as
+// an RPC method.
+func CloseBloomIndexerService(s *BloomIndexerService) error {
 	close(s.quit)
 	return s.indexer.Close()
-}
-
-var _ core.ChainIndexerBackend = (*bloomBackend)(nil)
-
-// bloomBackend is a wrapper around a [core.BloomIndexer] that
-// overrides the bloom filter retrieval to allow for custom bloom filter generation.
-type bloomBackend struct {
-	*core.BloomIndexer
-	b Backend
-}
-
-// Process adds a new header's bloom into the index, possibly overriding
-// it using the backend's [BloomOverrider] implementation.
-func (b *bloomBackend) Process(ctx context.Context, header *types.Header) error {
-	bloom := maybeOverrideBloom(header, b.b)
-	return b.ProcessWithBloomOverride(header, bloom)
 }
 
 // BloomOverrider is an optional extension to [Backend], allowing arbitrary
@@ -132,4 +113,26 @@ func maybeOverrideBloom(header *types.Header, backend Backend) types.Bloom {
 		return bo.OverrideHeaderBloom(header)
 	}
 	return header.Bloom
+}
+
+var _ core.ChainIndexerBackend = (*bloomBackend)(nil)
+
+// bloomBackend is a wrapper around a [core.BloomIndexer] that
+// overrides Process() to allow for custom bloom filter generation.
+type bloomBackend struct {
+	*core.BloomIndexer
+	override BloomOverrider
+}
+
+func (b *bloomBackend) bloom(h *types.Header) types.Bloom {
+	if b.override == nil {
+		return h.Bloom
+	}
+	return b.override.OverrideHeaderBloom(h)
+}
+
+// Process adds a new header's bloom into the index, possibly overriding
+// it using the backend's [BloomOverrider] implementation.
+func (b *bloomBackend) Process(ctx context.Context, header *types.Header) error {
+	return b.ProcessWithBloomOverride(header, b.bloom(header))
 }
