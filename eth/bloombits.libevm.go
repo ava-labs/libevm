@@ -17,8 +17,11 @@
 package eth
 
 import (
+	"sync"
+
 	"github.com/ava-labs/libevm/core/bloombits"
 	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/libevm/options"
 )
 
 const (
@@ -26,22 +29,61 @@ const (
 	// multiplex requests onto the global servicing goroutines.
 	BloomFilterThreads = bloomFilterThreads
 
-	// BloomRetrievalBatch is the maximum number of bloom bit retrievals to service
-	// in a single batch.
+	// BloomRetrievalBatch is the maximum number of bloom bit retrievals to
+	// service in a single batch.
 	BloomRetrievalBatch = bloomRetrievalBatch
 
-	// BloomRetrievalWait is the maximum time to wait for enough bloom bit requests
-	// to accumulate request an entire batch (avoiding hysteresis).
+	// BloomRetrievalWait is the maximum time to wait for enough bloom bit
+	// requests to accumulate request an entire batch (avoiding hysteresis).
 	BloomRetrievalWait = bloomRetrievalWait
 )
 
-// StartBloomHandlers starts a batch of goroutines to accept bloom bit database
-// retrievals from possibly a range of filters and serving the data to satisfy.
-// This is identical to [Ethereum.startBloomHandlers], but exposed for use separately.
-func StartBloomHandlers(db ethdb.Database, bloomRequests chan chan *bloombits.Retrieval, closeBloomHandler chan struct{}, sectionSize uint64) {
-	(&Ethereum{
-		bloomRequests:     bloomRequests,
-		closeBloomHandler: closeBloomHandler,
+// A bloomHandlersOption configures [Ethereum.startBloomHandlers].
+type bloomHandlersOption = options.Option[bloomHandlersConfig]
+
+type bloomHandlersConfig struct {
+	wg *sync.WaitGroup
+}
+
+// bloomHandlersWG returns the last [sync.WaitGroup] set by an option, or a
+// default value that exists only to avoid panics when used but it otherwise
+// inaccessible.
+func bloomHandlersWG(opts ...bloomHandlersOption) *sync.WaitGroup {
+	blackhole := &sync.WaitGroup{}
+	return options.ApplyTo(&bloomHandlersConfig{blackhole}, opts...).wg
+}
+
+// StartBloomHandlers starts a batch of goroutines to serve data for
+// [bloombits.Retrieval] requests from any number of filters. This is identical
+// to [Ethereum.startBloomHandlers], but exposed for independent use.
+func StartBloomHandlers(db ethdb.Database, sectionSize uint64) *BloomHandlers {
+	bh := &BloomHandlers{
+		Requests: make(chan chan *bloombits.Retrieval),
+		quit:     make(chan struct{}),
+	}
+	eth := &Ethereum{
+		bloomRequests:     bh.Requests,
+		closeBloomHandler: bh.quit,
 		chainDb:           db,
-	}).startBloomHandlers(sectionSize)
+	}
+	eth.startBloomHandlers(sectionSize, options.Func[bloomHandlersConfig](func(c *bloomHandlersConfig) {
+		c.wg = &bh.wg
+	}))
+	return bh
+}
+
+// BloomHandlers serve data for [bloombits.Retrieval] requests from any number
+// of filters. [BloomHandlers.Close] MUST be called to release goroutines, after
+// which a send on the requests channel will block indefinitely.
+type BloomHandlers struct {
+	Requests chan chan *bloombits.Retrieval
+	quit     chan struct{}
+	wg       sync.WaitGroup
+}
+
+// Close releases resources in use by the [BloomHandlers]; repeated calls will
+// panic.
+func (bh *BloomHandlers) Close() {
+	close(bh.quit)
+	bh.wg.Wait()
 }

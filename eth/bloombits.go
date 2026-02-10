@@ -43,9 +43,12 @@ const (
 
 // startBloomHandlers starts a batch of goroutines to accept bloom bit database
 // retrievals from possibly a range of filters and serving the data to satisfy.
-func (eth *Ethereum) startBloomHandlers(sectionSize uint64) {
+func (eth *Ethereum) startBloomHandlers(sectionSize uint64, opts ...bloomHandlersOption) {
+	wg := bloomHandlersWG(opts...)
 	for i := 0; i < bloomServiceThreads; i++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for {
 				select {
 				case <-eth.closeBloomHandler:
