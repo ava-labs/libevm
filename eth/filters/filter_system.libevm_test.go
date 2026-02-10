@@ -14,17 +14,13 @@
 // along with the go-ethereum library. If not, see
 // <http://www.gnu.org/licenses/>.
 
-package eth
+package filters
 
-import (
-	"testing"
+import "github.com/ava-labs/libevm/core/types"
 
-	"go.uber.org/goleak"
+var _ BloomOverrider = (*testBackend)(nil)
 
-	"github.com/ava-labs/libevm/core/rawdb"
-)
-
-func TestStartBloomHandlersNoLeaks(t *testing.T) {
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-	StartBloomHandlers(rawdb.NewMemoryDatabase(), 42).Close()
+func (b *testBackend) OverrideHeaderBloom(header *types.Header) types.Bloom {
+	b.overrideBloomCalled.Store(true)
+	return header.Bloom
 }

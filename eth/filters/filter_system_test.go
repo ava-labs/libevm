@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"reflect"
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,15 +44,16 @@ import (
 )
 
 type testBackend struct {
-	db              ethdb.Database
-	sections        uint64
-	txFeed          event.Feed
-	logsFeed        event.Feed
-	rmLogsFeed      event.Feed
-	pendingLogsFeed event.Feed
-	chainFeed       event.Feed
-	pendingBlock    *types.Block
-	pendingReceipts types.Receipts
+	db                  ethdb.Database
+	sections            uint64
+	txFeed              event.Feed
+	logsFeed            event.Feed
+	rmLogsFeed          event.Feed
+	pendingLogsFeed     event.Feed
+	chainFeed           event.Feed
+	pendingBlock        *types.Block
+	pendingReceipts     types.Receipts
+	overrideBloomCalled atomic.Bool
 }
 
 func (b *testBackend) ChainConfig() *params.ChainConfig {
@@ -902,6 +904,10 @@ func TestLightFilterLogs(t *testing.T) {
 				t.Errorf("invalid log on index %d for case %d", l, i)
 			}
 		}
+	}
+
+	if !backend.overrideBloomCalled.Load() {
+		t.Error("expected OverrideHeaderBloom to be called")
 	}
 }
 

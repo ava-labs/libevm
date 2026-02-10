@@ -34,6 +34,8 @@ func NewBloomIndexerBackend(db ethdb.Database, size uint64) *BloomIndexer {
 }
 
 // ProcessWithBloomOverride is the same as [BloomIndexer.Process], but takes the header and bloom separately.
+// This must obey the same invariates as [BloomIndexer.Process], including calling [BloomIndexer.Reset]
+// to start a new section prior to this call, otherwise this function will panic.
 func (b *BloomIndexer) ProcessWithBloomOverride(header *types.Header, bloom types.Bloom) error {
 	index := uint(header.Number.Uint64() - b.section*b.size)
 	if err := b.gen.AddBloom(index, bloom); err != nil {
