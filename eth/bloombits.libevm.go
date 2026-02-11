@@ -21,7 +21,6 @@ import (
 
 	"github.com/ava-labs/libevm/core/bloombits"
 	"github.com/ava-labs/libevm/ethdb"
-	"github.com/ava-labs/libevm/libevm/options"
 )
 
 const (
@@ -38,21 +37,6 @@ const (
 	BloomRetrievalWait = bloomRetrievalWait
 )
 
-// A bloomHandlersOption configures [Ethereum.startBloomHandlers].
-type bloomHandlersOption = options.Option[bloomHandlersConfig]
-
-type bloomHandlersConfig struct {
-	wg *sync.WaitGroup
-}
-
-// bloomHandlersWG returns the last [sync.WaitGroup] set by an option, or a
-// default value that exists only to avoid panics when used but it otherwise
-// inaccessible.
-func bloomHandlersWG(opts ...bloomHandlersOption) *sync.WaitGroup {
-	blackhole := &sync.WaitGroup{}
-	return options.ApplyTo(&bloomHandlersConfig{blackhole}, opts...).wg
-}
-
 // StartBloomHandlers starts a batch of goroutines to serve data for
 // [bloombits.Retrieval] requests from any number of filters. This is identical
 // to [Ethereum.startBloomHandlers], but exposed for independent use.
@@ -66,9 +50,7 @@ func StartBloomHandlers(db ethdb.Database, sectionSize uint64) *BloomHandlers {
 		closeBloomHandler: bh.quit,
 		chainDb:           db,
 	}
-	eth.startBloomHandlers(sectionSize, options.Func[bloomHandlersConfig](func(c *bloomHandlersConfig) {
-		c.wg = &bh.wg
-	}))
+	eth.startBloomHandlers(sectionSize)
 	return bh
 }
 
