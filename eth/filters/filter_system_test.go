@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/libevm"
+	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/consensus/ethash"
 	"github.com/ava-labs/libevm/core"
@@ -44,16 +44,17 @@ import (
 )
 
 type testBackend struct {
-	db                  ethdb.Database
-	sections            uint64
-	txFeed              event.Feed
-	logsFeed            event.Feed
-	rmLogsFeed          event.Feed
-	pendingLogsFeed     event.Feed
-	chainFeed           event.Feed
-	pendingBlock        *types.Block
-	pendingReceipts     types.Receipts
-	overrideBloomCalled atomic.Bool
+	db              ethdb.Database
+	sections        uint64
+	txFeed          event.Feed
+	logsFeed        event.Feed
+	rmLogsFeed      event.Feed
+	pendingLogsFeed event.Feed
+	chainFeed       event.Feed
+	pendingBlock    *types.Block
+	pendingReceipts types.Receipts
+
+	overrideBloomCalled atomic.Bool //libevm
 }
 
 func (b *testBackend) ChainConfig() *params.ChainConfig {
