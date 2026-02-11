@@ -17,8 +17,6 @@
 package eth
 
 import (
-	"sync"
-
 	"github.com/ava-labs/libevm/core/bloombits"
 	"github.com/ava-labs/libevm/ethdb"
 )
@@ -60,12 +58,10 @@ func StartBloomHandlers(db ethdb.Database, sectionSize uint64) *BloomHandlers {
 type BloomHandlers struct {
 	Requests chan chan *bloombits.Retrieval
 	quit     chan struct{}
-	wg       sync.WaitGroup
 }
 
 // Close releases resources in use by the [BloomHandlers]; repeated calls will
 // panic.
 func (bh *BloomHandlers) Close() {
 	close(bh.quit)
-	bh.wg.Wait()
 }
