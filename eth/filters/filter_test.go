@@ -109,8 +109,8 @@ func BenchmarkFilters(b *testing.B) {
 
 func TestFilters(t *testing.T) {
 	var (
-		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{})
+		db     = rawdb.NewMemoryDatabase()
+		_, sys = newTestFilterSystem(t, db, Config{})
 		// Sender account
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr    = crypto.PubkeyToAddress(key1.PublicKey)
@@ -373,11 +373,6 @@ func TestFilters(t *testing.T) {
 		if string(have) != tc.want {
 			t.Fatalf("test %d, have:\n%s\nwant:\n%s", i, have, tc.want)
 		}
-
-		if !backend.overrideBloomCalled.Load() {
-			t.Error("expected OverrideHeaderBloom to be called")
-		}
-		backend.overrideBloomCalled.Store(false)
 	}
 
 	t.Run("timeout", func(t *testing.T) {

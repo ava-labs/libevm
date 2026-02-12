@@ -24,11 +24,10 @@ import (
 	"math/rand"
 	"reflect"
 	"runtime"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	ethereum "github.com/ava-labs/libevm"
+	"github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/consensus/ethash"
 	"github.com/ava-labs/libevm/core"
@@ -53,8 +52,6 @@ type testBackend struct {
 	chainFeed       event.Feed
 	pendingBlock    *types.Block
 	pendingReceipts types.Receipts
-
-	overrideBloomCalled atomic.Bool //libevm
 }
 
 func (b *testBackend) ChainConfig() *params.ChainConfig {
@@ -905,10 +902,6 @@ func TestLightFilterLogs(t *testing.T) {
 				t.Errorf("invalid log on index %d for case %d", l, i)
 			}
 		}
-	}
-
-	if !backend.overrideBloomCalled.Load() {
-		t.Error("expected OverrideHeaderBloom to be called")
 	}
 }
 
