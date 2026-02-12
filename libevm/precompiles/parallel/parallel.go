@@ -59,7 +59,10 @@ type Processor struct {
 }
 
 type (
-	job struct {
+	// job is an alias to allow it to be used as an "underlying type" for
+	// generic type parameters, while prefetch and process are explicitly *not*
+	// aliases, to guarantee that they aren't considered equivalent.
+	job = struct {
 		handler handler
 		tx      IndexedTx
 	}
@@ -101,10 +104,14 @@ func New(prefetchers, processors int) *Processor {
 	p.workers.Add(workers)       // for shutdown via [Processor.Close]
 	p.stateShare.wg.Add(workers) // for readiness of [Processor.worker] loops
 	for range prefetchers {
-		go p.worker(p.prefetch, nil)
+		go worker(p, p.prefetch, func(sdb libevm.StateReader, job *prefetch) {
+			job.handler.prefetch(sdb, job)
+		})
 	}
 	for range processors {
-		go p.worker(nil, p.process)
+		go worker(p, p.process, func(sdb libevm.StateReader, job *process) {
+			job.handler.process(sdb, job)
+		})
 	}
 	p.stateShare.wg.Wait()
 
@@ -133,7 +140,7 @@ func (s *stateDBSharer) distribute(sdb *state.StateDB) {
 	<-s.sdb
 }
 
-func (p *Processor) worker(prefetch chan *prefetch, process chan *process) {
+func worker[J ~job](p *Processor, work <-chan *J, do func(libevm.StateReader, *J)) {
 	defer p.workers.Done()
 
 	var sdb *state.StateDB
@@ -155,17 +162,11 @@ func (p *Processor) worker(prefetch chan *prefetch, process chan *process) {
 			stateAvailable = share.available
 			share.wg.Done()
 
-		case job, ok := <-prefetch:
+		case w, ok := <-work:
 			if !ok {
 				return
 			}
-			job.handler.prefetch(sdb, job)
-
-		case job, ok := <-process:
-			if !ok {
-				return
-			}
-			job.handler.process(sdb, job)
+			do(sdb, w)
 		}
 	}
 }
