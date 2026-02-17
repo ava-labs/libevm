@@ -24,9 +24,11 @@ import (
 	"crypto/elliptic"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	btc_ecdsa "github.com/btcsuite/btcd/btcec/v2/ecdsa"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 // Ecrecover returns the uncompressed public key that created the given signature.
@@ -148,5 +150,44 @@ func CompressPubkey(pubkey *ecdsa.PublicKey) []byte {
 
 // S256 returns an instance of the secp256k1 curve.
 func S256() elliptic.Curve {
-	return btcec.S256()
+	return btCurve{secp256k1.S256()}
+}
+
+type btCurve struct {
+	*secp256k1.KoblitzCurve
+}
+
+func (curve btCurve) IsOnCurve(x, y *big.Int) bool {
+	if x.Cmp(secp256k1.Params().P) >= 0 || y.Cmp(secp256k1.Params().P) >= 0 {
+		return false
+	}
+	return curve.KoblitzCurve.IsOnCurve(x, y)
+}
+
+// Marshal converts a point given as (x, y) into a byte slice.
+func (curve btCurve) Marshal(x, y *big.Int) []byte {
+	byteLen := (curve.Params().BitSize + 7) / 8
+
+	ret := make([]byte, 1+2*byteLen)
+	ret[0] = 4 // uncompressed point
+
+	x.FillBytes(ret[1 : 1+byteLen])
+	y.FillBytes(ret[1+byteLen : 1+2*byteLen])
+
+	return ret
+}
+
+// Unmarshal converts a point, serialised by Marshal, into an x, y pair. On
+// error, x = nil.
+func (curve btCurve) Unmarshal(data []byte) (x, y *big.Int) {
+	byteLen := (curve.Params().BitSize + 7) / 8
+	if len(data) != 1+2*byteLen {
+		return nil, nil
+	}
+	if data[0] != 4 { // uncompressed form
+		return nil, nil
+	}
+	x = new(big.Int).SetBytes(data[1 : 1+byteLen])
+	y = new(big.Int).SetBytes(data[1+byteLen:])
+	return
 }
