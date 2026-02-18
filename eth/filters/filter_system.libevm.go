@@ -14,22 +14,22 @@
 // along with the go-ethereum library. If not, see
 // <http://www.gnu.org/licenses/>.
 
-package ethapi
+package filters
 
 import (
-	"math/big"
-
-	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/params"
 )
 
-// NewRPCTransaction exports the [newRPCTransaction] function.
-func NewRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, blockTime uint64, index uint64, baseFee *big.Int, config *params.ChainConfig) *RPCTransaction {
-	return newRPCTransaction(tx, blockHash, blockNumber, blockTime, index, baseFee, config)
+// BloomOverrider is an optional extension to [Backend], allowing arbitrary
+// bloom filters to be returned for a header. If not implemented,
+// [types.Header.Bloom] is used instead.
+type BloomOverrider interface {
+	OverrideHeaderBloom(*types.Header) types.Bloom
 }
 
-// MarshalReceipt exports the [marshalReceipt] function.
-func MarshalReceipt(r *types.Receipt, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex int) map[string]any {
-	return marshalReceipt(r, blockHash, blockNumber, signer, tx, txIndex)
+func maybeOverrideBloom(header *types.Header, backend Backend) types.Bloom {
+	if bo, ok := backend.(BloomOverrider); ok {
+		return bo.OverrideHeaderBloom(header)
+	}
+	return header.Bloom
 }
