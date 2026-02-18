@@ -1,0 +1,23 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "consensus",
+    srcs = [
+        "consensus.go",
+        "errors.go",
+        "merger.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/consensus",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//core/rawdb",
+        "//core/state",
+        "//core/types",
+        "//ethdb",
+        "//log",
+        "//params",
+        "//rlp",
+        "//rpc",
+    ],
+)

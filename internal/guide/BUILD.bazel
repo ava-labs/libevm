@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "guide",
+    srcs = ["guide.go"],
+    importpath = "github.com/ava-labs/libevm/internal/guide",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "guide_test",
+    srcs = ["guide_test.go"],
+    embed = [":guide"],
+    deps = [
+        "//accounts/keystore",
+        "//common",
+        "//core/types",
+    ],
+)

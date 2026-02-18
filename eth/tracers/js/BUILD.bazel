@@ -1,0 +1,34 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "js",
+    srcs = [
+        "bigint.go",
+        "goja.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/eth/tracers/js",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//common/hexutil",
+        "//core/vm",
+        "//crypto",
+        "//eth/tracers",
+        "//eth/tracers/js/internal/tracers",
+        "@com_github_dop251_goja//:goja",
+    ],
+)
+
+go_test(
+    name = "js_test",
+    srcs = ["tracer_test.go"],
+    embed = [":js"],
+    deps = [
+        "//common",
+        "//core/state",
+        "//core/vm",
+        "//eth/tracers",
+        "//params",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)

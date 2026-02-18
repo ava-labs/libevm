@@ -1,0 +1,13 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "hookstest",
+    srcs = ["stub.go"],
+    importpath = "github.com/ava-labs/libevm/libevm/hookstest",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//libevm",
+        "//params",
+    ],
+)

@@ -1,0 +1,30 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "apitypes",
+    srcs = ["types.go"],
+    importpath = "github.com/ava-labs/libevm/signer/core/apitypes",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//accounts",
+        "//common",
+        "//common/hexutil",
+        "//common/math",
+        "//core/types",
+        "//crypto",
+    ],
+)
+
+go_test(
+    name = "apitypes_test",
+    srcs = [
+        "signed_data_internal_test.go",
+        "types_test.go",
+    ],
+    embed = [":apitypes"],
+    deps = [
+        "//common",
+        "//common/hexutil",
+        "//common/math",
+    ],
+)

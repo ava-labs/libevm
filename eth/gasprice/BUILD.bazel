@@ -1,0 +1,44 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "gasprice",
+    srcs = [
+        "feehistory.go",
+        "gasprice.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/eth/gasprice",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//common/lru",
+        "//consensus/misc/eip1559",
+        "//core",
+        "//core/types",
+        "//event",
+        "//log",
+        "//params",
+        "//rpc",
+        "@org_golang_x_exp//slices",
+    ],
+)
+
+go_test(
+    name = "gasprice_test",
+    srcs = [
+        "feehistory_test.go",
+        "gasprice_test.go",
+    ],
+    embed = [":gasprice"],
+    deps = [
+        "//common",
+        "//consensus/ethash",
+        "//core",
+        "//core/rawdb",
+        "//core/types",
+        "//core/vm",
+        "//crypto",
+        "//event",
+        "//params",
+        "//rpc",
+    ],
+)

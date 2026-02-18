@@ -1,0 +1,17 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "gasestimator",
+    srcs = ["gasestimator.go"],
+    importpath = "github.com/ava-labs/libevm/eth/gasestimator",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//core",
+        "//core/state",
+        "//core/types",
+        "//core/vm",
+        "//log",
+        "//params",
+    ],
+)

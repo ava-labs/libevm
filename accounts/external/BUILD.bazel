@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "external",
+    srcs = ["backend.go"],
+    importpath = "github.com/ava-labs/libevm/accounts/external",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//:libevm",
+        "//accounts",
+        "//common",
+        "//common/hexutil",
+        "//core/types",
+        "//event",
+        "//log",
+        "//rpc",
+        "//signer/core/apitypes",
+    ],
+)

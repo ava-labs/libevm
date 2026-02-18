@@ -1,0 +1,27 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "usbwallet",
+    srcs = [
+        "hub.go",
+        "ledger.go",
+        "trezor.go",
+        "wallet.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/accounts/usbwallet",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//:libevm",
+        "//accounts",
+        "//accounts/usbwallet/trezor",
+        "//common",
+        "//common/hexutil",
+        "//core/types",
+        "//crypto",
+        "//event",
+        "//log",
+        "//rlp",
+        "@com_github_golang_protobuf//proto",
+        "@com_github_karalabe_usb//:usb",
+    ],
+)

@@ -1,0 +1,26 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "v4wire",
+    srcs = ["v4wire.go"],
+    importpath = "github.com/ava-labs/libevm/p2p/discover/v4wire",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common/math",
+        "//crypto",
+        "//p2p/enode",
+        "//p2p/enr",
+        "//rlp",
+    ],
+)
+
+go_test(
+    name = "v4wire_test",
+    srcs = ["v4wire_test.go"],
+    embed = [":v4wire"],
+    deps = [
+        "//crypto",
+        "//rlp",
+        "@com_github_davecgh_go_spew//spew",
+    ],
+)

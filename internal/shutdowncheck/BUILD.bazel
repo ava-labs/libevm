@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "shutdowncheck",
+    srcs = ["shutdown_tracker.go"],
+    importpath = "github.com/ava-labs/libevm/internal/shutdowncheck",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//common",
+        "//core/rawdb",
+        "//ethdb",
+        "//log",
+    ],
+)

@@ -1,0 +1,13 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "exp",
+    srcs = ["exp.go"],
+    importpath = "github.com/ava-labs/libevm/metrics/exp",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//log",
+        "//metrics",
+        "//metrics/prometheus",
+    ],
+)

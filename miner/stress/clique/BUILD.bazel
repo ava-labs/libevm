@@ -1,0 +1,32 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "clique_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/ava-labs/libevm/miner/stress/clique",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//accounts/keystore",
+        "//common",
+        "//common/fdlimit",
+        "//core",
+        "//core/txpool/legacypool",
+        "//core/types",
+        "//crypto",
+        "//eth",
+        "//eth/downloader",
+        "//eth/ethconfig",
+        "//log",
+        "//miner",
+        "//node",
+        "//p2p",
+        "//p2p/enode",
+        "//params",
+    ],
+)
+
+go_binary(
+    name = "clique",
+    embed = [":clique_lib"],
+    visibility = ["//visibility:public"],
+)

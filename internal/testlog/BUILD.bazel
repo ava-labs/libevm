@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "testlog",
+    srcs = ["testlog.go"],
+    importpath = "github.com/ava-labs/libevm/internal/testlog",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//log",
+        "@org_golang_x_exp//slog",
+    ],
+)

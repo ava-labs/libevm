@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "deps",
+    srcs = ["deps.go"],
+    embedsrcs = [
+        "bignumber.js",
+        "web3.js",
+    ],
+    importpath = "github.com/ava-labs/libevm/internal/jsre/deps",
+    visibility = ["//:__subpackages__"],
+)

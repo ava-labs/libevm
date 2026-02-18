@@ -1,0 +1,33 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "adapters",
+    srcs = [
+        "exec.go",
+        "inproc.go",
+        "types.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/p2p/simulations/adapters",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//crypto",
+        "//event",
+        "//internal/reexec",
+        "//log",
+        "//node",
+        "//p2p",
+        "//p2p/enode",
+        "//p2p/enr",
+        "//p2p/simulations/pipes",
+        "//rpc",
+        "@com_github_gorilla_websocket//:websocket",
+        "@org_golang_x_exp//slog",
+    ],
+)
+
+go_test(
+    name = "adapters_test",
+    srcs = ["inproc_test.go"],
+    embed = [":adapters"],
+    deps = ["//p2p/simulations/pipes"],
+)

@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "hashdb",
+    srcs = ["database.go"],
+    importpath = "github.com/ava-labs/libevm/triedb/hashdb",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//core/rawdb",
+        "//core/types",
+        "//ethdb",
+        "//log",
+        "//metrics",
+        "//rlp",
+        "//trie/trienode",
+        "//trie/triestate",
+        "@com_github_victoriametrics_fastcache//:fastcache",
+    ],
+)

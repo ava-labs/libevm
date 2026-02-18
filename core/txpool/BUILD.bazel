@@ -1,0 +1,25 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "txpool",
+    srcs = [
+        "errors.go",
+        "subpool.go",
+        "txpool.go",
+        "validation.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/core/txpool",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//core",
+        "//core/state",
+        "//core/types",
+        "//crypto/kzg4844",
+        "//event",
+        "//log",
+        "//metrics",
+        "//params",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)

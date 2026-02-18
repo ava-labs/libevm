@@ -1,0 +1,23 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "types",
+    srcs = [
+        "committee.go",
+        "config.go",
+        "gen_header_json.go",
+        "gen_syncaggregate_json.go",
+        "header.go",
+        "light_sync.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/beacon/types",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//beacon/merkle",
+        "//beacon/params",
+        "//common",
+        "//common/hexutil",
+        "@com_github_protolambda_bls12_381_util//:bls12-381-util",
+        "@in_gopkg_yaml_v3//:yaml_v3",
+    ],
+)

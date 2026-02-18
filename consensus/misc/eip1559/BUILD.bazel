@@ -1,0 +1,26 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "eip1559",
+    srcs = ["eip1559.go"],
+    importpath = "github.com/ava-labs/libevm/consensus/misc/eip1559",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//common/math",
+        "//consensus/misc",
+        "//core/types",
+        "//params",
+    ],
+)
+
+go_test(
+    name = "eip1559_test",
+    srcs = ["eip1559_test.go"],
+    embed = [":eip1559"],
+    deps = [
+        "//common",
+        "//core/types",
+        "//params",
+    ],
+)
