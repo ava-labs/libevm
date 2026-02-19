@@ -24,6 +24,7 @@ import (
 	"math/rand/v2"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -570,6 +571,33 @@ func TestTotalCost(t *testing.T) {
 				t.Errorf("PreprocessingGasCharge() got (%d, %v); want (%d, nil)", got, err, tt.want)
 			}
 		})
+	}
+}
+
+func TestBeforeWorkClosesPerBlock(t *testing.T) {
+	w := &wrapper[struct{}, struct{}, struct{}, struct{}]{}
+
+	w.beforeWork(1)
+	firstBlockCh := w.whenProcessed
+
+	w.beforeWork(1)
+	secondBlockCh := w.whenProcessed
+
+	w.txsBeingProcessed.Done()
+	w.txsBeingProcessed.Done()
+
+	for name, ch := range map[string]<-chan TxResult[struct{}]{
+		"first block":  firstBlockCh,
+		"second block": secondBlockCh,
+	} {
+		select {
+		case _, ok := <-ch:
+			if ok {
+				t.Fatalf("%s channel was expected to be closed", name)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("%s channel was not closed", name)
+		}
 	}
 }
 
