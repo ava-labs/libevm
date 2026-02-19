@@ -214,7 +214,6 @@ func (w *wrapper[CD, D, R, A]) beforeWork(jobs int) {
 	}(w.whenProcessed)
 }
 
-
 func (w *wrapper[CD, D, R, A]) prefetch(sdb libevm.StateReader, job *prefetch) {
 	w.data[job.tx.Index].put(w.Prefetch(sdb, job.tx, w.common.peek()))
 }
