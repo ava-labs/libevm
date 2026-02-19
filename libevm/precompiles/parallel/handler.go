@@ -204,11 +204,16 @@ func (w *wrapper[CD, D, R, A]) beforeWork(jobs int) {
 	w.txsBeingProcessed.Add(jobs)
 	w.whenProcessed = make(chan TxResult[R], jobs)
 	w.txOrder = make(chan TxResult[R], jobs)
-	go func() {
+	// The channel is captured by value via the function parameter which
+	// prevents a race where a subsequent call to beforeWork (for the next block)
+	// reassigns `w.whenProcessed` before this goroutine executes, which would
+	// cause a double-close panic.
+	go func(ch chan TxResult[R]) {
 		w.txsBeingProcessed.Wait()
-		close(w.whenProcessed)
-	}()
+		close(ch)
+	}(w.whenProcessed)
 }
+
 
 func (w *wrapper[CD, D, R, A]) prefetch(sdb libevm.StateReader, job *prefetch) {
 	w.data[job.tx.Index].put(w.Prefetch(sdb, job.tx, w.common.peek()))
