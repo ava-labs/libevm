@@ -284,14 +284,17 @@ func (w *wrapper[CD, D, R, A]) finishBlock(sdb vm.StateDB, b *types.Block, rs ty
 	// might still be reading results. We therefore guarantee their completion
 	// before "taking" all of [wrapper.results].
 	var wg sync.WaitGroup
-	wg.Go(func() {
+	wg.Add(2) // TODO(arr4n) update to Go 1.25 and use `wg.Go`
+	go func() {
 		for range w.txOrder {
 		}
-	})
-	wg.Go(func() {
+		wg.Done()
+	}()
+	go func() {
 		for range w.whenProcessed {
 		}
-	})
+		wg.Done()
+	}()
 	wg.Wait()
 
 	w.common.take()
