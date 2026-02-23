@@ -204,14 +204,12 @@ func (w *wrapper[CD, D, R, A]) beforeWork(jobs int) {
 	w.txsBeingProcessed.Add(jobs)
 	w.whenProcessed = make(chan TxResult[R], jobs)
 	w.txOrder = make(chan TxResult[R], jobs)
-	// The channel is captured by value via the function parameter which
-	// prevents a race where a subsequent call to beforeWork (for the next block)
-	// reassigns `w.whenProcessed` before this goroutine executes, which would
-	// cause a double-close panic.
-	go func(ch chan TxResult[R]) {
+	go func() {
 		w.txsBeingProcessed.Wait()
-		close(ch)
-	}(w.whenProcessed)
+		// [wrapper.finishBlock] blocks until this is closed, guaranteeing
+		// cleanup of this goroutine.
+		close(w.whenProcessed)
+	}()
 }
 
 func (w *wrapper[CD, D, R, A]) prefetch(sdb libevm.StateReader, job *prefetch) {
@@ -256,6 +254,8 @@ func (w *wrapper[CD, D, R, A]) result(i int) (TxResult[R], bool) {
 
 func (w *wrapper[CD, D, R, A]) postProcess() {
 	go func() {
+		// [wrapper.finishBlock] blocks until this is closed, guaranteeing
+		// cleanup of this goroutine.
 		defer close(w.txOrder)
 		for i := range w.totalTxsInBlock {
 			r, ok := w.result(i)
@@ -280,16 +280,19 @@ func (w *wrapper[CD, D, R, A]) finishBlock(sdb vm.StateDB, b *types.Block, rs ty
 	// [wrapper.postProcess] is guaranteed to have finished because it sets
 	// [wrapper.aggregated], from which we have just read. However
 	// [Handler.PostProcess] is under no obligation to block on anything, and
-	// the goroutine filling [wrapper.txOrder] might still be reading results.
-	// We therefore guarantee its completion before "getting and keeping" all of
-	// [wrapper.results] otherwise said goroutine can leak.
-	for range w.txOrder {
-		// Nobody needs these anymore, but we need to know that the channel has
-		// been closed.
-	}
-	// Although we know this will unblock effectively immediately, it's safer to
-	// verify the intuition than to rely on complex reasoning.
-	w.txsBeingProcessed.Wait()
+	// the goroutines filling [wrapper.txOrder] and [wrapper.whenProcessed]
+	// might still be reading results. We therefore guarantee their completion
+	// before "taking" all of [wrapper.results].
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for range w.txOrder {
+		}
+	})
+	wg.Go(func() {
+		for range w.whenProcessed {
+		}
+	})
+	wg.Wait()
 
 	w.common.take()
 	for _, v := range w.results[:w.totalTxsInBlock] {
