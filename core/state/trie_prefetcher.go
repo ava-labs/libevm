@@ -203,7 +203,7 @@ func (p *triePrefetcher) used(owner common.Hash, root common.Hash, used [][]byte
 	}
 }
 
-// trieID returns an unique trie identifier consists the trie owner and root hash.
+// trieID returns a unique trie identifier consists the trie owner and root hash.
 func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
 	trieID := make([]byte, common.HashLength*2)
 	copy(trieID, owner.Bytes())

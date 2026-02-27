@@ -27,7 +27,7 @@ import (
 	"github.com/ava-labs/libevm/log"
 )
 
-// traceWriter is an vm.EVMLogger which also holds an inner logger/tracer.
+// traceWriter is a vm.EVMLogger which also holds an inner logger/tracer.
 // When the TxEnd event happens, the inner tracer result is written to the file, and
 // the file is closed.
 type traceWriter struct {

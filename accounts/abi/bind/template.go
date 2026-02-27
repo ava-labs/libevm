@@ -114,7 +114,7 @@ var (
 
 {{$structs := .Structs}}
 {{range $structs}}
-	// {{.Name}} is an auto generated low-level Go binding around an user-defined struct.
+	// {{.Name}} is an auto generated low-level Go binding around a user-defined struct.
 	type {{.Name}} struct {
 	{{range $field := .Fields}}
 	{{$field.Name}} {{$field.Type}}{{end}}

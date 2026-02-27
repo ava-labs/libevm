@@ -239,7 +239,7 @@ func (t *freezerTable) repair() error {
 	firstIndex.unmarshalBinary(buffer)
 
 	// Assign the tail fields with the first stored index.
-	// The total removed items is represented with an uint32,
+	// The total removed items is represented with a uint32,
 	// which is not enough in theory but enough in practice.
 	// TODO: use uint64 to represent total removed items.
 	t.tailId = firstIndex.filenum

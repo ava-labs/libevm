@@ -107,7 +107,7 @@ func (q *payloadQueue) has(id engine.PayloadID) bool {
 	return false
 }
 
-// headerQueueItem represents an hash->header tuple to store until it's retrieved
+// headerQueueItem represents a hash->header tuple to store until it's retrieved
 // or evicted.
 type headerQueueItem struct {
 	hash   common.Hash

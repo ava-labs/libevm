@@ -171,7 +171,7 @@ type TxFetcher struct {
 
 	// Stage 1: Waiting lists for newly discovered transactions that might be
 	// broadcast without needing explicit request/reply round trips.
-	waitlist  map[common.Hash]map[string]struct{}    // Transactions waiting for an potential broadcast
+	waitlist  map[common.Hash]map[string]struct{}    // Transactions waiting for a potential broadcast
 	waittime  map[common.Hash]mclock.AbsTime         // Timestamps when transactions were added to the waitlist
 	waitslots map[string]map[common.Hash]*txMetadata // Waiting announcements grouped by peer (DoS protection)
 

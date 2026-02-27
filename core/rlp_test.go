@@ -133,7 +133,7 @@ func testRlpIterator(t *testing.T, txs, uncles, datasize int) {
 	}
 }
 
-// BenchmarkHashing compares the speeds of hashing a rlp raw data directly
+// BenchmarkHashing compares the speeds of hashing an rlp raw data directly
 // without the unmarshalling/marshalling step
 func BenchmarkHashing(b *testing.B) {
 	// Make a pretty fat block
