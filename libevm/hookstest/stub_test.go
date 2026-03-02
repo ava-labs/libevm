@@ -35,7 +35,7 @@ func TestSetupGenesisBlockWithStub(t *testing.T) {
 	// [log.Crit] being called.
 	l := log.Root()
 	t.Cleanup(func() { log.SetDefault(l) })
-	log.SetDefault(log.NewLogger(ethtest.NewTBLogHandler(t, log.LevelDebug)))
+	log.SetDefault(log.NewLogger(ethtest.NewTBLogHandler(t, log.LevelWarn)))
 
 	stub := &Stub{}
 	extras := stub.Register(t)
