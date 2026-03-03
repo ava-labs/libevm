@@ -53,11 +53,11 @@ func (r *tbRecorder) Fatalf(format string, a ...any) {
 func TestTBLogHandler(t *testing.T) {
 	doLogging := func(t *testing.T, l log.Logger) {
 		t.Helper()
-		l.Debug("Hi")
-		l.Info("Austin", "you", "are")
-		l.Warn("very")
+		l.Debug("Austin")
+		l.Info("you")
+		l.Warn("are")
 		l.Error("cool!")
-		require.Panics(t, func() { l.Crit("oh no you exploded") }, "Crit()")
+		require.Panics(t, func() { l.Crit("Oh no you lost aura!") }, "Crit()")
 	}
 
 	tests := []struct {
@@ -71,26 +71,26 @@ func TestTBLogHandler(t *testing.T) {
 			name:  "warn_level",
 			level: slog.LevelWarn,
 			wantLog: []string{
-				"Hi", "Austin",
+				"Austin", "you",
 			},
 			wantErr: []string{
-				"very", "cool!",
+				"are", "cool!",
 			},
 			wantFatal: []string{
-				"oh no you exploded",
+				"Oh no you lost aura!",
 			},
 		},
 		{
 			name:  "error_level",
 			level: slog.LevelError,
 			wantLog: []string{
-				"Hi", "Austin", "very",
+				"Austin", "you", "are",
 			},
 			wantErr: []string{
 				"cool!",
 			},
 			wantFatal: []string{
-				"oh no you exploded",
+				"Oh no you lost aura!",
 			},
 		},
 	}
