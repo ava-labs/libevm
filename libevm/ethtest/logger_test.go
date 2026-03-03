@@ -17,9 +17,9 @@
 package ethtest
 
 import (
-	"fmt"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slog"
 
@@ -31,50 +31,64 @@ type tbRecorder struct {
 	logged, errored, fataled []string
 }
 
+// message extracts the log message from the handler's format args.
+func message(_ string, a ...any) string {
+	return a[1].(string)
+}
+
 func (r *tbRecorder) Logf(format string, a ...any) {
-	r.logged = append(r.logged, fmt.Sprintf(format, a...))
+	r.logged = append(r.logged, message(format, a...))
 }
 
 func (r *tbRecorder) Errorf(format string, a ...any) {
-	r.errored = append(r.errored, fmt.Sprintf(format, a...))
+	r.errored = append(r.errored, message(format, a...))
 }
 
 func (r *tbRecorder) Fatalf(format string, a ...any) {
-	r.fataled = append(r.fataled, fmt.Sprintf(format, a...))
+	r.fataled = append(r.fataled, message(format, a...))
 	panic("fatalf called") // prevent os.Exit(1) after log.Crit
 }
 
 func TestTBLogHandler(t *testing.T) {
-	// Each entry in wantLog/wantErr is a list of substrings that must all
-	// appear in the corresponding formatted log line.
+	doLogging := func(t *testing.T, l log.Logger) {
+		l.Debug("Hi")
+		l.Info("Austin", "you", "are")
+		l.Warn("very")
+		l.Error("cool!")
+		require.Panics(t, func() { l.Crit("oh no you exploded") }, "Crit()")
+	}
+
 	tests := []struct {
-		name    string
-		level   slog.Level
-		wantLog [][]string
-		wantErr [][]string
+		name      string
+		level     slog.Level
+		wantLog   []string
+		wantErr   []string
+		wantFatal []string
 	}{
 		{
 			name:  "warn_level",
 			level: slog.LevelWarn,
-			wantLog: [][]string{
-				{"Hi"},
-				{"Austin", "you", "are"},
+			wantLog: []string{
+				"Hi", "Austin",
 			},
-			wantErr: [][]string{
-				{"very"},
-				{"cool"},
+			wantErr: []string{
+				"very", "cool!",
+			},
+			wantFatal: []string{
+				"oh no you exploded",
 			},
 		},
 		{
 			name:  "error_level",
 			level: slog.LevelError,
-			wantLog: [][]string{
-				{"Hi"},
-				{"Austin", "you", "are"},
-				{"very"},
+			wantLog: []string{
+				"Hi", "Austin", "very",
 			},
-			wantErr: [][]string{
-				{"cool"},
+			wantErr: []string{
+				"cool!",
+			},
+			wantFatal: []string{
+				"oh no you exploded",
 			},
 		},
 	}
@@ -84,33 +98,17 @@ func TestTBLogHandler(t *testing.T) {
 			got := &tbRecorder{}
 			l := log.NewLogger(NewTBLogHandler(got, tt.level))
 
-			l.Debug("Hi")
-			l.Info("Austin", "you", "are")
-			l.Warn("very")
-			l.Error("cool")
+			doLogging(t, l)
 
-			require.Len(t, got.logged, len(tt.wantLog), "Logf() calls")
-			for i, wants := range tt.wantLog {
-				for _, want := range wants {
-					require.Contains(t, got.logged[i], want, "Logf()[%d]", i)
-				}
+			if diff := cmp.Diff(tt.wantLog, got.logged); diff != "" {
+				t.Errorf("Logf() calls diff (-want +got):\n%s", diff)
 			}
-
-			require.Len(t, got.errored, len(tt.wantErr), "Errorf() calls")
-			for i, wants := range tt.wantErr {
-				for _, want := range wants {
-					require.Contains(t, got.errored[i], want, "Errorf()[%d]", i)
-				}
+			if diff := cmp.Diff(tt.wantErr, got.errored); diff != "" {
+				t.Errorf("Errorf() calls diff (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tt.wantFatal, got.fataled); diff != "" {
+				t.Errorf("Fatalf() calls diff (-want +got):\n%s", diff)
 			}
 		})
 	}
-}
-
-func TestTBLogHandler_Crit(t *testing.T) {
-	got := &tbRecorder{}
-	l := log.NewLogger(NewTBLogHandler(got, slog.LevelWarn))
-
-	require.Panics(t, func() { l.Crit("Explosion") }, "Crit()")
-	require.Len(t, got.fataled, 1, "Fatalf() calls")
-	require.Contains(t, got.fataled[0], "Explosion", "Fatalf()[0]")
 }
