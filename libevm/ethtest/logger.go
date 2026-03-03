@@ -46,7 +46,7 @@ type tbHandler struct {
 	attrs []slog.Attr
 }
 
-func (h *tbHandler) Enabled(_ context.Context, _ slog.Level) bool {
+func (h *tbHandler) Enabled(context.Context, slog.Level) bool {
 	return true
 }
 
