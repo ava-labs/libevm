@@ -33,7 +33,8 @@ type tbRecorder struct {
 
 // message extracts the log message from the handler's format args.
 func message(_ string, a ...any) string {
-	return a[1].(string)
+	s, _ := a[1].(string)
+	return s
 }
 
 func (r *tbRecorder) Logf(format string, a ...any) {
@@ -51,6 +52,7 @@ func (r *tbRecorder) Fatalf(format string, a ...any) {
 
 func TestTBLogHandler(t *testing.T) {
 	doLogging := func(t *testing.T, l log.Logger) {
+		t.Helper()
 		l.Debug("Hi")
 		l.Info("Austin", "you", "are")
 		l.Warn("very")
