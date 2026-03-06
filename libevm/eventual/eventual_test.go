@@ -23,6 +23,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TODO(arr4n) tparallel claims that the top-level test should also call
+// `t.Parallel()` but this seems unsubstantiated. Is my understanding of
+// parallel testing inside `t.Run()` incorrect (i.e. each run concurrently but
+// the primary test is serialised) or is the linter flagging false positives?
+//
+//nolint:tparallel
 func TestValue(t *testing.T) {
 	t.Run("Reset", func(t *testing.T) {
 		v := New[int]()
