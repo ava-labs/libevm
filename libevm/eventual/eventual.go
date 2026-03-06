@@ -18,6 +18,8 @@
 // getting of values.
 package eventual
 
+import "context"
+
 // A Value holds a value that is set at some unknown point in the future and
 // used, possibly concurrently, by one or more peekers or a single taker
 // (together, "getters"). The zero value is NOT ready for use.
@@ -61,6 +63,19 @@ func (v Value[T]) TryPeek() (T, bool) {
 	}
 }
 
+// PeekCtx is the context-aware equivalent of [Value.Peek], returning
+// [context.Cause] if the context is cancelled before a call to [Value.Put] is
+// made.
+func (v Value[T]) PeekCtx(ctx context.Context) (T, error) {
+	select {
+	case x := <-v.ch:
+		v.ch <- x
+		return x, nil
+	case <-ctx.Done():
+		return v.zero(), context.Cause(ctx)
+	}
+}
+
 // Take returns the value and resets `v` to its default state as if immediately
 // after construction. It blocks until a call to [Value.Put].
 func (v Value[T]) Take() T {
@@ -75,6 +90,18 @@ func (v Value[T]) TryTake() (T, bool) {
 		return x, true
 	default:
 		return v.zero(), false
+	}
+}
+
+// TakeCtx is the context-aware equivalent of [Value.Take], returning
+// [context.Cause] if the context is cancelled before a call to [Value.Put] is
+// made.
+func (v Value[T]) TakeCtx(ctx context.Context) (T, error) {
+	select {
+	case x := <-v.ch:
+		return x, nil
+	case <-ctx.Done():
+		return v.zero(), context.Cause(ctx)
 	}
 }
 

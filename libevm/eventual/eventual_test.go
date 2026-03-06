@@ -17,6 +17,8 @@
 package eventual
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -45,18 +47,21 @@ func TestValue(t *testing.T) {
 		method       string
 		blocking     func(Value[T]) T
 		nonBlocking  func(Value[T]) (T, bool)
+		withCtx      func(Value[T], context.Context) (T, error)
 		putEveryTime bool
 	}{
 		{
 			method:       "Peek",
 			blocking:     (Value[T]).Peek,
 			nonBlocking:  (Value[T]).TryPeek,
+			withCtx:      (Value[T]).PeekCtx,
 			putEveryTime: false, // unnecessary and would block
 		},
 		{
 			method:       "Take",
 			blocking:     (Value[T]).Take,
 			nonBlocking:  (Value[T]).TryTake,
+			withCtx:      (Value[T]).TakeCtx,
 			putEveryTime: true,
 		},
 	}
@@ -66,8 +71,19 @@ func TestValue(t *testing.T) {
 			t.Parallel()
 			sut := New[T]()
 
-			_, ok := tt.nonBlocking(sut)
-			assert.Falsef(t, ok, "Try%s() before Put()", tt.method)
+			{
+				_, ok := tt.nonBlocking(sut)
+				assert.Falsef(t, ok, "Try%s() before Put()", tt.method)
+			}
+
+			{
+				ctx, cancel := context.WithCancelCause(t.Context())
+				errCause := errors.New("because")
+				cancel(errCause)
+				_, err := tt.withCtx(sut, ctx)
+				//nolint:testifylint // Doesn't need to fail the whole test with require
+				assert.ErrorIsf(t, err, errCause, "%sCtx() before Put() and context cancelled with %v", tt.method, errCause)
+			}
 
 			const val = 42
 
@@ -97,6 +113,13 @@ func TestValue(t *testing.T) {
 			}
 			if got, ok := tt.nonBlocking(sut); !ok || got != val {
 				t.Errorf("After Put(), Try%s() got (%d, %t); want (%d, true)", tt.method, got, ok, val)
+			}
+
+			if tt.putEveryTime {
+				sut.Put(val)
+			}
+			if got, err := tt.withCtx(sut, t.Context()); err != nil || got != val {
+				t.Errorf("After Put(), %sCtx() got (%d, %v); want (%d, nil)", tt.method, got, err, val)
 			}
 		})
 	}
