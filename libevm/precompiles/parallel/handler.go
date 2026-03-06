@@ -23,6 +23,7 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
+	"github.com/ava-labs/libevm/libevm/eventual"
 	"github.com/ava-labs/libevm/libevm/stateconf"
 )
 
@@ -141,13 +142,13 @@ type wrapper[CD, D, R, A any] struct {
 	totalTxsInBlock   int
 	txsBeingProcessed sync.WaitGroup
 
-	common eventual[CD]
-	data   []eventual[D]
+	common eventual.Value[CD]
+	data   []eventual.Value[D]
 
-	results                []eventual[result[R]]
+	results                []eventual.Value[result[R]]
 	whenProcessed, txOrder chan TxResult[R]
 
-	aggregated eventual[A]
+	aggregated eventual.Value[A]
 }
 
 // AddHandler registers the [Handler] with the [Processor] and returns a
@@ -172,8 +173,8 @@ type wrapper[CD, D, R, A any] struct {
 func AddHandler[CD, D, R, A any](p *Processor, h Handler[CD, D, R, A]) func(txIndex int) (TxResult[R], bool) {
 	w := &wrapper[CD, D, R, A]{
 		Handler:    h,
-		common:     eventually[CD](),
-		aggregated: eventually[A](),
+		common:     eventual.New[CD](),
+		aggregated: eventual.New[A](),
 	}
 	p.handlers = append(p.handlers, w)
 	return w.result
@@ -185,19 +186,19 @@ func (w *wrapper[CD, D, R, A]) beforeBlock(sdb libevm.StateReader, b *types.Bloc
 	// they're emptied by [wrapper.process] and [wrapper.finishBlock]
 	// respectively.
 	for i := len(w.results); i < w.totalTxsInBlock; i++ {
-		w.data = append(w.data, eventually[D]())
-		w.results = append(w.results, eventually[result[R]]())
+		w.data = append(w.data, eventual.New[D]())
+		w.results = append(w.results, eventual.New[result[R]]())
 	}
 
 	go func() {
 		// goroutine guaranteed to have completed by the time a respective
 		// getter unblocks (i.e. in any call to [wrapper.prefetch]).
-		w.common.put(w.BeforeBlock(sdb, types.CopyHeader(b.Header())))
+		w.common.Put(w.BeforeBlock(sdb, types.CopyHeader(b.Header())))
 	}()
 }
 
 func (w *wrapper[CD, D, R, A]) shouldProcess(tx IndexedTx) (do bool, gas uint64) {
-	return w.Handler.ShouldProcess(tx, w.common.peek())
+	return w.Handler.ShouldProcess(tx, w.common.Peek())
 }
 
 func (w *wrapper[CD, D, R, A]) beforeWork(jobs int) {
@@ -213,19 +214,19 @@ func (w *wrapper[CD, D, R, A]) beforeWork(jobs int) {
 }
 
 func (w *wrapper[CD, D, R, A]) prefetch(sdb libevm.StateReader, job *prefetch) {
-	w.data[job.tx.Index].put(w.Prefetch(sdb, job.tx, w.common.peek()))
+	w.data[job.tx.Index].Put(w.Prefetch(sdb, job.tx, w.common.Peek()))
 }
 
 func (w *wrapper[CD, D, R, A]) process(sdb libevm.StateReader, job *process) {
 	defer w.txsBeingProcessed.Done()
 
 	idx := job.tx.Index
-	val := w.Process(sdb, job.tx, w.common.peek(), w.data[idx].take())
+	val := w.Process(sdb, job.tx, w.common.Peek(), w.data[idx].Take())
 	r := result[R]{
 		tx:  job.tx,
 		val: &val,
 	}
-	w.results[idx].put(r)
+	w.results[idx].Put(r)
 	w.whenProcessed <- TxResult[R]{
 		Tx:     job.tx,
 		Result: val,
@@ -233,14 +234,14 @@ func (w *wrapper[CD, D, R, A]) process(sdb libevm.StateReader, job *process) {
 }
 
 func (w *wrapper[CD, D, R, A]) nullResult(job *job) {
-	w.results[job.tx.Index].put(result[R]{
+	w.results[job.tx.Index].Put(result[R]{
 		tx:  job.tx,
 		val: nil,
 	})
 }
 
 func (w *wrapper[CD, D, R, A]) result(i int) (TxResult[R], bool) {
-	r := w.results[i].peek()
+	r := w.results[i].Peek()
 
 	txr := TxResult[R]{
 		Tx: r.tx,
@@ -271,11 +272,11 @@ func (w *wrapper[CD, D, R, A]) postProcess() {
 		TxOrder:      w.txOrder,
 		ProcessOrder: w.whenProcessed,
 	}
-	w.aggregated.put(w.PostProcess(w.common.peek(), res))
+	w.aggregated.Put(w.PostProcess(w.common.Peek(), res))
 }
 
 func (w *wrapper[CD, D, R, A]) finishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipts) {
-	w.AfterBlock(sdb, w.aggregated.take(), b, rs)
+	w.AfterBlock(sdb, w.aggregated.Take(), b, rs)
 
 	// [wrapper.postProcess] is guaranteed to have finished because it sets
 	// [wrapper.aggregated], from which we have just read. However
@@ -297,11 +298,11 @@ func (w *wrapper[CD, D, R, A]) finishBlock(sdb vm.StateDB, b *types.Block, rs ty
 	}()
 	wg.Wait()
 
-	w.common.take()
+	w.common.Take()
 	for _, v := range w.results[:w.totalTxsInBlock] {
 		// Every result channel is guaranteed to have some value in its buffer
 		// because [Processor.BeforeBlock] either sends a nil *R or it
 		// dispatches a job, which will send a non-nil *R.
-		v.take()
+		v.Take()
 	}
 }
