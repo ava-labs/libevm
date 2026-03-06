@@ -81,6 +81,7 @@ func TestValue(t *testing.T) {
 				errCause := errors.New("because")
 				cancel(errCause)
 				_, err := tt.withCtx(sut, ctx)
+				//nolint:testifylint // Doesn't need to fail the whole test with require
 				assert.ErrorIsf(t, err, errCause, "%sCtx() before Put() and context cancelled with %v", tt.method, errCause)
 			}
 
