@@ -34,8 +34,8 @@ func New[T any]() Value[T] {
 	}
 }
 
-// Put sets the value, unblocking any current and future getters. Put itself is
-// non-blocking, however it is NOT possible to overwrite the value without an
+// Put sets the value, unblocking any current and future getters. Put does not
+// require a concurrent getter, however it is NOT possible to overwrite the value without an
 // intervening call to [Value.Take], [Value.TryTake], or [Value.Reset].
 func (v Value[T]) Put(x T) {
 	v.ch <- x
