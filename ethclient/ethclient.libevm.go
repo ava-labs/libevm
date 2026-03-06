@@ -16,6 +16,7 @@
 
 package ethclient
 
-type (
-	FeeHistoryResult = feeHistoryResultMarshaling
-)
+// FeeHistoryResult exports the internal type, used for JSON-marshalling
+// [Client.FeeHistory] RPC results, to be converted to [ethereum.FeeHistory]
+// values.
+type FeeHistoryResult = feeHistoryResultMarshaling
