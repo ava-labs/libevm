@@ -18,12 +18,16 @@
 package ethapi
 
 import (
+	"context"
 	"math/big"
+	"time"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/internal/ethapi"
 	"github.com/ava-labs/libevm/params"
+	"github.com/ava-labs/libevm/rpc"
 )
 
 // Type aliases required by constructors.
@@ -49,7 +53,11 @@ type (
 
 // Type aliases for types used as arguments or responses to the APIs.
 type (
-	RPCTransaction = ethapi.RPCTransaction
+	RPCTransaction  = ethapi.RPCTransaction
+	TransactionArgs = ethapi.TransactionArgs
+	StateOverride   = ethapi.StateOverride
+	BlockOverrides  = ethapi.BlockOverrides
+	RevertError     = ethapi.RevertError
 )
 
 // NewEthereumAPI is identical to [ethapi.NewEthereumAPI].
@@ -90,4 +98,14 @@ func NewRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 // MarshalReceipt is identical to [ethapi.MarshalReceipt].
 func MarshalReceipt(r *types.Receipt, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex int) map[string]any {
 	return ethapi.MarshalReceipt(r, blockHash, blockNumber, signer, tx, txIndex)
+}
+
+// DoCall is identical to [ethapi.DoCall].
+func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
+	return ethapi.DoCall(ctx, b, args, blockNrOrHash, overrides, blockOverrides, timeout, globalGasCap)
+}
+
+// NewRevertError is identical to [ethapi.NewRevertError].
+func NewRevertError(revert []byte) *RevertError {
+	return ethapi.NewRevertError(revert)
 }
