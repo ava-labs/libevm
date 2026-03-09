@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slog"
 
@@ -28,25 +29,30 @@ import (
 
 type tbRecorder struct {
 	testing.TB
-	logged, errored, fataled []string
+	got recorded
 }
 
-// message extracts the log message from the handler's format args.
+type recorded struct {
+	Logf, Errorf, Fatalf []string
+}
+
+// message extracts the log message from the [tbHandler.Handle] call, which
+// always passes the original message as a string in `a[1]`.
 func message(_ string, a ...any) string {
 	s, _ := a[1].(string)
 	return s
 }
 
 func (r *tbRecorder) Logf(format string, a ...any) {
-	r.logged = append(r.logged, message(format, a...))
+	r.got.Logf = append(r.got.Logf, message(format, a...))
 }
 
 func (r *tbRecorder) Errorf(format string, a ...any) {
-	r.errored = append(r.errored, message(format, a...))
+	r.got.Errorf = append(r.got.Errorf, message(format, a...))
 }
 
 func (r *tbRecorder) Fatalf(format string, a ...any) {
-	r.fataled = append(r.fataled, message(format, a...))
+	r.got.Fatalf = append(r.got.Fatalf, message(format, a...))
 	panic("fatalf called") // prevent os.Exit(1) after log.Crit
 }
 
@@ -61,55 +67,50 @@ func TestTBLogHandler(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		level     slog.Level
-		wantLog   []string
-		wantErr   []string
-		wantFatal []string
+		level slog.Level
+		want  recorded
 	}{
 		{
-			name:  "warn_level",
 			level: slog.LevelWarn,
-			wantLog: []string{
-				"Austin", "you",
-			},
-			wantErr: []string{
-				"are", "cool!",
-			},
-			wantFatal: []string{
-				"Oh no you lost aura!",
+			want: recorded{
+				Logf: []string{
+					"Austin", "you",
+				},
+				Errorf: []string{
+					"are", "cool!",
+				},
+				Fatalf: []string{
+					"Oh no you lost aura!",
+				},
 			},
 		},
 		{
-			name:  "error_level",
 			level: slog.LevelError,
-			wantLog: []string{
-				"Austin", "you", "are",
-			},
-			wantErr: []string{
-				"cool!",
-			},
-			wantFatal: []string{
-				"Oh no you lost aura!",
+			want: recorded{
+				Logf: []string{
+					"Austin", "you", "are",
+				},
+				Errorf: []string{
+					"cool!",
+				},
+				Fatalf: []string{
+					"Oh no you lost aura!",
+				},
 			},
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := &tbRecorder{}
-			l := log.NewLogger(NewTBLogHandler(got, tt.level))
+		t.Run(tt.level.String(), func(t *testing.T) {
+			rec := &tbRecorder{}
+			doLogging(t, log.NewLogger(NewTBLogHandler(rec, tt.level)))
 
-			doLogging(t, l)
-
-			if diff := cmp.Diff(tt.wantLog, got.logged); diff != "" {
+			opts := cmp.Options{
+				cmp.AllowUnexported(tbRecorder{}),
+				cmpopts.IgnoreInterfaces(struct{ testing.TB }{}),
+			}
+			if diff := cmp.Diff(tt.want, rec.got, opts); diff != "" {
 				t.Errorf("Logf() calls diff (-want +got):\n%s", diff)
-			}
-			if diff := cmp.Diff(tt.wantErr, got.errored); diff != "" {
-				t.Errorf("Errorf() calls diff (-want +got):\n%s", diff)
-			}
-			if diff := cmp.Diff(tt.wantFatal, got.fataled); diff != "" {
-				t.Errorf("Fatalf() calls diff (-want +got):\n%s", diff)
 			}
 		})
 	}
