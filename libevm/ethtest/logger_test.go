@@ -17,10 +17,10 @@
 package ethtest
 
 import (
-	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slog"
 
@@ -29,37 +29,89 @@ import (
 
 type tbRecorder struct {
 	testing.TB
-	logged, errored []string
+	got recorded
+}
+
+type recorded struct {
+	Logf, Errorf, Fatalf []string
+}
+
+// message extracts the log message from the [tbHandler.Handle] call, which
+// always passes the original message as a string in `a[1]`.
+func message(_ string, a ...any) string {
+	s, _ := a[1].(string)
+	return s
 }
 
 func (r *tbRecorder) Logf(format string, a ...any) {
-	r.logged = append(r.logged, fmt.Sprintf(format, a...))
+	r.got.Logf = append(r.got.Logf, message(format, a...))
 }
 
 func (r *tbRecorder) Errorf(format string, a ...any) {
-	r.errored = append(r.errored, fmt.Sprintf(format, a...))
+	r.got.Errorf = append(r.got.Errorf, message(format, a...))
+}
+
+func (r *tbRecorder) Fatalf(format string, a ...any) {
+	r.got.Fatalf = append(r.got.Fatalf, message(format, a...))
+	panic("fatalf called") // prevent os.Exit(1) after log.Crit
 }
 
 func TestTBLogHandler(t *testing.T) {
-	got := &tbRecorder{}
-	l := log.NewLogger(NewTBLogHandler(got, slog.LevelDebug))
+	doLogging := func(t *testing.T, l log.Logger) {
+		t.Helper()
+		l.Debug("Austin")
+		l.Info("you")
+		l.Warn("are")
+		l.Error("cool!")
+		require.Panics(t, func() { l.Crit("Oh no you lost aura!") }, "Crit()")
+	}
 
-	l.Debug("Cockroach")            // Logf
-	l.Info("Hello", "who", "world") // Logf
-	l.Warn("Smoke")                 // Errorf
-	l.Error("Fire")                 // Errorf
-	// Crit will call os.Exit(1) so we don't test it.
+	tests := []struct {
+		level slog.Level
+		want  recorded
+	}{
+		{
+			level: slog.LevelWarn,
+			want: recorded{
+				Logf: []string{
+					"Austin", "you",
+				},
+				Errorf: []string{
+					"are", "cool!",
+				},
+				Fatalf: []string{
+					"Oh no you lost aura!",
+				},
+			},
+		},
+		{
+			level: slog.LevelError,
+			want: recorded{
+				Logf: []string{
+					"Austin", "you", "are",
+				},
+				Errorf: []string{
+					"cool!",
+				},
+				Fatalf: []string{
+					"Oh no you lost aura!",
+				},
+			},
+		},
+	}
 
-	require.Len(t, got.logged, 2, "Logf() calls")
-	require.Len(t, got.errored, 2, "Errorf() calls")
+	for _, tt := range tests {
+		t.Run(tt.level.String(), func(t *testing.T) {
+			rec := &tbRecorder{}
+			doLogging(t, log.NewLogger(NewTBLogHandler(rec, tt.level)))
 
-	// Check simplest elements without being brittle about exact formatting
-	// See https://testing.googleblog.com/2015/01/testing-on-toilet-change-detector-tests.html.
-	assert.Contains(t, got.logged[0], "Cockroach")
-	assert.Contains(t, got.logged[1], "Hello")
-	assert.Contains(t, got.logged[1], "who")
-	assert.Contains(t, got.logged[1], "world")
-
-	assert.Contains(t, got.errored[0], "Smoke")
-	assert.Contains(t, got.errored[1], "Fire")
+			opts := cmp.Options{
+				cmp.AllowUnexported(tbRecorder{}),
+				cmpopts.IgnoreInterfaces(struct{ testing.TB }{}),
+			}
+			if diff := cmp.Diff(tt.want, rec.got, opts); diff != "" {
+				t.Errorf("Logf() calls diff (-want +got):\n%s", diff)
+			}
+		})
+	}
 }
