@@ -53,11 +53,12 @@ type (
 
 // Type aliases for types used as arguments or responses to the APIs.
 type (
-	RPCTransaction  = ethapi.RPCTransaction
-	TransactionArgs = ethapi.TransactionArgs
-	StateOverride   = ethapi.StateOverride
-	BlockOverrides  = ethapi.BlockOverrides
-	RevertError     = ethapi.RevertError
+	RPCTransaction        = ethapi.RPCTransaction
+	TransactionArgs       = ethapi.TransactionArgs
+	StateOverride         = ethapi.StateOverride
+	BlockOverrides        = ethapi.BlockOverrides
+	RevertError           = ethapi.RevertError
+	SignTransactionResult = ethapi.SignTransactionResult
 )
 
 // NewEthereumAPI is identical to [ethapi.NewEthereumAPI].
