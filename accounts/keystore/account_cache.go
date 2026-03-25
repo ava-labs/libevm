@@ -27,10 +27,10 @@ import (
 	"sync"
 	"time"
 
-	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ava-labs/libevm/accounts"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/log"
+	mapset "github.com/deckarep/golang-set/v2"
 	"golang.org/x/exp/slices"
 )
 

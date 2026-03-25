@@ -23,8 +23,8 @@ import (
 	"sync"
 	"time"
 
-	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ava-labs/libevm/log"
+	mapset "github.com/deckarep/golang-set/v2"
 )
 
 // fileStat is metadata from the last scan used to detect in-place updates.
@@ -35,9 +35,9 @@ type fileStat struct {
 
 // fileCache is a cache of files seen during scan of keystore.
 type fileCache struct {
-	all      mapset.Set[string]       // Set of all files from the keystore folder
-	lastMod  time.Time                // Latest ModTime among key files in the last scan
-	fileStat map[string]fileStat      // path -> size and mod time at last scan
+	all      mapset.Set[string]  // Set of all files from the keystore folder
+	lastMod  time.Time           // Latest ModTime among key files in the last scan
+	fileStat map[string]fileStat // path -> size and mod time at last scan
 	mu       sync.Mutex
 }
 
