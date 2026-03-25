@@ -880,6 +880,13 @@ func TestPrecompileCallWithTracer(t *testing.T) {
 }
 
 func TestPrecompileOutboundCall_EIP150CallGas(t *testing.T) {
+	// Calldata bytes interpreted by the SUT precompile below (test harness only).
+	const (
+		opWithLegacyOutboundCallGas = 0xff // enable vm.WithLegacyOutboundCallGas for outbound Call
+		opNonZeroCallValue          = 0xee // attach 1 wei so CALL stipend rules apply (unless legacy)
+		opFixedCallGas5000          = 0xdd // outbound gas arg 5000 (< 63/64 of gasBudget)
+	)
+
 	const gasBudget = uint64(640_000)
 	wantCapped := gasBudget - gasBudget/64 // 63/64 of available when base cost is zero
 
@@ -894,11 +901,11 @@ func TestPrecompileOutboundCall_EIP150CallGas(t *testing.T) {
 				callGasArg := env.Gas()
 				for _, b := range input {
 					switch b {
-					case 0xff:
+					case opWithLegacyOutboundCallGas:
 						opts = append(opts, vm.WithLegacyOutboundCallGas())
-					case 0xee:
+					case opNonZeroCallValue:
 						val = uint256.NewInt(1)
-					case 0xdd:
+					case opFixedCallGas5000:
 						// Fixed outbound gas limit (less than 63/64 of a large budget).
 						callGasArg = 5000
 					}
@@ -935,7 +942,7 @@ func TestPrecompileOutboundCall_EIP150CallGas(t *testing.T) {
 	})
 
 	t.Run("legacy_full_gas", func(t *testing.T) {
-		ret, _, err := evm.Call(vm.AccountRef(common.Address{1}), sut, []byte{0xff}, gasBudget, uint256.NewInt(0))
+		ret, _, err := evm.Call(vm.AccountRef(common.Address{1}), sut, []byte{opWithLegacyOutboundCallGas}, gasBudget, uint256.NewInt(0))
 		require.NoError(t, err)
 		got := new(uint256.Int).SetBytes(common.TrimLeftZeroes(ret))
 		require.Equal(t, gasBudget, got.Uint64(), "WithLegacyOutboundCallGas should pass full requested gas to callee")
@@ -943,7 +950,7 @@ func TestPrecompileOutboundCall_EIP150CallGas(t *testing.T) {
 
 	t.Run("EIP150_nonzero_value_adds_call_stipend", func(t *testing.T) {
 		want := wantCapped + params.CallStipend
-		ret, _, err := evm.Call(vm.AccountRef(common.Address{1}), sut, []byte{0xee}, gasBudget, uint256.NewInt(0))
+		ret, _, err := evm.Call(vm.AccountRef(common.Address{1}), sut, []byte{opNonZeroCallValue}, gasBudget, uint256.NewInt(0))
 		require.NoError(t, err)
 		got := new(uint256.Int).SetBytes(common.TrimLeftZeroes(ret))
 		require.Equal(t, want, got.Uint64(), "callee gas should be 63/64-capped gas plus CALL stipend for value transfer")
@@ -951,14 +958,14 @@ func TestPrecompileOutboundCall_EIP150CallGas(t *testing.T) {
 
 	t.Run("EIP150_requested_gas_below_cap_unchanged", func(t *testing.T) {
 		const wantPassThrough = uint64(5000)
-		ret, _, err := evm.Call(vm.AccountRef(common.Address{1}), sut, []byte{0xdd}, gasBudget, uint256.NewInt(0))
+		ret, _, err := evm.Call(vm.AccountRef(common.Address{1}), sut, []byte{opFixedCallGas5000}, gasBudget, uint256.NewInt(0))
 		require.NoError(t, err)
 		got := new(uint256.Int).SetBytes(common.TrimLeftZeroes(ret))
 		require.Equal(t, wantPassThrough, got.Uint64(), "when the requested limit is below the 63/64 cap, callee receives the full requested amount")
 	})
 
 	t.Run("legacy_with_value_no_stipend", func(t *testing.T) {
-		ret, _, err := evm.Call(vm.AccountRef(common.Address{1}), sut, []byte{0xff, 0xee}, gasBudget, uint256.NewInt(0))
+		ret, _, err := evm.Call(vm.AccountRef(common.Address{1}), sut, []byte{opWithLegacyOutboundCallGas, opNonZeroCallValue}, gasBudget, uint256.NewInt(0))
 		require.NoError(t, err)
 		got := new(uint256.Int).SetBytes(common.TrimLeftZeroes(ret))
 		require.Equal(t, gasBudget, got.Uint64(), "legacy outbound gas must not add CALL stipend even when value is non-zero")
