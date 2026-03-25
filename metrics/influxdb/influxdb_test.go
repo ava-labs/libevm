@@ -23,6 +23,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -30,6 +32,21 @@ import (
 	"github.com/ava-labs/libevm/metrics/internal"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 )
+
+// stddev and variance serialization can differ by one ULP across GOARCH / Go versions.
+var influxStddevVarRE = regexp.MustCompile(`\b(stddev|variance)=([0-9.]+(?:[eE][+-]?[0-9]+)?)`)
+
+func normalizeInfluxStddevVariance(s string) string {
+	return influxStddevVarRE.ReplaceAllStringFunc(s, func(m string) string {
+		eq := strings.Index(m, "=")
+		key, val := m[:eq], m[eq+1:]
+		f, err := strconv.ParseFloat(val, 64)
+		if err != nil {
+			return m
+		}
+		return fmt.Sprintf("%s=%.12e", key, f)
+	})
+}
 
 func TestMain(m *testing.M) {
 	metrics.Enabled = true
@@ -62,7 +79,7 @@ func TestExampleV1(t *testing.T) {
 	} else {
 		want = string(wantB)
 	}
-	if have != want {
+	if normalizeInfluxStddevVariance(have) != normalizeInfluxStddevVariance(want) {
 		t.Errorf("\nhave:\n%v\nwant:\n%v\n", have, want)
 		t.Logf("have vs want:\n%v", findFirstDiffPos(have, want))
 	}
@@ -94,7 +111,7 @@ func TestExampleV2(t *testing.T) {
 	} else {
 		want = string(wantB)
 	}
-	if have != want {
+	if normalizeInfluxStddevVariance(have) != normalizeInfluxStddevVariance(want) {
 		t.Errorf("\nhave:\n%v\nwant:\n%v\n", have, want)
 		t.Logf("have vs want:\n%v", findFirstDiffPos(have, want))
 	}

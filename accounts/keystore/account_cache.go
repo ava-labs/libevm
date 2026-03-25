@@ -79,7 +79,10 @@ func newAccountCache(keydir string) (*accountCache, chan struct{}) {
 		keydir: keydir,
 		byAddr: make(map[common.Address][]accounts.Account),
 		notify: make(chan struct{}, 1),
-		fileC:  fileCache{all: mapset.NewThreadUnsafeSet[string]()},
+		fileC: fileCache{
+			all:      mapset.NewThreadUnsafeSet[string](),
+			fileStat: make(map[string]fileStat),
+		},
 	}
 	ac.watcher = newWatcher(ac)
 	return ac, ac.notify

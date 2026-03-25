@@ -27,11 +27,18 @@ import (
 	"github.com/ava-labs/libevm/log"
 )
 
+// fileStat is metadata from the last scan used to detect in-place updates.
+type fileStat struct {
+	mod  time.Time
+	size int64
+}
+
 // fileCache is a cache of files seen during scan of keystore.
 type fileCache struct {
-	all     mapset.Set[string] // Set of all files from the keystore folder
-	lastMod time.Time          // Last time instance when a file was modified
-	mu      sync.Mutex
+	all      mapset.Set[string]       // Set of all files from the keystore folder
+	lastMod  time.Time                // Latest ModTime among key files in the last scan
+	fileStat map[string]fileStat      // path -> size and mod time at last scan
+	mu       sync.Mutex
 }
 
 // scan performs a new scan on the given directory, compares against the already
@@ -54,6 +61,7 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set[string], mapset.Set[string]
 	mods := mapset.NewThreadUnsafeSet[string]()
 
 	var newLastMod time.Time
+	newFileStat := make(map[string]fileStat)
 	for _, fi := range files {
 		path := filepath.Join(keyDir, fi.Name())
 		// Skip any non-key files from the folder
@@ -69,8 +77,20 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set[string], mapset.Set[string]
 			return nil, nil, nil, err
 		}
 		modified := info.ModTime()
-		if modified.After(fc.lastMod) {
+		size := info.Size()
+		newFileStat[path] = fileStat{mod: modified, size: size}
+
+		switch {
+		case modified.After(fc.lastMod):
+			// Legacy coarse signal (new files and clock moved forward).
 			mods.Add(path)
+		case fc.all.Contains(path):
+			// In-place edits can keep the same coarse ModTime as fc.lastMod (e.g. same
+			// wall-clock second) while still changing content; compare per-file metadata.
+			prev := fc.fileStat[path]
+			if prev.size != size || !prev.mod.Equal(modified) {
+				mods.Add(path)
+			}
 		}
 		if modified.After(newLastMod) {
 			newLastMod = modified
@@ -83,7 +103,7 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set[string], mapset.Set[string]
 	creates := all.Difference(fc.all)   // Creates = current - previous
 	updates := mods.Difference(creates) // Updates = modified - creates
 
-	fc.all, fc.lastMod = all, newLastMod
+	fc.all, fc.lastMod, fc.fileStat = all, newLastMod, newFileStat
 	t3 := time.Now()
 
 	// Report on the scanning stats and return
