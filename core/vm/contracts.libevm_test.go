@@ -984,4 +984,30 @@ func TestPrecompileOutboundCall_EIP150CallGas(t *testing.T) {
 		got := new(uint256.Int).SetBytes(common.TrimLeftZeroes(ret))
 		require.Equal(t, wantChild, got.Uint64(), "callee gas is capped to 63/64 of remaining even when the requested limit is higher")
 	})
+
+	t.Run("pre_EIP150_rules_skip_outbound_gas_adjustment", func(t *testing.T) {
+		// Same fork heights as TestChainConfig except EIP-150 activates far in the future,
+		// so [params.Rules.IsEIP150] is false at blockCtx.BlockNumber.
+		cfg := *params.TestChainConfig
+		cfg.EIP150Block = big.NewInt(10_000)
+		require.False(t, cfg.IsEIP150(blockCtx.BlockNumber), "sanity: test block is before EIP-150 fork")
+
+		_, evmFrontier := ethtest.NewZeroEVM(t,
+			ethtest.WithChainConfig(&cfg),
+			ethtest.WithBlockContext(blockCtx),
+		)
+		evmFrontier.StateDB.AddBalance(sut, uint256.NewInt(1e18))
+
+		ret, _, err := evmFrontier.Call(vm.AccountRef(common.Address{1}), sut, nil, gasBudget, uint256.NewInt(0))
+		require.NoError(t, err)
+		got := new(uint256.Int).SetBytes(common.TrimLeftZeroes(ret))
+		require.Equal(t, gasBudget, got.Uint64(),
+			"without EIP-150 rules, outbound Call uses full requested gas (no 63/64) even without WithLegacyOutboundCallGas")
+
+		ret, _, err = evmFrontier.Call(vm.AccountRef(common.Address{1}), sut, []byte{opNonZeroCallValue}, gasBudget, uint256.NewInt(0))
+		require.NoError(t, err)
+		got = new(uint256.Int).SetBytes(common.TrimLeftZeroes(ret))
+		require.Equal(t, gasBudget, got.Uint64(),
+			"without EIP-150 rules, non-zero outbound value must not add CALL stipend to callee gas")
+	})
 }
