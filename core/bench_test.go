@@ -87,9 +87,10 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 	//	cpy.setSignatureValues(signer.ChainID(), v, r, s)
 	// After this operation, the data can be reused by the caller.
 	data := make([]byte, nbytes)
+	rules := params.NonActivatedConfig.Rules(common.Big0, false, 0)
 	return func(i int, gen *BlockGen) {
 		toaddr := common.Address{}
-		gas, _ := IntrinsicGas(data, nil, nil, false, false, false, false)
+		gas, _ := IntrinsicGas(data, nil, nil, false, &rules)
 		signer := gen.Signer()
 		gasPrice := big.NewInt(0)
 		if gen.header.BaseFee != nil {
