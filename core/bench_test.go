@@ -80,10 +80,24 @@ var (
 // value-transfer transaction with n bytes of extra data in each
 // block.
 func genValueTx(nbytes int) func(int, *BlockGen) {
+<<<<<<< HEAD
 	return func(i int, gen *BlockGen) {
 		toaddr := common.Address{}
 		data := make([]byte, nbytes)
 		gas, _ := IntrinsicGas(data, nil, false, false, false, false)
+=======
+	// We can reuse the data for all transactions.
+	// During signing, the method tx.WithSignature(s, sig)
+	// performs:
+	// 	cpy := tx.inner.copy()
+	//	cpy.setSignatureValues(signer.ChainID(), v, r, s)
+	// After this operation, the data can be reused by the caller.
+	data := make([]byte, nbytes)
+	rules := params.NonActivatedConfig.Rules(common.Big0, false, 0)
+	return func(i int, gen *BlockGen) {
+		toaddr := common.Address{}
+		gas, _ := IntrinsicGas(data, nil, nil, false, &rules)
+>>>>>>> 6f1b514f2 (core: refactor IntrinsicGas function to accept rules parameter)
 		signer := gen.Signer()
 		gasPrice := big.NewInt(0)
 		if gen.header.BaseFee != nil {

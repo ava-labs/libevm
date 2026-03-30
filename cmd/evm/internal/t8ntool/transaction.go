@@ -133,8 +133,14 @@ func Transaction(ctx *cli.Context) error {
 			r.Address = sender
 		}
 		// Check intrinsic gas
+<<<<<<< HEAD
 		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil,
 			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int)), chainConfig.IsShanghai(new(big.Int), 0)); err != nil {
+=======
+		rules := chainConfig.Rules(common.Big0, true, 0)
+		gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, &rules)
+		if err != nil {
+>>>>>>> 6f1b514f2 (core: refactor IntrinsicGas function to accept rules parameter)
 			r.Error = err
 			results = append(results, r)
 			continue
