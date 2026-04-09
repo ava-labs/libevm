@@ -309,9 +309,7 @@ func intrinsicGas(data []byte, access types.AccessList, txTo *common.Address, ru
 		data,
 		access,
 		create,
-		rules.IsHomestead,
-		rules.IsIstanbul, // EIP-2028
-		rules.IsShanghai, // EIP-3860
+		*rules,
 	)
 }
 
