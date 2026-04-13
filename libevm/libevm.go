@@ -31,6 +31,16 @@ type PrecompiledContract interface {
 	Run(input []byte) ([]byte, error)
 }
 
+// AccessList mirrors core/types.AccessList for packages that cannot import
+// core/types without causing a circular dependency.
+type AccessList []AccessTuple
+
+// AccessTuple is the element type of an [AccessList].
+type AccessTuple struct {
+	Address     common.Address
+	StorageKeys []common.Hash
+}
+
 // StateReader is a subset of vm.StateDB, exposing only methods that read from
 // but do not modify state. See method comments in vm.StateDB, which aren't
 // copied here as they risk becoming outdated.

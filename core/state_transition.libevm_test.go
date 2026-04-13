@@ -17,6 +17,7 @@ package core_test
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"testing"
 
@@ -59,6 +60,166 @@ func TestCanExecuteTransaction(t *testing.T) {
 	}
 	_, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(30e6))
 	require.EqualError(t, err, makeErr(msg.From, msg.To, value).Error())
+}
+
+func TestIntrinsicGasAccessListHook(t *testing.T) {
+	accessList := types.AccessList{{
+		Address: common.Address{1},
+		StorageKeys: []common.Hash{
+			{1},
+			{2},
+		},
+	}}
+	defaultAccessListGas := uint64(len(accessList))*params.TxAccessListAddressGas +
+		uint64(accessList.StorageKeys())*params.TxAccessListStorageKeyGas
+
+	tests := []struct {
+		name       string
+		accessList types.AccessList
+		hookGas    uint64
+		override   bool
+		wantGas    uint64
+		wantErr    error
+	}{
+		{
+			name:       "hook_overrides_with_custom_gas",
+			accessList: accessList,
+			hookGas:    100,
+			override:   true,
+			wantGas:    params.TxGas + 100,
+		},
+		{
+			name:       "hook_overrides_with_zero",
+			accessList: accessList,
+			hookGas:    0,
+			override:   true,
+			wantGas:    params.TxGas,
+		},
+		{
+			name:       "hook_does_not_override_uses_default",
+			accessList: accessList,
+			hookGas:    0,
+			override:   false,
+			wantGas:    params.TxGas + defaultAccessListGas,
+		},
+		{
+			name:       "nil_access_list_hook_not_called",
+			accessList: nil,
+			hookGas:    100,
+			override:   true,
+			wantGas:    params.TxGas,
+		},
+		{
+			name:       "empty_access_list_with_override",
+			accessList: types.AccessList{},
+			hookGas:    100,
+			override:   true,
+			wantGas:    params.TxGas + 100,
+		},
+		{
+			name:       "hook_gas_causes_overflow",
+			accessList: accessList,
+			hookGas:    math.MaxUint64,
+			override:   true,
+			wantErr:    core.ErrGasUintOverflow,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hooks := &hookstest.Stub{
+				AccessListGasFn: func(accessListDTO libevm.AccessList) (uint64, bool) {
+					return tt.hookGas, tt.override
+				},
+			}
+			hooks.Register(t)
+
+			rules := params.NonActivatedConfig.Rules(new(big.Int), false, 0)
+			got, err := core.IntrinsicGas(nil, tt.accessList, false, rules)
+
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err, "core.IntrinsicGas(...)")
+			require.Equal(t, tt.wantGas, got)
+		})
+	}
+}
+
+func TestIntrinsicGasAccessListHookDTO(t *testing.T) {
+	tests := []struct {
+		name       string
+		accessList types.AccessList
+	}{
+		{
+			name: "single_address_multiple_keys",
+			accessList: types.AccessList{{
+				Address:     common.Address{1},
+				StorageKeys: []common.Hash{{1}, {2}},
+			}},
+		},
+		{
+			name: "multiple_addresses",
+			accessList: types.AccessList{
+				{
+					Address:     common.Address{1},
+					StorageKeys: []common.Hash{{1}},
+				},
+				{
+					Address:     common.Address{2},
+					StorageKeys: []common.Hash{{2}, {3}},
+				},
+			},
+		},
+		{
+			name: "address_with_no_storage_keys",
+			accessList: types.AccessList{{
+				Address:     common.Address{1},
+				StorageKeys: []common.Hash{},
+			}},
+		},
+		{
+			name: "address_with_nil_storage_keys",
+			accessList: types.AccessList{{
+				Address:     common.Address{1},
+				StorageKeys: nil,
+			}},
+		},
+		{
+			name:       "empty_access_list",
+			accessList: types.AccessList{},
+		},
+		{
+			name: "full_address_and_hash",
+			accessList: types.AccessList{{
+				Address: common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678"),
+				StorageKeys: []common.Hash{
+					common.HexToHash("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"),
+				},
+			}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hooks := &hookstest.Stub{
+				AccessListGasFn: func(dto libevm.AccessList) (uint64, bool) {
+					require.Len(t, dto, len(tt.accessList), "access list length mismatch")
+					for i, tuple := range tt.accessList {
+						require.Equal(t, tuple.Address, dto[i].Address, "address mismatch at index %d", i)
+						require.Equal(t, tuple.StorageKeys, dto[i].StorageKeys, "storage keys mismatch at index %d", i)
+					}
+					return 0, true
+				},
+			}
+			hooks.Register(t)
+
+			rules := params.NonActivatedConfig.Rules(new(big.Int), false, 0)
+			_, err := core.IntrinsicGas(nil, tt.accessList, false, rules)
+			require.NoError(t, err, "core.IntrinsicGas(...)")
+		})
+	}
 }
 
 func TestMinimumGasConsumption(t *testing.T) {

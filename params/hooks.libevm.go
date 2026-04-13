@@ -55,6 +55,12 @@ type RulesHooks interface {
 	// received slice. The value it returns MUST be consistent with the
 	// behaviour of the PrecompileOverride hook.
 	ActivePrecompiles([]common.Address) []common.Address
+	// AccessListGas receives the transaction access list and returns the
+	// intrinsic gas to be charged for it. If override is true, the returned gas
+	// replaces the default per-address and per-storage-key calculation. If
+	// override is false, the default calculation is used. This hook is not
+	// called if the access list is nil.
+	AccessListGas(accessList libevm.AccessList) (gas uint64, override bool)
 	// MinimumGasConsumption receives a transaction's gas limit and returns the
 	// minimum quantity of gas units to be charged for said transaction. If the
 	// returned value is greater than the transaction's limit, the minimum spend
@@ -138,6 +144,11 @@ func (NOOPHooks) PrecompileOverride(common.Address) (libevm.PrecompiledContract,
 // ActivePrecompiles echoes the active addresses unchanged.
 func (NOOPHooks) ActivePrecompiles(active []common.Address) []common.Address {
 	return active
+}
+
+// AccessListGas returns override=false, signalling to use the default calculation.
+func (NOOPHooks) AccessListGas(_ libevm.AccessList) (uint64, bool) {
+	return 0, false
 }
 
 // MinimumGasConsumption always returns 0.
