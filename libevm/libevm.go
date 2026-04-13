@@ -35,7 +35,8 @@ type PrecompiledContract interface {
 // core/types without causing a circular dependency.
 type AccessList []AccessTuple
 
-// AccessTuple is the element type of an [AccessList].
+// AccessTuple mirrors core/types.AccessTuple for packages that cannot import
+// core/types without causing a circular dependency.
 type AccessTuple struct {
 	Address     common.Address
 	StorageKeys []common.Hash
