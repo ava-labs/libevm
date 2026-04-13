@@ -71,7 +71,7 @@ func TestIntrinsicGasAccessListHook(t *testing.T) {
 		},
 	}}
 	defaultAccessListGas := uint64(len(accessList))*params.TxAccessListAddressGas +
-		uint64(accessList.StorageKeys())*params.TxAccessListStorageKeyGas
+		uint64(accessList.StorageKeys())*params.TxAccessListStorageKeyGas //nolint:gosec // Known to not overflow
 
 	tests := []struct {
 		name       string
