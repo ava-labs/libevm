@@ -61,7 +61,7 @@ type RulesHooks interface {
 	// override is false, the default calculation is used. This hook is not
 	// called if the access list is nil. The hook may return an error (e.g., for
 	// gas overflow).
-	AccessListGas(accessList libevm.AccessList) (gas uint64, override bool, _ error)
+	AccessListGas(accessList libevm.AccessList) (gas uint64, override bool, err error)
 	// MinimumGasConsumption receives a transaction's gas limit and returns the
 	// minimum quantity of gas units to be charged for said transaction. If the
 	// returned value is greater than the transaction's limit, the minimum spend
