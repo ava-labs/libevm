@@ -77,6 +77,7 @@ func TestIntrinsicGasAccessListHook(t *testing.T) {
 		name       string
 		accessList types.AccessList
 		hookGas    uint64
+		hookErr    error
 		override   bool
 		wantGas    uint64
 		wantErr    error
@@ -123,13 +124,20 @@ func TestIntrinsicGasAccessListHook(t *testing.T) {
 			override:   true,
 			wantErr:    core.ErrGasUintOverflow,
 		},
+		{
+			name:       "hook_returns_error",
+			accessList: accessList,
+			hookErr:    core.ErrGasUintOverflow,
+			override:   true,
+			wantErr:    core.ErrGasUintOverflow,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hooks := &hookstest.Stub{
-				AccessListGasFn: func(accessListDTO libevm.AccessList) (uint64, bool) {
-					return tt.hookGas, tt.override
+				AccessListGasFn: func(accessListDTO libevm.AccessList) (uint64, bool, error) {
+					return tt.hookGas, tt.override, tt.hookErr
 				},
 			}
 			hooks.Register(t)
@@ -204,13 +212,13 @@ func TestIntrinsicGasAccessListHookDTO(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hooks := &hookstest.Stub{
-				AccessListGasFn: func(dto libevm.AccessList) (uint64, bool) {
+				AccessListGasFn: func(dto libevm.AccessList) (uint64, bool, error) {
 					require.Len(t, dto, len(tt.accessList), "access list length mismatch")
 					for i, tuple := range tt.accessList {
 						require.Equal(t, tuple.Address, dto[i].Address, "address mismatch at index %d", i)
 						require.Equal(t, tuple.StorageKeys, dto[i].StorageKeys, "storage keys mismatch at index %d", i)
 					}
-					return 0, true
+					return 0, true, nil
 				},
 			}
 			hooks.Register(t)

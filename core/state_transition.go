@@ -111,7 +111,10 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 		}
 	}
 	if accessList != nil {
-		accessListGas := accessListIntrinsicGas(accessList, rules)
+		accessListGas, err := accessListIntrinsicGas(accessList, rules)
+		if err != nil {
+			return 0, err
+		}
 		if math.MaxUint64-gas < accessListGas {
 			return 0, ErrGasUintOverflow
 		}
@@ -120,14 +123,19 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 	return gas, nil
 }
 
-// accessListIntrinsicGas returns the intrinsic gas for an access list.
-// It first checks if the hook overrides the gas calculation, and if so, returns the hook's value.
-// If the hook does not override, it returns the default upstream intrinsic gas.
-func accessListIntrinsicGas(accessList types.AccessList, rules params.Rules) uint64 {
-	if hookGas, override := rules.Hooks().AccessListGas(convertAccessList(accessList)); override {
-		return hookGas
+// accessListIntrinsicGas returns the intrinsic gas for an access list. If the
+// hook returns override=true, uses the hook's gas value; otherwise uses the
+// default per-address and per-storage-key calculation. Returns an error if the
+// hook returns one.
+func accessListIntrinsicGas(accessList types.AccessList, rules params.Rules) (uint64, error) {
+	hookGas, override, err := rules.Hooks().AccessListGas(convertAccessList(accessList))
+	if err != nil {
+		return 0, err
 	}
-	return defaultAccessListGas(accessList)
+	if override {
+		return hookGas, nil
+	}
+	return defaultAccessListGas(accessList), nil
 }
 
 // defaultAccessListGas returns the default upstream intrinsic gas for an access list.
