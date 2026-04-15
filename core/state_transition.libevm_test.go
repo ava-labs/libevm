@@ -150,7 +150,7 @@ func TestIntrinsicGasAccessListHook(t *testing.T) {
 				return
 			}
 			require.NoError(t, err, "core.IntrinsicGas(...)")
-			require.Equal(t, tt.wantGas, got)
+			require.Equal(t, tt.wantGas, got, "core.IntrinsicGas(...)")
 		})
 	}
 }
