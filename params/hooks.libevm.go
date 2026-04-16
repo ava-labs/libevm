@@ -59,7 +59,7 @@ type RulesHooks interface {
 	// intrinsic gas to be charged for it. If override is true, the returned gas
 	// replaces the default per-address and per-storage-key calculation. If
 	// override is false, the default calculation is used. This hook is not
-	// called if the access list is nil. The hook may return an error (e.g., for
+	// called if the access list is nil. The hook MAY return an error (e.g., for
 	// gas overflow).
 	AccessListGas(accessList libevm.AccessList) (gas uint64, override bool, err error)
 	// MinimumGasConsumption receives a transaction's gas limit and returns the
