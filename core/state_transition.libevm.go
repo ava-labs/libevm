@@ -18,8 +18,11 @@ package core
 
 import (
 	"fmt"
+	"math"
 
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/params"
 )
@@ -105,4 +108,30 @@ func (st *StateTransition) consumeMinimumGas() {
 		st.gasRemaining,
 		limit-minConsume,
 	)
+}
+
+// libevmAccessListGas is a convenience wrapper for calling the
+// [params.RulesHooks.AccessListGas] hook. It converts the raw access list to a
+// DTO and calls the hook. Returns the gas to be charged for the access list,
+// whether the hook overrides the default calculation and any error.
+// It MAY return an error for gas overflow if the hook returns a gas value that
+// would cause an overflow with [currGas]. It MUST be called with a non-nil
+// access list.
+func libevmAccessListGas(currGas uint64, raw types.AccessList, rules params.Rules) (gas uint64, override bool, err error) {
+	list := make(libevm.AccessList, len(raw))
+	for i, tuple := range raw {
+		list[i] = libevm.AccessTuple{
+			Address:     tuple.Address,
+			StorageKeys: tuple.StorageKeys,
+		}
+	}
+
+	hookGas, override, err := rules.Hooks().AccessListGas(list)
+	if !override || err != nil {
+		return 0, false, err
+	}
+	if math.MaxUint64-currGas < hookGas {
+		return 0, false, ErrGasUintOverflow
+	}
+	return hookGas, true, nil
 }

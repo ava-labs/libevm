@@ -26,7 +26,6 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto/kzg4844"
-	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 )
@@ -111,49 +110,16 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 		}
 	}
 	if accessList != nil {
-		accessListGas, err := accessListIntrinsicGas(accessList, rules)
-		if err != nil {
+		if hookGas, override, err := libevmAccessListGas(gas, accessList, rules); err != nil {
 			return 0, err
+		} else if override {
+			gas += hookGas
+		} else { //libevm: upstream original
+			gas += uint64(len(accessList)) * params.TxAccessListAddressGas
+			gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
 		}
-		if math.MaxUint64-gas < accessListGas {
-			return 0, ErrGasUintOverflow
-		}
-		gas += accessListGas
 	}
 	return gas, nil
-}
-
-// accessListIntrinsicGas returns the intrinsic gas for an access list. If the
-// hook returns override=true, uses the hook's gas value; otherwise uses the
-// default per-address and per-storage-key calculation. Returns an error if the
-// hook returns one.
-func accessListIntrinsicGas(accessList types.AccessList, rules params.Rules) (uint64, error) {
-	hookGas, override, err := rules.Hooks().AccessListGas(convertAccessList(accessList))
-	if err != nil {
-		return 0, err
-	}
-	if override {
-		return hookGas, nil
-	}
-	return defaultAccessListGas(accessList), nil
-}
-
-// defaultAccessListGas returns the default upstream intrinsic gas for an access list.
-func defaultAccessListGas(accessList types.AccessList) uint64 {
-	return uint64(len(accessList))*params.TxAccessListAddressGas +
-		uint64(accessList.StorageKeys())*params.TxAccessListStorageKeyGas
-}
-
-// convertAccessList converts a types.AccessList to a libevm.AccessList.
-func convertAccessList(accessList types.AccessList) libevm.AccessList {
-	al := make(libevm.AccessList, len(accessList))
-	for i, tuple := range accessList {
-		al[i] = libevm.AccessTuple{
-			Address:     tuple.Address,
-			StorageKeys: tuple.StorageKeys,
-		}
-	}
-	return al
 }
 
 // toWordSize returns the ceiled word size required for init code payment calculation.

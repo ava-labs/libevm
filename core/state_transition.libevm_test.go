@@ -16,6 +16,7 @@
 package core_test
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -73,6 +74,8 @@ func TestIntrinsicGasAccessListHook(t *testing.T) {
 	defaultAccessListGas := uint64(len(accessList))*params.TxAccessListAddressGas +
 		uint64(accessList.StorageKeys())*params.TxAccessListStorageKeyGas //nolint:gosec // Known to not overflow
 
+	testErr := errors.New("test error")
+
 	tests := []struct {
 		name       string
 		accessList types.AccessList
@@ -106,8 +109,6 @@ func TestIntrinsicGasAccessListHook(t *testing.T) {
 		{
 			name:       "nil_access_list_hook_not_called",
 			accessList: nil,
-			hookGas:    100,
-			override:   true,
 			wantGas:    params.TxGas,
 		},
 		{
@@ -127,16 +128,23 @@ func TestIntrinsicGasAccessListHook(t *testing.T) {
 		{
 			name:       "hook_returns_error",
 			accessList: accessList,
-			hookErr:    core.ErrGasUintOverflow,
+			hookErr:    testErr,
 			override:   true,
-			wantErr:    core.ErrGasUintOverflow,
+			wantErr:    testErr,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			hookCalled := false
 			hooks := &hookstest.Stub{
-				AccessListGasFn: func(accessListDTO libevm.AccessList) (uint64, bool, error) {
+				AccessListGasFn: func(dto libevm.AccessList) (uint64, bool, error) {
+					require.Len(t, dto, len(tt.accessList), "access list length mismatch")
+					for i, tuple := range tt.accessList {
+						require.Equal(t, tuple.Address, dto[i].Address, "address mismatch at index %d", i)
+						require.Equal(t, tuple.StorageKeys, dto[i].StorageKeys, "storage keys mismatch at index %d", i)
+					}
+					hookCalled = true
 					return tt.hookGas, tt.override, tt.hookErr
 				},
 			}
@@ -145,87 +153,9 @@ func TestIntrinsicGasAccessListHook(t *testing.T) {
 			rules := params.NonActivatedConfig.Rules(new(big.Int), false, 0)
 			got, err := core.IntrinsicGas(nil, tt.accessList, false, rules)
 
-			if tt.wantErr != nil {
-				require.ErrorIs(t, err, tt.wantErr)
-				return
-			}
-			require.NoError(t, err, "core.IntrinsicGas(...)")
+			require.ErrorIs(t, err, tt.wantErr)
 			require.Equal(t, tt.wantGas, got)
-		})
-	}
-}
-
-func TestIntrinsicGasAccessListHookDTO(t *testing.T) {
-	tests := []struct {
-		name       string
-		accessList types.AccessList
-	}{
-		{
-			name: "single_address_multiple_keys",
-			accessList: types.AccessList{{
-				Address:     common.Address{1},
-				StorageKeys: []common.Hash{{1}, {2}},
-			}},
-		},
-		{
-			name: "multiple_addresses",
-			accessList: types.AccessList{
-				{
-					Address:     common.Address{1},
-					StorageKeys: []common.Hash{{1}},
-				},
-				{
-					Address:     common.Address{2},
-					StorageKeys: []common.Hash{{2}, {3}},
-				},
-			},
-		},
-		{
-			name: "address_with_no_storage_keys",
-			accessList: types.AccessList{{
-				Address:     common.Address{1},
-				StorageKeys: []common.Hash{},
-			}},
-		},
-		{
-			name: "address_with_nil_storage_keys",
-			accessList: types.AccessList{{
-				Address:     common.Address{1},
-				StorageKeys: nil,
-			}},
-		},
-		{
-			name:       "empty_access_list",
-			accessList: types.AccessList{},
-		},
-		{
-			name: "full_address_and_hash",
-			accessList: types.AccessList{{
-				Address: common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678"),
-				StorageKeys: []common.Hash{
-					common.HexToHash("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"),
-				},
-			}},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			hooks := &hookstest.Stub{
-				AccessListGasFn: func(dto libevm.AccessList) (uint64, bool, error) {
-					require.Len(t, dto, len(tt.accessList), "access list length mismatch")
-					for i, tuple := range tt.accessList {
-						require.Equal(t, tuple.Address, dto[i].Address, "address mismatch at index %d", i)
-						require.Equal(t, tuple.StorageKeys, dto[i].StorageKeys, "storage keys mismatch at index %d", i)
-					}
-					return 0, true, nil
-				},
-			}
-			hooks.Register(t)
-
-			rules := params.NonActivatedConfig.Rules(new(big.Int), false, 0)
-			_, err := core.IntrinsicGas(nil, tt.accessList, false, rules)
-			require.NoError(t, err, "core.IntrinsicGas(...)")
+			require.Equal(t, tt.accessList != nil, hookCalled)
 		})
 	}
 }
