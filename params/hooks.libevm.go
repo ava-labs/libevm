@@ -147,7 +147,7 @@ func (NOOPHooks) ActivePrecompiles(active []common.Address) []common.Address {
 	return active
 }
 
-// AccessListGas returns override=false, signalling to use the default calculation.
+// AccessListGas returns override=false and nil error, signalling to use the default calculation.
 func (NOOPHooks) AccessListGas(_ libevm.AccessList) (uint64, bool, error) {
 	return 0, false, nil
 }
