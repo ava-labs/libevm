@@ -153,8 +153,8 @@ func TestIntrinsicGasAccessListHook(t *testing.T) {
 			rules := params.NonActivatedConfig.Rules(new(big.Int), false, 0)
 			got, err := core.IntrinsicGas(nil, tt.accessList, false, rules)
 
-			require.ErrorIs(t, err, tt.wantErr)
-			require.Equal(t, tt.wantGas, got)
+			require.ErrorIs(t, err, tt.wantErr, "core.IntrinsicGas(...)")
+			require.Equal(t, tt.wantGas, got, "core.IntrinsicGas(...)")
 			require.Equal(t, tt.accessList != nil, hookCalled)
 		})
 	}
