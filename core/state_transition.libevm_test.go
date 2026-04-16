@@ -141,8 +141,8 @@ func TestIntrinsicGasAccessListHook(t *testing.T) {
 				AccessListGasFn: func(dto libevm.AccessList) (uint64, bool, error) {
 					require.Len(t, dto, len(tt.accessList), "access list length mismatch")
 					for i, tuple := range tt.accessList {
-						require.Equal(t, tuple.Address, dto[i].Address, "address mismatch at index %d", i)
-						require.Equal(t, tuple.StorageKeys, dto[i].StorageKeys, "storage keys mismatch at index %d", i)
+						assert.Equal(t, tuple.Address, dto[i].Address, "address mismatch at index %d", i)
+						assert.Equal(t, tuple.StorageKeys, dto[i].StorageKeys, "storage keys mismatch at index %d", i)
 					}
 					hookCalled = true
 					return tt.hookGas, tt.override, tt.hookErr
