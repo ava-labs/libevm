@@ -110,14 +110,11 @@ func (st *StateTransition) consumeMinimumGas() {
 	)
 }
 
-// libevmAccessListGas is a convenience wrapper for calling the
-// [params.RulesHooks.AccessListGas] hook. It converts the raw access list to a
-// DTO and calls the hook. Returns the gas to be charged for the access list,
-// whether the hook overrides the default calculation and any error.
-// It MAY return an error for gas overflow if the hook returns a gas value that
-// would cause an overflow with [currGas]. It MUST be called with a non-nil
-// access list.
 func libevmAccessListGas(currGas uint64, raw types.AccessList, rules params.Rules) (gas uint64, override bool, err error) {
+	if raw == nil {
+		return 0, false, nil
+	}
+
 	list := make(libevm.AccessList, len(raw))
 	for i, tuple := range raw {
 		list[i] = libevm.AccessTuple{
@@ -126,12 +123,12 @@ func libevmAccessListGas(currGas uint64, raw types.AccessList, rules params.Rule
 		}
 	}
 
-	hookGas, override, err := rules.Hooks().AccessListGas(list)
+	extra, override, err := rules.Hooks().AccessListGas(list)
 	if !override || err != nil {
 		return 0, false, err
 	}
-	if math.MaxUint64-currGas < hookGas {
+	if math.MaxUint64-currGas < extra {
 		return 0, false, ErrGasUintOverflow
 	}
-	return hookGas, true, nil
+	return extra, true, nil
 }

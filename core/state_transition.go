@@ -109,15 +109,13 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 			gas += lenWords * params.InitCodeWordGas
 		}
 	}
-	if accessList != nil {
-		if hookGas, override, err := libevmAccessListGas(gas, accessList, rules); err != nil {
-			return 0, err
-		} else if override {
-			gas += hookGas
-		} else { //libevm: upstream original
-			gas += uint64(len(accessList)) * params.TxAccessListAddressGas
-			gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
-		}
+	if g, override, err := libevmAccessListGas(gas, accessList, rules); err != nil {
+		return 0, err
+	} else if override {
+		gas += g
+	} else if accessList != nil { //libevm: upstream origianl
+		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
+		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
 	}
 	return gas, nil
 }
