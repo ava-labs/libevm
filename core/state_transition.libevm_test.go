@@ -16,11 +16,14 @@
 package core_test
 
 import (
+	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"testing"
 
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
@@ -59,6 +62,103 @@ func TestCanExecuteTransaction(t *testing.T) {
 	}
 	_, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(30e6))
 	require.EqualError(t, err, makeErr(msg.From, msg.To, value).Error())
+}
+
+func TestIntrinsicGasAccessListHook(t *testing.T) {
+	accessList := types.AccessList{{
+		Address: common.Address{1},
+		StorageKeys: []common.Hash{
+			{1},
+			{2},
+		},
+	}}
+	defaultAccessListGas := uint64(len(accessList))*params.TxAccessListAddressGas +
+		uint64(accessList.StorageKeys())*params.TxAccessListStorageKeyGas //nolint:gosec // Known to not overflow
+
+	testErr := errors.New("test error")
+
+	tests := []struct {
+		name       string
+		accessList types.AccessList
+		hookGas    uint64
+		hookErr    error
+		override   bool
+		wantGas    uint64
+		wantErr    error
+	}{
+		{
+			name:       "hook_overrides_with_custom_gas",
+			accessList: accessList,
+			hookGas:    100,
+			override:   true,
+			wantGas:    params.TxGas + 100,
+		},
+		{
+			name:       "hook_overrides_with_zero",
+			accessList: accessList,
+			hookGas:    0,
+			override:   true,
+			wantGas:    params.TxGas,
+		},
+		{
+			name:       "hook_does_not_override_uses_default",
+			accessList: accessList,
+			hookGas:    0,
+			override:   false,
+			wantGas:    params.TxGas + defaultAccessListGas,
+		},
+		{
+			name:       "nil_access_list_hook_not_called",
+			accessList: nil,
+			wantGas:    params.TxGas,
+		},
+		{
+			name:       "empty_access_list_with_override",
+			accessList: types.AccessList{},
+			hookGas:    100,
+			override:   true,
+			wantGas:    params.TxGas + 100,
+		},
+		{
+			name:       "hook_gas_causes_overflow",
+			accessList: accessList,
+			hookGas:    math.MaxUint64,
+			override:   true,
+			wantErr:    core.ErrGasUintOverflow,
+		},
+		{
+			name:       "hook_returns_error",
+			accessList: accessList,
+			hookErr:    testErr,
+			override:   true,
+			wantErr:    testErr,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hookCalled := false
+			hooks := &hookstest.Stub{
+				AccessListGasFn: func(dto libevm.AccessList) (uint64, bool, error) {
+					require.Len(t, dto, len(tt.accessList), "access list length mismatch")
+					for i, tuple := range tt.accessList {
+						assert.Equal(t, tuple.Address, dto[i].Address, "address mismatch at index %d", i)
+						assert.Equal(t, tuple.StorageKeys, dto[i].StorageKeys, "storage keys mismatch at index %d", i)
+					}
+					hookCalled = true
+					return tt.hookGas, tt.override, tt.hookErr
+				},
+			}
+			hooks.Register(t)
+
+			rules := params.NonActivatedConfig.Rules(new(big.Int), false, 0)
+			got, err := core.IntrinsicGas(nil, tt.accessList, false, rules)
+
+			require.ErrorIs(t, err, tt.wantErr, "core.IntrinsicGas(...)")
+			require.Equal(t, tt.wantGas, got, "core.IntrinsicGas(...)")
+			require.Equal(t, tt.accessList != nil, hookCalled)
+		})
+	}
 }
 
 func TestMinimumGasConsumption(t *testing.T) {
