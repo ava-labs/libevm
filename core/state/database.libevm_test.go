@@ -39,12 +39,15 @@ func TestDatabaseRegistration(t *testing.T) {
 	assertDBWrapped(t, true)
 }
 func TestTempDatabaseRegistration(t *testing.T) {
-	libevm.WithTemporaryExtrasLock(func(lock libevm.ExtrasLock) error {
+	err := libevm.WithTemporaryExtrasLock(func(lock libevm.ExtrasLock) error {
 		return WithTempRegisteredDatabaseInterceptor(lock, dbInterceptor, func() error {
 			assertDBWrapped(t, true)
 			return nil
 		})
 	})
+	if err != nil {
+		t.Fatalf("during temp registration: %v", err)
+	}
 
 	assertDBWrapped(t, false)
 }
