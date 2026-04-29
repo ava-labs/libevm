@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"github.com/ava-labs/libevm/libevm"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type dbWrapper struct {
@@ -45,28 +47,21 @@ func TestTempDatabaseRegistration(t *testing.T) {
 			return nil
 		})
 	})
-	if err != nil {
-		t.Fatalf("during temp registration: %v", err)
-	}
+	require.NoError(t, err, "WithTempRegisteredDatabaseInterceptor")
 
 	assertDBWrapped(t, false)
 }
 
-func assertDBWrapped(t *testing.T, expectWrapped bool) {
+func assertDBWrapped(t *testing.T, wantWrapped bool) {
 	t.Helper()
 
-	db := NewDatabase(nil)
-	if _, ok := db.(*dbWrapper); ok != expectWrapped {
-		t.Errorf("expected database to be wrapped by %T, got %T", &dbWrapper{}, db)
+	var wantType any
+	if wantWrapped {
+		wantType = &dbWrapper{}
+	} else {
+		wantType = &cachingDB{}
 	}
-
-	db = NewDatabaseWithConfig(nil, nil)
-	if _, ok := db.(*dbWrapper); ok != expectWrapped {
-		t.Errorf("expected database to be wrapped by %T, got %T", &dbWrapper{}, db)
-	}
-
-	db = NewDatabaseWithNodeDB(nil, nil)
-	if _, ok := db.(*dbWrapper); ok != expectWrapped {
-		t.Errorf("expected database to be wrapped by %T, got %T", &dbWrapper{}, db)
-	}
+	assert.IsType(t, wantType, NewDatabase(nil), "NewDatabase(nil)")
+	assert.IsType(t, wantType, NewDatabaseWithConfig(nil, nil), "NewDatabaseWithConfig(nil, nil)")
+	assert.IsType(t, wantType, NewDatabaseWithNodeDB(nil, nil), "NewDatabaseWithNodeDB(nil, nil)")
 }

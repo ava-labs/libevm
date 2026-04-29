@@ -23,35 +23,35 @@ import (
 	"github.com/ava-labs/libevm/triedb"
 )
 
-// DatabaseInterceptor accepts the standard [Database] implementation returned
-// by [NewDatabaseWithConfig] and [NewDatabaseWithNodeDB], allowing the
-// returned [Database] to be re-implemented with custom behavior.
+// A DatabaseInterceptor accepts the standard [Database] implementation
+// returned by [NewDatabaseWithConfig] and [NewDatabaseWithNodeDB], allowing
+// the returned [Database] to be re-implemented with custom behavior.
 type DatabaseInterceptor func(Database) Database
 
-// RegisterDatabaseInterceptor registers the [DatabaseInterceptor] such that they modify the
-// behaviour of all [StateDB] instances. It is expected to be called in an
-// `init()` function and MUST NOT be called more than once.
-func RegisterDatabaseInterceptor(s DatabaseInterceptor) {
-	registeredInterceptor.MustRegister(s)
+// RegisterDatabaseInterceptor registers the [DatabaseInterceptor] such that it
+// modifies the behaviour of all [StateDB] instances. It MUST NOT be called
+// more than once.
+func RegisterDatabaseInterceptor(dbi DatabaseInterceptor) {
+	registeredInterceptor.MustRegister(dbi)
 }
 
-// WithTempRegisteredDatabaseInterceptor temporarily registers `i` as if calling
-// [RegisterDatabaseInterceptor] the same type parameter. After `fn` returns, the
-// registration is returned to its former state, be that none or the types
-// originally passed to [RegisterDatabaseInterceptor].
+// WithTempRegisteredDatabaseInterceptor temporarily registers `dbi` as if
+// calling [RegisterDatabaseInterceptor] with the same argument. After `fn`
+// returns, the registration is returned to its former state, be that none or
+// the types originally passed to [RegisterDatabaseInterceptor].
 //
 // This MUST NOT be used on a live chain. It is solely intended for off-chain
 // consumers that require access to extras. Said consumers SHOULD NOT, however
 // call this function directly. Use the libevm/temporary.WithRegisteredExtras()
 // function instead as it atomically overrides all possible packages.
-func WithTempRegisteredDatabaseInterceptor(lock libevm.ExtrasLock, i DatabaseInterceptor, fn func() error) error {
+func WithTempRegisteredDatabaseInterceptor(lock libevm.ExtrasLock, dbi DatabaseInterceptor, fn func() error) error {
 	if err := lock.Verify(); err != nil {
 		return err
 	}
-	return registeredInterceptor.TempOverride(i, fn)
+	return registeredInterceptor.TempOverride(dbi, fn)
 }
 
-// TestOnlyClearRegisteredDatabaseInterceptor clears the arguments previously passed to
+// TestOnlyClearRegisteredDatabaseInterceptor clears the argument previously passed to
 // [RegisterDatabaseInterceptor]. It panics if called from a non-testing call stack.
 //
 // In tests it SHOULD be called before every call to [RegisterDatabaseInterceptor] and then
@@ -69,22 +69,19 @@ var registeredInterceptor register.AtMostOnce[DatabaseInterceptor]
 // database will be the result of passing the [Database] returned by this
 // function to the interceptor.
 func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) Database {
-	cache := newDatabaseWithConfig(db, config)
-	r := &registeredInterceptor
-	if !r.Registered() {
-		return cache
-	}
-	return r.Get()(cache)
+	return interceptDB(newDatabaseWithConfig(db, config))
 }
 
 // NewDatabaseWithNodeDB creates a state database with an already initialized node database.
 // If a [DatabaseInterceptor] is registered, the returned database will be the result of
 // passing the [Database] returned by this function to the interceptor.
 func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) Database {
-	cache := newDatabaseWithNodeDB(db, triedb)
-	r := &registeredInterceptor
-	if !r.Registered() {
-		return cache
+	return interceptDB(newDatabaseWithNodeDB(db, triedb))
+}
+
+func interceptDB(db Database) Database {
+	if r := &registeredInterceptor; r.Registered() {
+		return r.Get()(db)
 	}
-	return r.Get()(cache)
+	return db
 }
