@@ -76,6 +76,11 @@ func TestGuardIntegration(t *testing.T) {
 	// This MUST NOT be [assert.ErrorIs] as such errors are never wrapped in geth.
 	assert.Equal(t, err, vm.ErrExecutionReverted, "Precompile reverted")
 	assert.Equal(t, returnIfGuarded, got, "Precompile reverted with expected data")
+
+	t.Run("static_call", func(t *testing.T) {
+		_, _, err := evm.StaticCall(vm.AccountRef{}, sut, []byte{}, 1e6)
+		require.Equal(t, vm.ErrWriteProtection, err, "StaticCall()")
+	})
 }
 
 type envStub struct {
@@ -90,6 +95,10 @@ func (s *envStub) Addresses() *libevm.AddressContext {
 			Self: s.self,
 		},
 	}
+}
+
+func (*envStub) ReadOnly() bool {
+	return false
 }
 
 func (s *envStub) StateDB() vm.StateDB {
