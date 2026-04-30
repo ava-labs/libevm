@@ -90,8 +90,9 @@ func RegisterExtras(s StateDBHooks) {
 //
 // This MUST NOT be used on a live chain. It is solely intended for off-chain
 // consumers that require access to extras. Said consumers SHOULD NOT, however
-// call this function directly. Use the libevm/temporary.WithRegisteredExtras()
-// function instead as it atomically overrides all possible packages.
+// call this function directly. Use the [libevm.WithTemporaryExtrasLock]
+// function instead in combination with all other registrations to ensure
+// that temporary registrations are atomically applied.
 func WithTempRegisteredExtras(lock libevm.ExtrasLock, s StateDBHooks, fn func() error) error {
 	if err := lock.Verify(); err != nil {
 		return err
