@@ -42,7 +42,7 @@ func RegisterDatabaseInterceptor(dbi DatabaseInterceptor) {
 //
 // This MUST NOT be used on a live chain. It is solely intended for off-chain
 // consumers that require access to extras. Said consumers SHOULD NOT, however
-// call this function directly. Use the libevm/temporary.WithRegisteredExtras()
+// call this function directly. Use the [libevm.WithTemporaryExtrasLock]
 // function instead as it atomically overrides all possible packages.
 func WithTempRegisteredDatabaseInterceptor(lock libevm.ExtrasLock, dbi DatabaseInterceptor, fn func() error) error {
 	if err := lock.Verify(); err != nil {
