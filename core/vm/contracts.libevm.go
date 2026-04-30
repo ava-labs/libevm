@@ -198,7 +198,7 @@ type PrecompileEnvironment interface {
 	ChainConfig() *params.ChainConfig
 	Rules() params.Rules
 	// StateDB will be non-nil i.f.f !ReadOnly().
-	StateDB() StateDB
+	StateDB() (StateDB, error)
 	// ReadOnlyState will always be non-nil.
 	ReadOnlyState() libevm.StateReader
 

@@ -97,12 +97,8 @@ func (s *envStub) Addresses() *libevm.AddressContext {
 	}
 }
 
-func (*envStub) ReadOnly() bool {
-	return false
-}
-
-func (s *envStub) StateDB() vm.StateDB {
-	return s.db
+func (s *envStub) StateDB() (vm.StateDB, error) {
+	return s.db, nil
 }
 
 func TestGuard(t *testing.T) {

@@ -80,11 +80,11 @@ func (e *environment) Addresses() *libevm.AddressContext {
 	}
 }
 
-func (e *environment) StateDB() StateDB {
+func (e *environment) StateDB() (StateDB, error) {
 	if e.ReadOnly() {
-		return nil
+		return nil, ErrWriteProtection
 	}
-	return e.evm.StateDB
+	return e.evm.StateDB, nil
 }
 
 func (e *environment) BlockHeader() (types.Header, error) {

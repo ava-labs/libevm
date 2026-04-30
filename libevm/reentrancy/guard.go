@@ -39,14 +39,13 @@ var slotPreimagePrefix = []byte("libevm-reentrancy-guard-")
 // Contract equality is defined as the [libevm.AddressContext] "self" address
 // being the same under EVM semantics.
 func Guard(env vm.PrecompileEnvironment, key []byte) error {
-	if env.ReadOnly() {
-		return vm.ErrWriteProtection
+	sdb, err := env.StateDB()
+	if err != nil {
+		return err
 	}
 
 	self := env.Addresses().EVMSemantic.Self
 	slot := crypto.Keccak256Hash(slotPreimagePrefix, key)
-
-	sdb := env.StateDB()
 	if sdb.GetTransientState(self, slot) != (common.Hash{}) {
 		return vm.ErrExecutionReverted
 	}
