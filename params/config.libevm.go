@@ -104,8 +104,9 @@ func payloadsAndConstructors[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) (
 //
 // This MUST NOT be used on a live chain. It is solely intended for off-chain
 // consumers that require access to extras. Said consumers SHOULD NOT, however
-// call this function directly. Use the libevm/temporary.WithRegisteredExtras()
-// function instead as it atomically overrides all possible packages.
+// call this function directly. Use the [libevm.WithTemporaryExtrasLock]
+// function instead in combination with all other registrations to ensure
+// that temporary registrations are atomically applied.
 func WithTempRegisteredExtras[C ChainConfigHooks, R RulesHooks](
 	lock libevm.ExtrasLock,
 	e Extras[C, R],
