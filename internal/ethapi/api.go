@@ -1245,7 +1245,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	if head.ParentBeaconRoot != nil {
 		result["parentBeaconBlockRoot"] = head.ParentBeaconRoot
 	}
-	return result
+	return head.PostRPCMarshal(result)
 }
 
 // RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
@@ -1280,7 +1280,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 	if block.Header().WithdrawalsHash != nil {
 		fields["withdrawals"] = block.Withdrawals()
 	}
-	return fields
+	return block.PostRPCMarshal(fields)
 }
 
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires

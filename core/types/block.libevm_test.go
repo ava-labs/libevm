@@ -43,6 +43,8 @@ type stubHeaderHooks struct {
 	toCopy                                   *stubHeaderHooks
 
 	errMarshal, errUnmarshal, errEncode, errDecode error
+
+	NOOPHeaderHooks
 }
 
 func fakeHeaderJSON(h *Header, suffix []byte) []byte {

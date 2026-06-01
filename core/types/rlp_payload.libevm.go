@@ -210,6 +210,10 @@ func (h *Header) hooks() HeaderHooks {
 	return new(NOOPHeaderHooks)
 }
 
+func (h *Header) PostRPCMarshal(m map[string]any) map[string]any {
+	return h.hooks().PostRPCMarshal(m)
+}
+
 func (b *Body) hooks() BlockBodyHooks {
 	if r := registeredExtras; r.Registered() {
 		return r.Get().hooks.hooksFromBody(b)
@@ -222,6 +226,10 @@ func (b *Block) hooks() BlockBodyHooks {
 		return r.Get().hooks.hooksFromBlock(b)
 	}
 	return NOOPBlockBodyHooks{}
+}
+
+func (b *Block) PostRPCMarshal(m map[string]any) map[string]any {
+	return b.hooks().PostRPCMarshal(m)
 }
 
 func (e *StateAccountExtra) clone() *StateAccountExtra {
