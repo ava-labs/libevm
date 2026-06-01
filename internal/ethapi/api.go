@@ -1245,6 +1245,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	if head.ParentBeaconRoot != nil {
 		result["parentBeaconBlockRoot"] = head.ParentBeaconRoot
 	}
+	head.PostRPCMarshal(result) //libevm
 	return result
 }
 
@@ -1280,6 +1281,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 	if block.Header().WithdrawalsHash != nil {
 		fields["withdrawals"] = block.Withdrawals()
 	}
+	block.PostRPCMarshal(fields) //libevm
 	return fields
 }
 

@@ -210,6 +210,12 @@ func (h *Header) hooks() HeaderHooks {
 	return new(NOOPHeaderHooks)
 }
 
+// PostRPCMarshal propagates `h` and `m` to the respective method on the
+// registered [HeaderHooks], if any, and is otherwise a noop.
+func (h *Header) PostRPCMarshal(m map[string]any) {
+	h.hooks().PostRPCMarshal(h, m)
+}
+
 func (b *Body) hooks() BlockBodyHooks {
 	if r := registeredExtras; r.Registered() {
 		return r.Get().hooks.hooksFromBody(b)
@@ -222,6 +228,12 @@ func (b *Block) hooks() BlockBodyHooks {
 		return r.Get().hooks.hooksFromBlock(b)
 	}
 	return NOOPBlockBodyHooks{}
+}
+
+// PostRPCMarshal propagates `b` and `m` to the respective method on the
+// registered [BlockBodyHooks], if any, and is otherwise a noop.
+func (b *Block) PostRPCMarshal(m map[string]any) {
+	b.hooks().PostRPCMarshal(b, m)
 }
 
 func (e *StateAccountExtra) clone() *StateAccountExtra {

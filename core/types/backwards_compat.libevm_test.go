@@ -200,6 +200,7 @@ func TestBlockRLPBackwardsCompatibility(t *testing.T) {
 type cChainBodyExtras struct {
 	Version uint32
 	ExtData *[]byte
+	NOOPBlockBodyHooks
 }
 
 var _ BlockBodyHooks = (*cChainBodyExtras)(nil)
