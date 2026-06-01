@@ -32,7 +32,7 @@ type HeaderHooks interface {
 	EncodeRLP(*Header, io.Writer) error
 	DecodeRLP(*Header, *rlp.Stream) error
 	PostCopy(dst *Header)
-	PostRPCMarshal(map[string]any) map[string]any
+	PostRPCMarshal(h *Header, marshalled map[string]any)
 }
 
 var _ interface {
@@ -86,9 +86,7 @@ func (*NOOPHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
 }
 func (*NOOPHeaderHooks) PostCopy(dst *Header) {}
 
-func (*NOOPHeaderHooks) PostRPCMarshal(m map[string]any) map[string]any {
-	return m
-}
+func (*NOOPHeaderHooks) PostRPCMarshal(*Header, map[string]any) {}
 
 var _ = []interface {
 	rlp.Encoder
@@ -129,7 +127,7 @@ type BlockBodyHooks interface {
 	BlockRLPFieldPointersForDecoding(*BlockRLPProxy) *rlp.Fields
 	BodyRLPFieldsForEncoding(*Body) *rlp.Fields
 	BodyRLPFieldPointersForDecoding(*Body) *rlp.Fields
-	PostRPCMarshal(map[string]any) map[string]any
+	PostRPCMarshal(b *Block, marshalled map[string]any)
 }
 
 // NOOPBlockBodyHooks implements [BlockBodyHooks] such that they are equivalent
@@ -186,6 +184,4 @@ func (NOOPBlockBodyHooks) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 	}
 }
 
-func (NOOPBlockBodyHooks) PostRPCMarshal(m map[string]any) map[string]any {
-	return m
-}
+func (NOOPBlockBodyHooks) PostRPCMarshal(*Block, map[string]any) {}

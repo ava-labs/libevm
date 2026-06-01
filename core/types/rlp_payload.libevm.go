@@ -210,8 +210,10 @@ func (h *Header) hooks() HeaderHooks {
 	return new(NOOPHeaderHooks)
 }
 
-func (h *Header) PostRPCMarshal(m map[string]any) map[string]any {
-	return h.hooks().PostRPCMarshal(m)
+// PostRPCMarshal propagates `h` and `m` to the respective method on the
+// registered [HeaderHooks], if any, and is otherwise a noop.
+func (h *Header) PostRPCMarshal(m map[string]any) {
+	h.hooks().PostRPCMarshal(h, m)
 }
 
 func (b *Body) hooks() BlockBodyHooks {
@@ -228,8 +230,10 @@ func (b *Block) hooks() BlockBodyHooks {
 	return NOOPBlockBodyHooks{}
 }
 
-func (b *Block) PostRPCMarshal(m map[string]any) map[string]any {
-	return b.hooks().PostRPCMarshal(m)
+// PostRPCMarshal propagates `b` and `m` to the respective method on the
+// registered [BlockBodyHooks], if any, and is otherwise a noop.
+func (b *Block) PostRPCMarshal(m map[string]any) {
+	b.hooks().PostRPCMarshal(b, m)
 }
 
 func (e *StateAccountExtra) clone() *StateAccountExtra {
