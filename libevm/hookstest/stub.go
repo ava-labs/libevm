@@ -142,6 +142,10 @@ func (s Stub) CanCreateContract(cc *libevm.AddressContext, gas uint64, sr libevm
 	return gas, nil
 }
 
+func (s Stub) ShouldRefundGas() bool {
+	return true
+}
+
 // MinimumGasConsumption proxies arguments to the s.MinimumGasConsumptionFn
 // function if non-nil, otherwise it acts as a noop.
 func (s Stub) MinimumGasConsumption(limit uint64) uint64 {

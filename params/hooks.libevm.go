@@ -62,6 +62,7 @@ type RulesHooks interface {
 	// called if the access list is nil. The hook MAY return an error (e.g., for
 	// gas overflow).
 	AccessListGas(accessList libevm.AccessList) (gas uint64, override bool, err error)
+	ShouldRefundGas() bool
 	// MinimumGasConsumption receives a transaction's gas limit and returns the
 	// minimum quantity of gas units to be charged for said transaction. If the
 	// returned value is greater than the transaction's limit, the minimum spend
@@ -150,6 +151,11 @@ func (NOOPHooks) ActivePrecompiles(active []common.Address) []common.Address {
 // AccessListGas returns override=false and nil error, signalling to use the default calculation.
 func (NOOPHooks) AccessListGas(_ libevm.AccessList) (uint64, bool, error) {
 	return 0, false, nil
+}
+
+// ShouldRefundGas always returns true.
+func (NOOPHooks) ShouldRefundGas() bool {
+	return true
 }
 
 // MinimumGasConsumption always returns 0.

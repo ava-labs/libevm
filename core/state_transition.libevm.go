@@ -94,6 +94,10 @@ func (st *StateTransition) canExecuteTransaction() error {
 	return nil
 }
 
+func (st *StateTransition) shouldRefundGas() bool {
+	return st.rulesHooks().ShouldRefundGas()
+}
+
 // consumeMinimumGas updates the gas remaining to reflect the value returned by
 // [params.RulesHooks.MinimumGasConsumption]. It MUST be called after all code
 // that modifies gas consumption but before the balance is returned for
