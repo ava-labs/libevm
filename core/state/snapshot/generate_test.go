@@ -1003,7 +1003,7 @@ func generateAndRelease(t *testing.T, scheme string) {
 func testGenerateGoroutineLeak(t *testing.T, scheme string) {
 	generateAndRelease(t, scheme)
 
-	// Snapshot the current goroutines now before verifying the run
+	// Snapshot the current goroutines now berfore verifying the run
 	// below leaks none of its own.
 	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 
