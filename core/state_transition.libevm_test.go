@@ -300,3 +300,69 @@ func TestMinimumGasConsumption(t *testing.T) {
 		})
 	}
 }
+
+func TestGasRefunds(t *testing.T) {
+	const refund = 100
+
+	tests := []struct {
+		shouldRefund bool
+		want         uint64
+	}{
+		{
+			shouldRefund: true,
+			want:         params.TxGas - refund,
+		},
+		{
+			shouldRefund: false,
+			want:         params.TxGas,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("should_refund_%t", tt.shouldRefund), func(t *testing.T) {
+			refunder := common.Address{'r', 'e'}
+			hooks := &hookstest.Stub{
+				DisableGasRefunds: !tt.shouldRefund,
+				PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+					refunder: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, _ []byte) ([]byte, error) {
+						env.StateDB().AddRefund(refund)
+						return nil, nil
+					}),
+				},
+			}
+			hooks.Register(t)
+
+			sdb, evm := ethtest.NewZeroEVM(t)
+
+			key, err := crypto.GenerateKey()
+			require.NoError(t, err, "crypto.GenerateKey()")
+			sdb.AddBalance(crypto.PubkeyToAddress(key.PublicKey), new(uint256.Int).SetAllOne())
+
+			tx := types.MustSignNewTx(
+				key,
+				types.LatestSigner(evm.ChainConfig()),
+				&types.LegacyTx{
+					To:       &refunder,
+					Gas:      1e6,
+					GasPrice: big.NewInt(1),
+				},
+			)
+
+			gp := core.GasPool(math.MaxUint64)
+			var got uint64
+			receipt, err := core.ApplyTransaction(
+				evm.ChainConfig(), nil, &common.Address{}, &gp, sdb,
+				&types.Header{
+					Number:     big.NewInt(0),
+					Difficulty: big.NewInt(0),
+				},
+				tx, &got, vm.Config{},
+			)
+			require.NoError(t, err, "core.ApplyTransaction(...)")
+			require.Equalf(t, types.ReceiptStatusSuccessful, receipt.Status, "%T.Status", receipt)
+
+			assert.Equal(t, tt.want, got, "core.ApplyTransaction(..., gasUsed *uint64, ...)")
+			assert.Equalf(t, tt.want, receipt.GasUsed, "%T.GasUsed", receipt)
+		})
+	}
+}
