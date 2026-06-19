@@ -94,8 +94,11 @@ func (st *StateTransition) canExecuteTransaction() error {
 	return nil
 }
 
-func (st *StateTransition) shouldRefundGas() bool {
-	return st.rulesHooks().ShouldRefundGas()
+func (st *StateTransition) afterGasRefund(refunded uint64) {
+	if !st.rulesHooks().ShouldRefundGas() {
+		st.gasRemaining -= refunded
+	}
+	st.consumeMinimumGas()
 }
 
 // consumeMinimumGas updates the gas remaining to reflect the value returned by
