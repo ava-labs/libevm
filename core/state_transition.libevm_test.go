@@ -336,7 +336,7 @@ func TestGasRefunds(t *testing.T) {
 
 			key, err := crypto.GenerateKey()
 			require.NoError(t, err, "crypto.GenerateKey()")
-			sdb.AddBalance(crypto.PubkeyToAddress(key.PublicKey), new(uint256.Int).SetAllOne())
+			sdb.SetBalance(crypto.PubkeyToAddress(key.PublicKey), new(uint256.Int).SetAllOne())
 
 			tx := types.MustSignNewTx(
 				key,
