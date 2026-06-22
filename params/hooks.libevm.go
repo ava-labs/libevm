@@ -62,6 +62,8 @@ type RulesHooks interface {
 	// called if the access list is nil. The hook MAY return an error (e.g., for
 	// gas overflow).
 	AccessListGas(accessList libevm.AccessList) (gas uint64, override bool, err error)
+	// ShouldRefundGas returns whether or not to honour gas refunds, which is
+	// otherwise the default behaviour.
 	ShouldRefundGas() bool
 	// MinimumGasConsumption receives a transaction's gas limit and returns the
 	// minimum quantity of gas units to be charged for said transaction. If the
