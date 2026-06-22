@@ -51,6 +51,7 @@ type Stub struct {
 	CanExecuteTransactionFn func(common.Address, *common.Address, libevm.StateReader) error
 	CanCreateContractFn     func(*libevm.AddressContext, uint64, libevm.StateReader) (uint64, error)
 	MinimumGasConsumptionFn func(txGasLimit uint64) uint64
+	DisableGasRefunds       bool
 }
 
 // Register is a convenience wrapper for registering s as both the
@@ -140,6 +141,17 @@ func (s Stub) CanCreateContract(cc *libevm.AddressContext, gas uint64, sr libevm
 		return f(cc, gas, sr)
 	}
 	return gas, nil
+}
+
+// ShouldRefundGas returns the negation of [Stub.DisableGasRefund].
+//
+// Although the double-negation of the boolean isn't ideal for readability, this
+// allows the zero [Stub] to mirror default behaviour, while keeping the
+// production hook name as a [positive boolean].
+//
+// [positive boolean]: https://testing.googleblog.com/2023/10/improve-readability-with-positive.html
+func (s Stub) ShouldRefundGas() bool {
+	return !s.DisableGasRefunds
 }
 
 // MinimumGasConsumption proxies arguments to the s.MinimumGasConsumptionFn

@@ -481,7 +481,7 @@ func (st *StateTransition) refundGas(refundQuotient uint64) uint64 {
 	}
 	st.gasRemaining += refund
 
-	st.consumeMinimumGas() // libevm: see comment on method re call-site requirements
+	st.afterGasRefund(refund) // libevm: see [StateTransition.consumeMinimumGas] re call-site requirements
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := uint256.NewInt(st.gasRemaining)
