@@ -41,6 +41,7 @@ func SetBeaconBlockRoot(sdb *state.StateDB, hdr *types.Header) {
 
 	sdb.SetState(params.BeaconRootsStorageAddress, uint64ToHash(timeIdx), uint64ToHash(hdr.Time))
 	sdb.SetState(params.BeaconRootsStorageAddress, uint64ToHash(rootIdx), *hdr.ParentBeaconRoot)
+	sdb.Finalise(true)
 }
 
 func uint64ToHash(x uint64) (h common.Hash) {
