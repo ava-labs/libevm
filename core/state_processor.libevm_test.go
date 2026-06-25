@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
@@ -41,8 +40,8 @@ func TestSetBeaconBlockRoot(t *testing.T) {
 	for time := uint64(1); time < 1<<14; time += 100 {
 		sdb, evm := ethtest.NewZeroEVM(t,
 			ethtest.WithBlockContext(vm.BlockContext{
-				CanTransfer: core.CanTransfer,
-				Transfer:    core.Transfer,
+				CanTransfer: CanTransfer,
+				Transfer:    Transfer,
 				BlockNumber: big.NewInt(1),
 				Time:        time,
 				Random:      &common.Hash{}, // implies post-Merge, required for PUSH0
