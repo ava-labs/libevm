@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
@@ -38,35 +39,15 @@ import (
 
 func TestSetBeaconBlockRoot(t *testing.T) {
 	for time := uint64(1); time < 1<<14; time += 100 {
-		sdb, evm := ethtest.NewZeroEVM(t,
-			ethtest.WithBlockContext(vm.BlockContext{
-				CanTransfer: CanTransfer,
-				Transfer:    Transfer,
-				BlockNumber: big.NewInt(1),
-				Time:        time,
-				Random:      &common.Hash{}, // implies post-Merge, required for PUSH0
-			}),
-			ethtest.WithChainConfig(params.MergedTestChainConfig),
-		)
-
-		_, addr, _, err := evm.Create(
-			// https://eips.ethereum.org/EIPS/eip-4788
-			vm.AccountRef(common.HexToAddress(`0x0B799C86a49DEeb90402691F1041aa3AF2d3C875`)),
-			common.FromHex(`0x60618060095f395ff33373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500`),
-			0x3d090,
-			uint256.NewInt(0),
-		)
-		require.NoErrorf(t, err, "%T.Create([EIP-4788 contract])", evm)
-		require.Equalf(t, params.BeaconRootsStorageAddress, addr, "%T.Create([EIP-4788 contract]) deployed address", evm)
 
 		root := crypto.Keccak256Hash(binary.BigEndian.AppendUint64(nil, time))
 		tests := []struct {
 			name  string
-			setup func()
+			setup func(*vm.EVM, *state.StateDB)
 		}{
 			{
 				name: "SetBeaconBlockRoot_SUT",
-				setup: func() {
+				setup: func(_ *vm.EVM, sdb *state.StateDB) {
 					hdr := &types.Header{
 						Time:             time,
 						ParentBeaconRoot: &root,
@@ -76,20 +57,39 @@ func TestSetBeaconBlockRoot(t *testing.T) {
 			},
 			{
 				name: "ProcessBeaconBlockRoot_gold_standard",
-				setup: func() {
+				setup: func(evm *vm.EVM, sdb *state.StateDB) {
 					ProcessBeaconBlockRoot(root, evm, sdb)
 				},
 			},
 		}
 
+		var gotStateRoots [2]common.Hash
+
 		for i, tt := range tests {
 			t.Run(fmt.Sprintf("%s_time_%d", tt.name, time), func(t *testing.T) {
-				if i == 0 { // ProcessBeaconBlockRoot() calls sdb.Finalise() so the snapshot revert would panic
-					snap := sdb.Snapshot()
-					defer sdb.RevertToSnapshot(snap)
-				}
+				sdb, evm := ethtest.NewZeroEVM(t,
+					ethtest.WithBlockContext(vm.BlockContext{
+						CanTransfer: CanTransfer,
+						Transfer:    Transfer,
+						BlockNumber: big.NewInt(1),
+						Time:        time,
+						Random:      &common.Hash{}, // implies post-Merge, required for PUSH0
+					}),
+					ethtest.WithChainConfig(params.MergedTestChainConfig),
+				)
 
-				tt.setup()
+				_, addr, _, err := evm.Create(
+					// https://eips.ethereum.org/EIPS/eip-4788
+					vm.AccountRef(common.HexToAddress(`0x0B799C86a49DEeb90402691F1041aa3AF2d3C875`)),
+					common.FromHex(`0x60618060095f395ff33373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500`),
+					0x3d090,
+					uint256.NewInt(0),
+				)
+				require.NoErrorf(t, err, "%T.Create([EIP-4788 contract])", evm)
+				require.Equalf(t, params.BeaconRootsStorageAddress, addr, "%T.Create([EIP-4788 contract]) deployed address", evm)
+
+				tt.setup(evm, sdb)
+				gotStateRoots[i] = sdb.IntermediateRoot(true)
 
 				got, _, err := evm.StaticCall(
 					vm.AccountRef{},
@@ -101,5 +101,7 @@ func TestSetBeaconBlockRoot(t *testing.T) {
 				assert.Equal(t, root.Bytes(), got, "%T.StaticCall([EIP-4788 contract], [just-set root's time])")
 			})
 		}
+
+		assert.Equalf(t, gotStateRoots[1], gotStateRoots[0], "%T.IntermediateRoot() after SetBeaconBlockRoot() vs gold-standard ProcessBeaconBlockRoot()", &state.StateDB{})
 	}
 }
