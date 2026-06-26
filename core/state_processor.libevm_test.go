@@ -27,19 +27,17 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/libevm/ethtest"
 	"github.com/ava-labs/libevm/params"
-
-	. "github.com/ava-labs/libevm/core"
 )
 
 func TestSetBeaconBlockRoot(t *testing.T) {
 	for time := uint64(1); time < 1<<14; time += 100 {
-
 		root := crypto.Keccak256Hash(binary.BigEndian.AppendUint64(nil, time))
 		tests := []struct {
 			name  string
@@ -52,13 +50,13 @@ func TestSetBeaconBlockRoot(t *testing.T) {
 						Time:             time,
 						ParentBeaconRoot: &root,
 					}
-					SetBeaconBlockRoot(sdb, hdr)
+					core.SetBeaconBlockRoot(sdb, hdr)
 				},
 			},
 			{
 				name: "ProcessBeaconBlockRoot_gold_standard",
 				setup: func(evm *vm.EVM, sdb *state.StateDB) {
-					ProcessBeaconBlockRoot(root, evm, sdb)
+					core.ProcessBeaconBlockRoot(root, evm, sdb)
 				},
 			},
 		}
@@ -69,8 +67,8 @@ func TestSetBeaconBlockRoot(t *testing.T) {
 			t.Run(fmt.Sprintf("%s_time_%d", tt.name, time), func(t *testing.T) {
 				sdb, evm := ethtest.NewZeroEVM(t,
 					ethtest.WithBlockContext(vm.BlockContext{
-						CanTransfer: CanTransfer,
-						Transfer:    Transfer,
+						CanTransfer: core.CanTransfer,
+						Transfer:    core.Transfer,
 						BlockNumber: big.NewInt(1),
 						Time:        time,
 						Random:      &common.Hash{}, // implies post-Merge, required for PUSH0
