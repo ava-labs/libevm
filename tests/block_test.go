@@ -64,7 +64,7 @@ func TestBlockchain(t *testing.T) {
 // TestExecutionSpecBlocktests runs the test fixtures from execution-spec-tests.
 func TestExecutionSpecBlocktests(t *testing.T) {
 	if !common.FileExist(executionSpecBlockchainTestDir) {
-		t.Skipf("directory %s does not exist", executionSpecBlockchainTestDir)
+		failOrSkip(t, "directory %s does not exist", executionSpecBlockchainTestDir)
 	}
 	bt := new(testMatcher)
 
