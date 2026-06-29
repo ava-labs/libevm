@@ -26,8 +26,9 @@ import (
 type StateDBCommitOption = options.Option[stateDBCommitConfig]
 
 type stateDBCommitConfig struct {
-	snapshotOpts []SnapshotUpdateOption
-	triedbOpts   []TrieDBUpdateOption
+	snapshotOpts         []SnapshotUpdateOption
+	triedbOpts           []TrieDBUpdateOption
+	intermediateRootOpts []StateDBIntermediateRootOption
 }
 
 // WithSnapshotUpdateOpts returns a StateDBCommitOption carrying a list of
@@ -58,6 +59,21 @@ func WithTrieDBUpdateOpts(opts ...TrieDBUpdateOption) StateDBCommitOption {
 // the provided slice of StateDBCommitOption.
 func ExtractTrieDBUpdateOpts(opts ...StateDBCommitOption) []TrieDBUpdateOption {
 	return options.As(opts...).triedbOpts
+}
+
+// WithIntermediateRootOpts returns a StateDBCommitOption carrying a list of
+// StateDBIntermediateRootOptions. If multiple such options are used, only the last will be
+// applied as they overwrite each other.
+func WithIntermediateRootOpts(opts ...StateDBIntermediateRootOption) StateDBCommitOption {
+	return options.Func[stateDBCommitConfig](func(c *stateDBCommitConfig) {
+		c.intermediateRootOpts = opts
+	})
+}
+
+// ExtractIntermediateRootOpts returns the list of StateDBIntermediateRootOptions carried by
+// the provided slice of StateDBCommitOption.
+func ExtractIntermediateRootOpts(opts ...StateDBCommitOption) []StateDBIntermediateRootOption {
+	return options.As(opts...).intermediateRootOpts
 }
 
 // A SnapshotUpdateOption configures the behaviour of
@@ -112,6 +128,22 @@ func ExtractTrieDBUpdatePayload(opts ...TrieDBUpdateOption) (common.Hash, common
 		return common.Hash{}, common.Hash{}, false
 	}
 	return *conf.parentBlockHash, *conf.currentBlockHash, true
+}
+
+type StateDBIntermediateRootOption = options.Option[stateDBIntermediateRootConfig]
+
+type stateDBIntermediateRootConfig struct {
+	shouldDestruct bool
+}
+
+func WithStateDBDestruct() StateDBIntermediateRootOption {
+	return options.Func[stateDBIntermediateRootConfig](func(c *stateDBIntermediateRootConfig) {
+		c.shouldDestruct = true
+	})
+}
+
+func ShouldDestructStateDB(opts ...StateDBIntermediateRootOption) bool {
+	return options.As(opts...).shouldDestruct
 }
 
 // A StateDBStateOption configures the behaviour of state.StateDB methods for
