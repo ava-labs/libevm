@@ -419,7 +419,7 @@ func (s *Service) readLoop(conn *connWrapper) {
 			if !ok {
 				log.Warn("Invalid stats history request", "msg", msg["emit"][1])
 				select {
-				case s.histCh <- nil: // Treat it as an no indexes request
+				case s.histCh <- nil: // Treat it as a no indexes request
 				default:
 				}
 				continue

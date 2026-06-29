@@ -129,7 +129,7 @@ var (
 	stdiouiFlag = &cli.BoolFlag{
 		Name: "stdio-ui",
 		Usage: "Use STDIN/STDOUT as a channel for an external UI. " +
-			"This means that an STDIN/STDOUT is used for RPC-communication with a e.g. a graphical user " +
+			"This means that a STDIN/STDOUT is used for RPC-communication with a e.g. a graphical user " +
 			"interface, and can be used when Clef is started by an external process.",
 	}
 	testFlag = &cli.BoolFlag{
