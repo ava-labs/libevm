@@ -1,0 +1,24 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "storage",
+    srcs = [
+        "aes_gcm_storage.go",
+        "storage.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/signer/storage",
+    visibility = ["//visibility:public"],
+    deps = ["//log"],
+)
+
+go_test(
+    name = "storage_test",
+    srcs = ["aes_gcm_storage_test.go"],
+    embed = [":storage"],
+    deps = [
+        "//common",
+        "//log",
+        "@com_github_mattn_go_colorable//:go-colorable",
+        "@org_golang_x_exp//slog",
+    ],
+)

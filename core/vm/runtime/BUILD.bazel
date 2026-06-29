@@ -1,0 +1,49 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "runtime",
+    srcs = [
+        "doc.go",
+        "env.go",
+        "runtime.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/core/vm/runtime",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//core",
+        "//core/rawdb",
+        "//core/state",
+        "//core/types",
+        "//core/vm",
+        "//crypto",
+        "//params",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)
+
+go_test(
+    name = "runtime_test",
+    srcs = [
+        "runtime_example_test.go",
+        "runtime_fuzz_test.go",
+        "runtime_test.go",
+    ],
+    embed = [":runtime"],
+    deps = [
+        "//accounts/abi",
+        "//common",
+        "//consensus",
+        "//core",
+        "//core/asm",
+        "//core/rawdb",
+        "//core/state",
+        "//core/types",
+        "//core/vm",
+        "//eth/tracers",
+        "//eth/tracers/js",
+        "//eth/tracers/logger",
+        "//params",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)

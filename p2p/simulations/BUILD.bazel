@@ -1,0 +1,49 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "simulations",
+    srcs = [
+        "connect.go",
+        "events.go",
+        "http.go",
+        "mocker.go",
+        "network.go",
+        "simulation.go",
+        "test.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/p2p/simulations",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//event",
+        "//log",
+        "//p2p",
+        "//p2p/enode",
+        "//p2p/enr",
+        "//p2p/simulations/adapters",
+        "//rpc",
+        "@com_github_gorilla_websocket//:websocket",
+        "@com_github_julienschmidt_httprouter//:httprouter",
+    ],
+)
+
+go_test(
+    name = "simulations_test",
+    srcs = [
+        "connect_test.go",
+        "http_test.go",
+        "mocker_test.go",
+        "network_test.go",
+    ],
+    embed = [":simulations"],
+    deps = [
+        "//event",
+        "//log",
+        "//node",
+        "//p2p",
+        "//p2p/enode",
+        "//p2p/simulations/adapters",
+        "//rpc",
+        "@com_github_mattn_go_colorable//:go-colorable",
+        "@org_golang_x_exp//slog",
+    ],
+)

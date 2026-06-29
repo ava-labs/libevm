@@ -1,0 +1,30 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "ethstats",
+    srcs = ["ethstats.go"],
+    importpath = "github.com/ava-labs/libevm/ethstats",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//:libevm",
+        "//common",
+        "//common/mclock",
+        "//consensus",
+        "//core",
+        "//core/types",
+        "//eth/protocols/eth",
+        "//event",
+        "//log",
+        "//miner",
+        "//node",
+        "//p2p",
+        "//rpc",
+        "@com_github_gorilla_websocket//:websocket",
+    ],
+)
+
+go_test(
+    name = "ethstats_test",
+    srcs = ["ethstats_test.go"],
+    embed = [":ethstats"],
+)

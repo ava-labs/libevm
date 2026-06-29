@@ -1,0 +1,62 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "p2p",
+    srcs = [
+        "dial.go",
+        "message.go",
+        "metrics.go",
+        "peer.go",
+        "peer_error.go",
+        "protocol.go",
+        "server.go",
+        "server_nat.go",
+        "transport.go",
+        "util.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/p2p",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//common/bitutil",
+        "//common/mclock",
+        "//crypto",
+        "//event",
+        "//log",
+        "//metrics",
+        "//p2p/discover",
+        "//p2p/enode",
+        "//p2p/enr",
+        "//p2p/nat",
+        "//p2p/netutil",
+        "//p2p/rlpx",
+        "//rlp",
+        "@org_golang_x_exp//slices",
+    ],
+)
+
+go_test(
+    name = "p2p_test",
+    srcs = [
+        "dial_test.go",
+        "message_test.go",
+        "peer_test.go",
+        "server_nat_test.go",
+        "server_test.go",
+        "transport_test.go",
+        "util_test.go",
+    ],
+    embed = [":p2p"],
+    deps = [
+        "//common/mclock",
+        "//crypto",
+        "//internal/testlog",
+        "//log",
+        "//p2p/enode",
+        "//p2p/enr",
+        "//p2p/netutil",
+        "//p2p/rlpx",
+        "//p2p/simulations/pipes",
+        "@com_github_davecgh_go_spew//spew",
+    ],
+)

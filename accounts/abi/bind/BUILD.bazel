@@ -1,0 +1,49 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "bind",
+    srcs = [
+        "auth.go",
+        "backend.go",
+        "base.go",
+        "bind.go",
+        "template.go",
+        "util.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/accounts/abi/bind",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//:libevm",
+        "//accounts",
+        "//accounts/abi",
+        "//accounts/external",
+        "//accounts/keystore",
+        "//common",
+        "//core/types",
+        "//crypto",
+        "//event",
+        "//log",
+    ],
+)
+
+go_test(
+    name = "bind_test",
+    srcs = [
+        "base_test.go",
+        "bind_test.go",
+        "util_test.go",
+    ],
+    embed = [":bind"],
+    deps = [
+        "//:libevm",
+        "//accounts/abi",
+        "//common",
+        "//common/hexutil",
+        "//core/types",
+        "//crypto",
+        "//ethclient/simulated",
+        "//params",
+        "//rlp",
+        "@com_github_stretchr_testify//assert",
+    ],
+)

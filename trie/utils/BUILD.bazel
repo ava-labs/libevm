@@ -1,0 +1,25 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "utils",
+    srcs = ["verkle.go"],
+    importpath = "github.com/ava-labs/libevm/trie/utils",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common/lru",
+        "//metrics",
+        "@com_github_crate_crypto_go_ipa//bandersnatch/fr",
+        "@com_github_gballet_go_verkle//:go-verkle",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)
+
+go_test(
+    name = "utils_test",
+    srcs = ["verkle_test.go"],
+    embed = [":utils"],
+    deps = [
+        "@com_github_gballet_go_verkle//:go-verkle",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)

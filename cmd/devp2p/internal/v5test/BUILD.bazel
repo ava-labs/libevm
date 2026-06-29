@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "v5test",
+    srcs = [
+        "discv5tests.go",
+        "framework.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/cmd/devp2p/internal/v5test",
+    visibility = ["//cmd/devp2p:__subpackages__"],
+    deps = [
+        "//common/mclock",
+        "//crypto",
+        "//internal/utesting",
+        "//p2p/discover/v5wire",
+        "//p2p/enode",
+        "//p2p/enr",
+        "//p2p/netutil",
+    ],
+)

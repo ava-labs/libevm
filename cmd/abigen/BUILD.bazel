@@ -1,0 +1,36 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "abigen_lib",
+    srcs = [
+        "main.go",
+        "namefilter.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/cmd/abigen",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//accounts/abi/bind",
+        "//cmd/utils",
+        "//common/compiler",
+        "//crypto",
+        "//internal/flags",
+        "//log",
+        "@com_github_urfave_cli_v2//:cli",
+    ],
+)
+
+go_binary(
+    name = "abigen",
+    embed = [":abigen_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "abigen_test",
+    srcs = ["namefilter_test.go"],
+    embed = [":abigen_lib"],
+    deps = [
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)

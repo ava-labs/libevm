@@ -1,0 +1,29 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "native",
+    srcs = [
+        "4byte.go",
+        "call.go",
+        "call_flat.go",
+        "gen_account_json.go",
+        "gen_callframe_json.go",
+        "gen_flatcallaction_json.go",
+        "gen_flatcallresult_json.go",
+        "mux.go",
+        "noop.go",
+        "prestate.go",
+        "prestate_libevm.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/eth/tracers/native",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//accounts/abi",
+        "//common",
+        "//common/hexutil",
+        "//core/vm",
+        "//crypto",
+        "//eth/tracers",
+        "//log",
+    ],
+)

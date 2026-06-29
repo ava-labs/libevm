@@ -1,0 +1,17 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "misc",
+    srcs = [
+        "dao.go",
+        "gaslimit.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/consensus/misc",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core/state",
+        "//core/types",
+        "//params",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)

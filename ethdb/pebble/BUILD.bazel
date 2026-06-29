@@ -1,0 +1,28 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "pebble",
+    srcs = ["pebble.go"],
+    importpath = "github.com/ava-labs/libevm/ethdb/pebble",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//ethdb",
+        "//log",
+        "//metrics",
+        "@com_github_cockroachdb_pebble//:pebble",
+        "@com_github_cockroachdb_pebble//bloom",
+    ],
+)
+
+go_test(
+    name = "pebble_test",
+    srcs = ["pebble_test.go"],
+    embed = [":pebble"],
+    deps = [
+        "//ethdb",
+        "//ethdb/dbtest",
+        "@com_github_cockroachdb_pebble//:pebble",
+        "@com_github_cockroachdb_pebble//vfs",
+    ],
+)

@@ -1,0 +1,40 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "ethash",
+    srcs = [
+        "consensus.go",
+        "difficulty.go",
+        "ethash.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/consensus/ethash",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//common/math",
+        "//consensus",
+        "//consensus/misc",
+        "//consensus/misc/eip1559",
+        "//core/state",
+        "//core/types",
+        "//params",
+        "//rlp",
+        "//rpc",
+        "//trie",
+        "@com_github_deckarep_golang_set_v2//:golang-set",
+        "@com_github_holiman_uint256//:uint256",
+        "@org_golang_x_crypto//sha3",
+    ],
+)
+
+go_test(
+    name = "ethash_test",
+    srcs = ["consensus_test.go"],
+    embed = [":ethash"],
+    deps = [
+        "//common",
+        "//common/math",
+        "//core/types",
+        "//params",
+    ],
+)

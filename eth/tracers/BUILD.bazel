@@ -1,0 +1,58 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "tracers",
+    srcs = [
+        "api.go",
+        "tracers.go",
+        "tracker.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/eth/tracers",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//common/hexutil",
+        "//consensus",
+        "//core",
+        "//core/rawdb",
+        "//core/state",
+        "//core/types",
+        "//core/vm",
+        "//eth/tracers/logger",
+        "//ethdb",
+        "//internal/ethapi",
+        "//log",
+        "//params",
+        "//rlp",
+        "//rpc",
+    ],
+)
+
+go_test(
+    name = "tracers_test",
+    srcs = [
+        "api_test.go",
+        "tracers_test.go",
+        "tracker_test.go",
+    ],
+    embed = [":tracers"],
+    deps = [
+        "//common",
+        "//common/hexutil",
+        "//consensus",
+        "//consensus/ethash",
+        "//core",
+        "//core/rawdb",
+        "//core/state",
+        "//core/types",
+        "//core/vm",
+        "//crypto",
+        "//eth/tracers/logger",
+        "//ethdb",
+        "//internal/ethapi",
+        "//params",
+        "//rpc",
+        "//tests",
+        "@org_golang_x_exp//slices",
+    ],
+)

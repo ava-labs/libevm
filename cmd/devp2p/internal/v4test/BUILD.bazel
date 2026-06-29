@@ -1,0 +1,17 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "v4test",
+    srcs = [
+        "discv4tests.go",
+        "framework.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/cmd/devp2p/internal/v4test",
+    visibility = ["//cmd/devp2p:__subpackages__"],
+    deps = [
+        "//crypto",
+        "//internal/utesting",
+        "//p2p/discover/v4wire",
+        "//p2p/enode",
+    ],
+)

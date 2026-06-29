@@ -1,0 +1,27 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "asm",
+    srcs = [
+        "asm.go",
+        "compiler.go",
+        "lexer.go",
+        "tokentype_string.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/core/asm",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common/math",
+        "//core/vm",
+    ],
+)
+
+go_test(
+    name = "asm_test",
+    srcs = [
+        "asm_test.go",
+        "compiler_test.go",
+        "lex_test.go",
+    ],
+    embed = [":asm"],
+)

@@ -1,0 +1,32 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "bloombits",
+    srcs = [
+        "doc.go",
+        "generator.go",
+        "matcher.go",
+        "scheduler.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/core/bloombits",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common/bitutil",
+        "//core/types",
+        "//crypto",
+    ],
+)
+
+go_test(
+    name = "bloombits_test",
+    srcs = [
+        "generator_test.go",
+        "matcher_test.go",
+        "scheduler_test.go",
+    ],
+    embed = [":bloombits"],
+    deps = [
+        "//common",
+        "//core/types",
+    ],
+)

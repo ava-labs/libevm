@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "bn256",
+    srcs = ["bn256_fuzz.go"],
+    importpath = "github.com/ava-labs/libevm/tests/fuzzers/bn256",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//crypto/bn256/cloudflare",
+        "//crypto/bn256/google",
+        "@com_github_consensys_gnark_crypto//ecc/bn254",
+    ],
+)
+
+go_test(
+    name = "bn256_test",
+    srcs = ["bn256_test.go"],
+    embed = [":bn256"],
+)

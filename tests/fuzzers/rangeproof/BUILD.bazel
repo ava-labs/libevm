@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "rangeproof",
+    srcs = ["rangeproof-fuzzer.go"],
+    importpath = "github.com/ava-labs/libevm/tests/fuzzers/rangeproof",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//core/rawdb",
+        "//ethdb/memorydb",
+        "//trie",
+        "//triedb",
+        "@org_golang_x_exp//slices",
+    ],
+)
+
+go_test(
+    name = "rangeproof_test",
+    srcs = ["rangeproof_test.go"],
+    embed = [":rangeproof"],
+)
