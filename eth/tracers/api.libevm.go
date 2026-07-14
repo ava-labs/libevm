@@ -16,15 +16,5 @@
 
 package tracers
 
-import (
-	"context"
-
-	"github.com/ava-labs/libevm/core"
-	"github.com/ava-labs/libevm/core/state"
-	"github.com/ava-labs/libevm/core/vm"
-)
-
-// TraceTx exports [API.traceTx].
-func TraceTx(api *API, ctx context.Context, message *core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
-	return api.traceTx(ctx, message, txctx, vmctx, statedb, config)
-}
+// DefaultTraceTimeout exports [defaultTraceTimeout].
+const DefaultTraceTimeout = defaultTraceTimeout
