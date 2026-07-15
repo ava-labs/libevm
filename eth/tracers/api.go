@@ -951,48 +951,16 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
 func (api *API) traceTx(ctx context.Context, message *core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
-	var (
-		tracer    Tracer
-		err       error
-		timeout   = defaultTraceTimeout
-		txContext = core.NewEVMTxContext(message)
-	)
-	if config == nil {
-		config = &TraceConfig{}
-	}
-	// Default tracer is the struct logger
-	tracer = logger.NewStructLogger(config.Config)
-	if config.Tracer != nil {
-		tracer, err = DefaultDirectory.New(*config.Tracer, txctx, config.TracerConfig)
-		if err != nil {
-			return nil, err
-		}
-	}
-	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer, NoBaseFee: true})
+	txContext := core.NewEVMTxContext(message)
+	return TraceTx(ctx, config, txctx, func(cfg vm.Config) error {
+		cfg.NoBaseFee = true
+		vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), cfg)
 
-	// Define a meaningful timeout of a single transaction trace
-	if config.Timeout != nil {
-		if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
-			return nil, err
-		}
-	}
-	deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
-	go func() {
-		<-deadlineCtx.Done()
-		if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
-			tracer.Stop(errors.New("execution timeout"))
-			// Stop evm execution. Note cancellation is not necessarily immediate.
-			vmenv.Cancel()
-		}
-	}()
-	defer cancel()
-
-	// Call Prepare to clear out the statedb access list
-	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
-	if err := applyMessage(api.backend, vmenv, statedb, message); err != nil {
-		return nil, fmt.Errorf("tracing failed: %w", err)
-	}
-	return tracer.GetResult()
+		// Call Prepare to clear out the statedb access list
+		statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
+		// [applyMessage] wraps any error as "tracing failed".
+		return applyMessage(api.backend, vmenv, statedb, message)
+	})
 }
 
 // APIs return the collection of RPC services the tracer package offers.

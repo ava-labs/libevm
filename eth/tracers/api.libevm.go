@@ -17,13 +17,19 @@
 package tracers
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"math/big"
+	"sync"
+	"time"
 
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/eth/tracers/logger"
 )
 
 // DefaultTraceTimeout exports defaultTraceTimeout.
@@ -66,4 +72,83 @@ func applyMessage(b Backend, vmenv *vm.EVM, sdb *state.StateDB, message *core.Me
 		return fmt.Errorf("after executing transaction failed: %w", err)
 	}
 	return nil
+}
+
+// TraceTx traces a transaction executed by `execute`, which MUST apply the
+// transaction with the provided [vm.Config] attached. The [Tracer] specified
+// by config observes the execution.
+func TraceTx(ctx context.Context, config *TraceConfig, txctx *Context, execute func(vm.Config) error) (interface{}, error) {
+	var (
+		tracer  Tracer
+		err     error
+		timeout = defaultTraceTimeout
+	)
+	if config == nil {
+		config = &TraceConfig{}
+	}
+	// Default tracer is the struct logger
+	tracer = logger.NewStructLogger(config.Config)
+	if config.Tracer != nil {
+		tracer, err = DefaultDirectory.New(*config.Tracer, txctx, config.TracerConfig)
+		if err != nil {
+			return nil, err
+		}
+	}
+	cancelling := &evmCancellingTracer{Tracer: tracer}
+
+	// Define a meaningful timeout of a single transaction trace
+	if config.Timeout != nil {
+		if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
+			return nil, err
+		}
+	}
+	deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+	go func() {
+		<-deadlineCtx.Done()
+		if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
+			// Also cancels the EVM; note cancellation is not necessarily
+			// immediate.
+			cancelling.Stop(errors.New("execution timeout"))
+		}
+	}()
+	defer cancel()
+
+	if err := execute(vm.Config{Tracer: cancelling}); err != nil {
+		return nil, err
+	}
+	return cancelling.GetResult()
+}
+
+// evmCancellingTracer wraps a [Tracer] so that Stop also cancels the [vm.EVM]
+// executing the traced transaction.
+type evmCancellingTracer struct {
+	Tracer
+
+	mu      sync.Mutex
+	env     *vm.EVM
+	stopped bool
+}
+
+func (t *evmCancellingTracer) CaptureStart(env *vm.EVM, from, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+	t.mu.Lock()
+	t.env = env
+	stopped := t.stopped
+	t.mu.Unlock()
+
+	if stopped {
+		env.Cancel()
+	}
+	t.Tracer.CaptureStart(env, from, to, create, input, gas, value)
+}
+
+func (t *evmCancellingTracer) Stop(err error) {
+	t.mu.Lock()
+	t.stopped = true
+	env := t.env
+	t.mu.Unlock()
+
+	t.Tracer.Stop(err)
+	if env != nil {
+		env.Cancel()
+	}
 }
