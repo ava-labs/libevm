@@ -17,5 +17,5 @@
 package native
 
 // CallFrame exports the [callFrame] type, used for JSON-marshalling the
-// results of the callTracer tracer.
+// results of the callTracer.
 type CallFrame = callFrame
