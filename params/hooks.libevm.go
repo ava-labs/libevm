@@ -71,6 +71,10 @@ type RulesHooks interface {
 	// will be capped at the limit. The minimum spend will be applied _after_
 	// refunds, if any.
 	MinimumGasConsumption(txGasLimit uint64) (gas uint64)
+	// AfterExecutingTransaction is called after a transaction has executed
+	// successfully, allowing post-execution state modification. It is not
+	// called if execution failed or was invalidated.
+	AfterExecutingTransaction(state libevm.StateDB, baseFee *big.Int, gasUsed uint64)
 }
 
 // RulesAllowlistHooks are a subset of [RulesHooks] that gate actions, signalled
@@ -164,3 +168,6 @@ func (NOOPHooks) ShouldRefundGas() bool {
 func (NOOPHooks) MinimumGasConsumption(uint64) uint64 {
 	return 0
 }
+
+// AfterExecutingTransaction does nothing.
+func (NOOPHooks) AfterExecutingTransaction(libevm.StateDB, *big.Int, uint64) {}

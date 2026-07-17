@@ -42,16 +42,17 @@ func Register[C params.ChainConfigHooks, R params.RulesHooks](tb testing.TB, ext
 // [params.RulesHooks]. Each of the fields, if non-nil, back their respective
 // hook methods, which otherwise fall back to the default behaviour.
 type Stub struct {
-	CheckConfigForkOrderFn  func() error
-	CheckConfigCompatibleFn func(*params.ChainConfig, *big.Int, uint64) *params.ConfigCompatError
-	DescriptionSuffix       string
-	PrecompileOverrides     map[common.Address]libevm.PrecompiledContract
-	ActivePrecompilesFn     func([]common.Address) []common.Address
-	AccessListGasFn         func(libevm.AccessList) (uint64, bool, error)
-	CanExecuteTransactionFn func(common.Address, *common.Address, libevm.StateReader) error
-	CanCreateContractFn     func(*libevm.AddressContext, uint64, libevm.StateReader) (uint64, error)
-	MinimumGasConsumptionFn func(txGasLimit uint64) uint64
-	DisableGasRefunds       bool
+	CheckConfigForkOrderFn      func() error
+	CheckConfigCompatibleFn     func(*params.ChainConfig, *big.Int, uint64) *params.ConfigCompatError
+	DescriptionSuffix           string
+	PrecompileOverrides         map[common.Address]libevm.PrecompiledContract
+	ActivePrecompilesFn         func([]common.Address) []common.Address
+	AccessListGasFn             func(libevm.AccessList) (uint64, bool, error)
+	CanExecuteTransactionFn     func(common.Address, *common.Address, libevm.StateReader) error
+	CanCreateContractFn         func(*libevm.AddressContext, uint64, libevm.StateReader) (uint64, error)
+	MinimumGasConsumptionFn     func(txGasLimit uint64) uint64
+	DisableGasRefunds           bool
+	AfterExecutingTransactionFn func(state libevm.StateDB, baseFee *big.Int, gasUsed uint64)
 }
 
 // Register is a convenience wrapper for registering s as both the
@@ -161,6 +162,15 @@ func (s Stub) MinimumGasConsumption(limit uint64) uint64 {
 		return f(limit)
 	}
 	return 0
+}
+
+// AfterExecutingTransaction proxies arguments to the
+// s.AfterExecutingTransactionFn function if non-nil, otherwise it acts as a
+// noop.
+func (s Stub) AfterExecutingTransaction(state libevm.StateDB, baseFee *big.Int, gasUsed uint64) {
+	if f := s.AfterExecutingTransactionFn; f != nil {
+		f(state, baseFee, gasUsed)
+	}
 }
 
 var _ interface {

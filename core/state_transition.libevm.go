@@ -74,7 +74,13 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		st.state.RevertToSnapshot(snap)
 		err = fmt.Errorf("execution invalidated: %w", invalid)
 	}
-	return res, err
+
+	if err != nil {
+		return res, err
+	}
+
+	st.rulesHooks().AfterExecutingTransaction(st.state, st.evm.Context.BaseFee, res.UsedGas)
+	return res, nil
 }
 
 // canExecuteTransaction is a convenience wrapper for calling the
