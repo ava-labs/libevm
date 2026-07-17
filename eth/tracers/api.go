@@ -272,7 +272,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				for i, tx := range task.block.Transactions() {
 					msg, _ := core.TransactionToMessage(tx, signer, task.block.BaseFee())
 					txctx := &Context{
-						BlockHash:   task.block.Hash(),
+						BlockHash:   api.blockHash(task.block),
 						BlockNumber: task.block.Number(),
 						TxIndex:     i,
 						TxHash:      tx.Hash(),
@@ -407,7 +407,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			// Queue up next received result
 			result := &blockTraceResult{
 				Block:  hexutil.Uint64(res.block.NumberU64()),
-				Hash:   res.block.Hash(),
+				Hash:   api.blockHash(res.block),
 				Traces: res.results,
 			}
 			done[uint64(result.Block)] = result
@@ -597,7 +597,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	// Native tracers have low overhead
 	var (
 		txs       = block.Transactions()
-		blockHash = block.Hash()
+		blockHash = api.blockHash(block)
 		is158     = api.backend.ChainConfig().IsEIP158(block.Number())
 		blockCtx  = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
@@ -631,7 +631,7 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 	// Execute all the transaction contained within the block concurrently
 	var (
 		txs       = block.Transactions()
-		blockHash = block.Hash()
+		blockHash = api.blockHash(block)
 		blockCtx  = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		results   = make([]*txTraceResult, len(txs))
@@ -769,7 +769,8 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// If the transaction needs tracing, swap out the configs
 		if tx.Hash() == txHash || txHash == (common.Hash{}) {
 			// Generate a unique temporary file to dump it into
-			prefix := fmt.Sprintf("block_%#x-%d-%#x-", block.Hash().Bytes()[:4], i, tx.Hash().Bytes()[:4])
+			blockHash := api.blockHash(block)
+			prefix := fmt.Sprintf("block_%#x-%d-%#x-", blockHash.Bytes()[:4], i, tx.Hash().Bytes()[:4])
 			if !canon {
 				prefix = fmt.Sprintf("%valt-", prefix)
 			}
