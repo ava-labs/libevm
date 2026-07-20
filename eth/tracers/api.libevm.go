@@ -40,3 +40,7 @@ func (a *API) blockHash(block *types.Block) common.Hash {
 	}
 	return overrider.BlockHash(block)
 }
+
+// TxTraceResult exports the [txTraceResult] type, returned per transaction
+// by the TraceBlock* methods.
+type TxTraceResult = txTraceResult
