@@ -301,6 +301,110 @@ func TestMinimumGasConsumption(t *testing.T) {
 	}
 }
 
+func TestAfterExecutingTransaction(t *testing.T) {
+	const (
+		gasPrice = 3
+		reward   = 42
+	)
+
+	var (
+		beneficiary = common.Address{'b', 'e', 'n'}
+		invalidator = common.Address{'i', 'n', 'v'}
+		testErr     = errors.New("test error")
+	)
+
+	tests := []struct {
+		name          string
+		to            *common.Address
+		startingFunds *uint256.Int
+		wantErr       error
+	}{
+		{
+			name:          "successful_execution",
+			to:            &common.Address{},
+			startingFunds: new(uint256.Int).SetAllOne(),
+		},
+		{
+			name:          "execution_invalidated",
+			to:            &invalidator,
+			startingFunds: new(uint256.Int).SetAllOne(),
+			wantErr:       testErr,
+		},
+		{
+			name:          "execution_error",
+			to:            &common.Address{},
+			startingFunds: uint256.NewInt(1), // can't buy gas
+			wantErr:       core.ErrInsufficientFunds,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var (
+				hookCalled bool
+				gotBaseFee *big.Int
+				gotGasUsed uint64
+			)
+			hooks := &hookstest.Stub{
+				AfterExecutingTransactionFn: func(state libevm.StateDB, baseFee *big.Int, gasUsed uint64) {
+					hookCalled = true
+					gotBaseFee = baseFee
+					gotGasUsed = gasUsed
+					state.AddBalance(beneficiary, uint256.NewInt(reward))
+				},
+				PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+					invalidator: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, _ []byte) ([]byte, error) {
+						env.InvalidateExecution(testErr)
+						return nil, nil
+					}),
+				},
+			}
+			hooks.Register(t)
+
+			key, err := crypto.GenerateKey()
+			require.NoError(t, err, "crypto.GenerateKey()")
+
+			sdb, evm := ethtest.NewZeroEVM(t)
+			sdb.SetBalance(crypto.PubkeyToAddress(key.PublicKey), tt.startingFunds)
+
+			tx := types.MustSignNewTx(
+				key,
+				types.LatestSigner(evm.ChainConfig()),
+				&types.LegacyTx{
+					To:       tt.to,
+					Gas:      1e6,
+					GasPrice: big.NewInt(gasPrice),
+				},
+			)
+
+			gp := core.GasPool(math.MaxUint64)
+			var gasUsed uint64
+			receipt, err := core.ApplyTransaction(
+				evm.ChainConfig(), nil, &common.Address{}, &gp, sdb,
+				&types.Header{
+					BaseFee: big.NewInt(gasPrice),
+					// Required but irrelevant fields
+					Number:     big.NewInt(0),
+					Difficulty: big.NewInt(0),
+				},
+				tx, &gasUsed, vm.Config{},
+			)
+			require.ErrorIs(t, err, tt.wantErr, "core.ApplyTransaction(...)")
+
+			wantHookCalled := tt.wantErr == nil
+			require.Equal(t, wantHookCalled, hookCalled, "hook called i.f.f. execution succeeds")
+			if !wantHookCalled {
+				assert.Equal(t, new(uint256.Int), sdb.GetBalance(beneficiary), "balance of beneficiary unchanged when hook not called")
+				return
+			}
+
+			assert.Equal(t, big.NewInt(gasPrice), gotBaseFee, "base fee received by hook")
+			assert.Equalf(t, receipt.GasUsed, gotGasUsed, "gas used received by hook vs %T.GasUsed", receipt)
+			assert.Equal(t, uint64(reward), sdb.GetBalance(beneficiary).Uint64(), "state modified by hook")
+		})
+	}
+}
+
 func TestGasRefunds(t *testing.T) {
 	const refund = 100
 
