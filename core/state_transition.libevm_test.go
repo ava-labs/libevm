@@ -314,41 +314,36 @@ func TestAfterExecutingTransaction(t *testing.T) {
 	)
 
 	tests := []struct {
-		name           string
-		to             *common.Address
-		startingFunds  *uint256.Int
-		wantHookCalled bool
-		wantErr        error
+		name          string
+		to            *common.Address
+		startingFunds *uint256.Int
+		wantErr       error
 	}{
 		{
-			name:           "successful_execution",
-			to:             &common.Address{},
-			startingFunds:  new(uint256.Int).SetAllOne(),
-			wantHookCalled: true,
+			name:          "successful_execution",
+			to:            &common.Address{},
+			startingFunds: new(uint256.Int).SetAllOne(),
 		},
 		{
-			name:           "execution_invalidated",
-			to:             &invalidator,
-			startingFunds:  new(uint256.Int).SetAllOne(),
-			wantHookCalled: false,
-			wantErr:        testErr,
+			name:          "execution_invalidated",
+			to:            &invalidator,
+			startingFunds: new(uint256.Int).SetAllOne(),
+			wantErr:       testErr,
 		},
 		{
-			name:           "execution_error",
-			to:             &common.Address{},
-			startingFunds:  uint256.NewInt(1), // can't buy gas
-			wantHookCalled: false,
-			wantErr:        core.ErrInsufficientFunds,
+			name:          "execution_error",
+			to:            &common.Address{},
+			startingFunds: uint256.NewInt(1), // can't buy gas
+			wantErr:       core.ErrInsufficientFunds,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var (
-				hookCalled  bool
-				gotBaseFee  *big.Int
-				gotGasUsed  uint64
-				wantBaseFee = big.NewInt(gasPrice)
+				hookCalled bool
+				gotBaseFee *big.Int
+				gotGasUsed uint64
 			)
 			hooks := &hookstest.Stub{
 				AfterExecutingTransactionFn: func(state libevm.StateDB, baseFee *big.Int, gasUsed uint64) {
@@ -387,22 +382,23 @@ func TestAfterExecutingTransaction(t *testing.T) {
 			receipt, err := core.ApplyTransaction(
 				evm.ChainConfig(), nil, &common.Address{}, &gp, sdb,
 				&types.Header{
-					BaseFee: wantBaseFee,
+					BaseFee: big.NewInt(gasPrice),
 					// Required but irrelevant fields
 					Number:     big.NewInt(0),
 					Difficulty: big.NewInt(0),
 				},
 				tx, &gasUsed, vm.Config{},
 			)
-
-			require.Equal(t, tt.wantHookCalled, hookCalled, "hook called i.f.f. execution succeeds")
 			require.ErrorIs(t, err, tt.wantErr, "core.ApplyTransaction(...)")
-			if tt.wantErr != nil {
-				assert.True(t, sdb.GetBalance(beneficiary).IsZero(), "no state modification by uncalled hook")
+
+			wantHookCalled := tt.wantErr == nil
+			require.Equal(t, wantHookCalled, hookCalled, "hook called i.f.f. execution succeeds")
+			if !wantHookCalled {
+				assert.Equal(t, new(uint256.Int), sdb.GetBalance(beneficiary), "balance of beneficiary unchanged when hook not called")
 				return
 			}
 
-			assert.Equal(t, wantBaseFee, gotBaseFee, "base fee received by hook")
+			assert.Equal(t, big.NewInt(gasPrice), gotBaseFee, "base fee received by hook")
 			assert.Equalf(t, receipt.GasUsed, gotGasUsed, "gas used received by hook vs %T.GasUsed", receipt)
 			assert.Equal(t, uint64(reward), sdb.GetBalance(beneficiary).Uint64(), "state modified by hook")
 		})
