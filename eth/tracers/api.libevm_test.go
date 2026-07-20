@@ -267,7 +267,7 @@ func TestOverrideBlockHash_Propagation(t *testing.T) {
 func blockAt(t *testing.T, b *alteredBackend, num uint64) *types.Block {
 	t.Helper()
 
-	block, err := b.BlockByNumber(t.Context(), rpc.BlockNumber(num))
+	block, err := b.BlockByNumber(t.Context(), rpc.BlockNumber(num)) //#nosec G115 -- block number is small
 	require.NoErrorf(t, err, "BlockByNumber(%d)", num)
 	return block
 }
@@ -275,7 +275,7 @@ func blockAt(t *testing.T, b *alteredBackend, num uint64) *types.Block {
 func headerAt(t *testing.T, b *alteredBackend, num uint64) *types.Header {
 	t.Helper()
 
-	header, err := b.HeaderByNumber(t.Context(), rpc.BlockNumber(num))
+	header, err := b.HeaderByNumber(t.Context(), rpc.BlockNumber(num)) //#nosec G115 -- block number is small
 	require.NoErrorf(t, err, "HeaderByNumber(%d)", num)
 	return header
 }
