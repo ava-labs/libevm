@@ -35,6 +35,6 @@ var (
 	// StateReader MUST be a subset vm.StateDB.
 	_ libevm.StateReader = (vm.StateDB)(nil)
 
-	// StateDB MUST be a subset of vm.StateDB.
+	// StateDB MUST be a non-strict subset of vm.StateDB.
 	_ libevm.StateDB = (vm.StateDB)(nil)
 )

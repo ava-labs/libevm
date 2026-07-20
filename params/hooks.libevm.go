@@ -72,8 +72,9 @@ type RulesHooks interface {
 	// refunds, if any.
 	MinimumGasConsumption(txGasLimit uint64) (gas uint64)
 	// AfterExecutingTransaction is called after a transaction has executed
-	// successfully, allowing post-execution state modification. It is not
-	// called if execution failed or was invalidated.
+	// without consensus errors, and the execution has not been invalidated.
+	// The exact qualifications for a "consensus error" can be found in the
+	// comment for core/state_transition.go:StateTransition.transitionDb.
 	AfterExecutingTransaction(state libevm.StateDB, baseFee *big.Int, gasUsed uint64)
 }
 

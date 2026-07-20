@@ -72,10 +72,9 @@ type StateReader interface {
 	TxIndex() int
 }
 
-// StateDB is a subset of vm.StateDB, embedding [StateReader] and adding
-// balance mutation, mirrored here for packages that cannot import core/vm
-// without causing a circular dependency. See method comments in vm.StateDB,
-// which aren't copied here as they risk becoming outdated.
+// StateDB is a subset of vm.StateDB that embeds [StateReader] and adds balance
+// mutation, mirrored here to avoid a core/vm import cycle. See method comments
+// in vm.StateDB, which aren't copied here as they risk becoming outdated.
 type StateDB interface {
 	StateReader
 
