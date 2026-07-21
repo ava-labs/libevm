@@ -228,7 +228,6 @@ func traceChainHashes(t *testing.T, api *API) map[uint64][]common.Hash {
 	next := uint64(1)
 	for result := range api.traceChain(from, to, &TraceConfig{Tracer: &tracer}, nil) {
 		require.Equal(t, next, uint64(result.Block), "traced block number")
-		seen[next] = append(seen[next], result.Hash)
 		hashes := []common.Hash{result.Hash}
 		for i, trace := range result.Traces {
 			require.Emptyf(t, trace.Error, "trace error for tx %d of block %d", i, next)
@@ -347,9 +346,11 @@ func TestOverrideBlockHash_StandardTraceBlockToFile(t *testing.T) {
 		require.NoErrorf(t, err, "StandardTraceBlockToFile() block %d", blockNum)
 		require.NotEmptyf(t, files, "StandardTraceBlockToFile() block %d returned no files", blockNum)
 
-		for _, file := range files {
-			defer os.Remove(file)
-		}
+		t.Cleanup(func() {
+			for _, file := range files {
+				os.Remove(file)
+			}
+		})
 
 		wantPrefix := fmt.Sprintf("block_%#x-", expectedHash.Bytes()[:4])
 		for _, file := range files {

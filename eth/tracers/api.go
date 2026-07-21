@@ -141,7 +141,7 @@ func (api *API) blockByNumberAndHash(ctx context.Context, number rpc.BlockNumber
 	if err != nil {
 		return nil, err
 	}
-	if block.Hash() == hash {
+	if api.blockHash(block) == hash {
 		return block, nil
 	}
 	return api.blockByHash(ctx, hash)
