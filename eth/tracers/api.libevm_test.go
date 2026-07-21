@@ -251,18 +251,21 @@ func TestOverrideBlockHash_Propagation(t *testing.T) {
 		{
 			name: "traceBlock_sequential",
 			trace: func(t *testing.T) map[uint64][]common.Hash {
+				t.Helper()
 				return traceBlockHashes(t, api, blockHashCaptureTracerName)
 			},
 		},
 		{
 			name: "traceBlock_parallel",
 			trace: func(t *testing.T) map[uint64][]common.Hash {
+				t.Helper()
 				return traceBlockHashes(t, api, blockHashCaptureTracerJSName)
 			},
 		},
 		{
 			name: "traceChain",
 			trace: func(t *testing.T) map[uint64][]common.Hash {
+				t.Helper()
 				return traceChainHashes(t, api)
 			},
 		},
@@ -348,7 +351,7 @@ func TestOverrideBlockHash_StandardTraceBlockToFile(t *testing.T) {
 
 		t.Cleanup(func() {
 			for _, file := range files {
-				os.Remove(file)
+				assert.NoError(t, os.Remove(file), "os.Remove()")
 			}
 		})
 
