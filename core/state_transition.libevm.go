@@ -25,6 +25,7 @@ import (
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/params"
+	"github.com/holiman/uint256"
 )
 
 func (st *StateTransition) rulesHooks() params.RulesHooks {
@@ -74,7 +75,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		st.state.RevertToSnapshot(snap)
 		err = fmt.Errorf("execution invalidated: %w", invalid)
 	}
-
 	return res, err
 }
 
@@ -114,6 +114,31 @@ func (st *StateTransition) afterGasRefund(refunded uint64) {
 		st.gasRemaining,
 		limit-minConsume,
 	)
+
+	st.maybeCreditBaseFeeToCoinbase()
+}
+
+// maybeCreditBaseFeeToCoinbase credits the coinbase with the base-fee portion
+// of the transaction fee, which EIP-1559 would otherwise burn. The effective
+// tip is unconditionally credited by transitionDb so MUST NOT be included here.
+//
+// This MUST be called after [StateTransition.refundGas] and before
+// [vm.EVMLogger.CaptureEnd] in the defer of
+// [StateTransition.transitionDb].
+func (st *StateTransition) maybeCreditBaseFeeToCoinbase() {
+	if !st.rulesHooks().ShouldCreditBaseFeeToCoinbase() {
+		return
+	}
+
+	baseFee := st.evm.Context.BaseFee
+	if baseFee == nil {
+		return
+	}
+
+	baseFeeU256, _ := uint256.FromBig(baseFee)
+	fee := new(uint256.Int).SetUint64(st.gasUsed())
+	fee.Mul(fee, baseFeeU256)
+	st.state.AddBalance(st.evm.Context.Coinbase, fee)
 }
 
 // libevmAccessListGas is a convenience wrapper for calling the

@@ -465,8 +465,6 @@ func (st *StateTransition) transitionDb() (*ExecutionResult, error) {
 		st.state.AddBalance(st.evm.Context.Coinbase, fee)
 	}
 
-	st.rulesHooks().AfterExecutingTransaction(st.state, st.evm.Context.BaseFee, st.gasUsed()) // libevm: must be done before tracer.CaptureEnd() in defer.
-
 	return &ExecutionResult{
 		UsedGas:     st.gasUsed(),
 		RefundedGas: gasRefund,

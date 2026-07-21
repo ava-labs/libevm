@@ -71,11 +71,10 @@ type RulesHooks interface {
 	// will be capped at the limit. The minimum spend will be applied _after_
 	// refunds, if any.
 	MinimumGasConsumption(txGasLimit uint64) (gas uint64)
-	// AfterExecutingTransaction is called after a transaction has executed
-	// without consensus errors, and the execution has not been invalidated.
-	// The exact qualifications for a "consensus error" can be found in the
-	// comment for core/state_transition.go:StateTransition.transitionDb.
-	AfterExecutingTransaction(state libevm.StateDB, baseFee *big.Int, gasUsed uint64)
+	// ShouldCreditBaseFeeToCoinbase returns whether or not to credit the
+	// block's base fee to the coinbase address. By default, it will NOT be
+	// credited.
+	ShouldCreditBaseFeeToCoinbase() bool
 }
 
 // RulesAllowlistHooks are a subset of [RulesHooks] that gate actions, signalled
@@ -170,5 +169,7 @@ func (NOOPHooks) MinimumGasConsumption(uint64) uint64 {
 	return 0
 }
 
-// AfterExecutingTransaction does nothing.
-func (NOOPHooks) AfterExecutingTransaction(libevm.StateDB, *big.Int, uint64) {}
+// ShouldCreditBaseFeeToCoinbase always returns false.
+func (NOOPHooks) ShouldCreditBaseFeeToCoinbase() bool {
+	return false
+}
