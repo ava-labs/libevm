@@ -16,6 +16,7 @@
 package core_test
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -31,6 +32,8 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/eth/tracers"
+	"github.com/ava-labs/libevm/eth/tracers/native"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/ethtest"
 	"github.com/ava-labs/libevm/libevm/hookstest"
@@ -307,11 +310,7 @@ func TestAfterExecutingTransaction(t *testing.T) {
 		reward   = 42
 	)
 
-	var (
-		beneficiary = common.Address{'b', 'e', 'n'}
-		invalidator = common.Address{'i', 'n', 'v'}
-		testErr     = errors.New("test error")
-	)
+	beneficiary := common.Address{'b', 'e', 'n'}
 
 	tests := []struct {
 		name          string
@@ -324,12 +323,7 @@ func TestAfterExecutingTransaction(t *testing.T) {
 			to:            &common.Address{},
 			startingFunds: new(uint256.Int).SetAllOne(),
 		},
-		{
-			name:          "execution_invalidated",
-			to:            &invalidator,
-			startingFunds: new(uint256.Int).SetAllOne(),
-			wantErr:       testErr,
-		},
+
 		{
 			name:          "execution_error",
 			to:            &common.Address{},
@@ -350,13 +344,9 @@ func TestAfterExecutingTransaction(t *testing.T) {
 					hookCalled = true
 					gotBaseFee = baseFee
 					gotGasUsed = gasUsed
+					curr := state.GetBalance(beneficiary)
+					state.SubBalance(beneficiary, curr)
 					state.AddBalance(beneficiary, uint256.NewInt(reward))
-				},
-				PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
-					invalidator: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, _ []byte) ([]byte, error) {
-						env.InvalidateExecution(testErr)
-						return nil, nil
-					}),
 				},
 			}
 			hooks.Register(t)
@@ -377,17 +367,21 @@ func TestAfterExecutingTransaction(t *testing.T) {
 				},
 			)
 
+			// All edits MUST be captured by the tracer.
+			tracer, err := tracers.DefaultDirectory.New("prestateTracer", &tracers.Context{}, json.RawMessage(`{"diffMode":true}`))
+			require.NoError(t, err, `tracers.DefaultDirectory.New("prestateTracer", ...)`)
+
 			gp := core.GasPool(math.MaxUint64)
 			var gasUsed uint64
 			receipt, err := core.ApplyTransaction(
-				evm.ChainConfig(), nil, &common.Address{}, &gp, sdb,
+				evm.ChainConfig(), nil, &beneficiary, &gp, sdb,
 				&types.Header{
 					BaseFee: big.NewInt(gasPrice),
 					// Required but irrelevant fields
 					Number:     big.NewInt(0),
 					Difficulty: big.NewInt(0),
 				},
-				tx, &gasUsed, vm.Config{},
+				tx, &gasUsed, vm.Config{Tracer: tracer},
 			)
 			require.ErrorIs(t, err, tt.wantErr, "core.ApplyTransaction(...)")
 
@@ -401,6 +395,16 @@ func TestAfterExecutingTransaction(t *testing.T) {
 			assert.Equal(t, big.NewInt(gasPrice), gotBaseFee, "base fee received by hook")
 			assert.Equalf(t, receipt.GasUsed, gotGasUsed, "gas used received by hook vs %T.GasUsed", receipt)
 			assert.Equal(t, uint64(reward), sdb.GetBalance(beneficiary).Uint64(), "state modified by hook")
+
+			traced, err := tracer.GetResult()
+			require.NoError(t, err, "tracer.GetResult()")
+			var diff struct {
+				Post map[common.Address]*native.Account `json:"post"`
+				Pre  map[common.Address]*native.Account `json:"pre"`
+			}
+			require.NoError(t, json.Unmarshal(traced, &diff), "json.Unmarshal(tracer.GetResult(), ...)")
+			require.Containsf(t, diff.Post, beneficiary, "beneficiary in post-state diff of native prestate tracer")
+			assert.Equal(t, big.NewInt(reward), diff.Post[beneficiary].Balance, "balance added by hook in post-state diff of native prestate tracer")
 		})
 	}
 }

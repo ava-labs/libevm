@@ -79,6 +79,7 @@ type StateDB interface {
 	StateReader
 
 	AddBalance(common.Address, *uint256.Int)
+	SubBalance(common.Address, *uint256.Int)
 }
 
 // AddressContext carries addresses available to contexts such as calls and

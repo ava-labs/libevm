@@ -75,12 +75,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		err = fmt.Errorf("execution invalidated: %w", invalid)
 	}
 
-	if err != nil {
-		return res, err
-	}
-
-	st.rulesHooks().AfterExecutingTransaction(st.state, st.evm.Context.BaseFee, res.UsedGas)
-	return res, nil
+	return res, err
 }
 
 // canExecuteTransaction is a convenience wrapper for calling the
