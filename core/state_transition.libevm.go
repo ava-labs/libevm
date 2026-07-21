@@ -20,12 +20,13 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/holiman/uint256"
+
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/params"
-	"github.com/holiman/uint256"
 )
 
 func (st *StateTransition) rulesHooks() params.RulesHooks {
