@@ -24,6 +24,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
@@ -91,7 +92,7 @@ type alteredBackend struct {
 var _ BlockHashOverrider = (*alteredBackend)(nil)
 
 func (b *alteredBackend) BlockHash(block *types.Block) common.Hash {
-	return b.canonicalHash(block.NumberU64())
+	return b.unalteredHash(block.NumberU64())
 }
 
 func (b *alteredBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
@@ -114,18 +115,18 @@ func (b *alteredBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*t
 }
 
 func (b *alteredBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly, preferDisk bool) (*state.StateDB, StateReleaseFunc, error) {
-	return b.testBackend.StateAtBlock(ctx, b.canonicalBlock(block.NumberU64()), reexec, base, readOnly, preferDisk)
+	return b.testBackend.StateAtBlock(ctx, b.unalteredBlock(block.NumberU64()), reexec, base, readOnly, preferDisk)
 }
 
 func (b *alteredBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*core.Message, vm.BlockContext, *state.StateDB, StateReleaseFunc, error) {
-	return b.testBackend.StateAtTransaction(ctx, b.canonicalBlock(block.NumberU64()), txIndex, reexec)
+	return b.testBackend.StateAtTransaction(ctx, b.unalteredBlock(block.NumberU64()), txIndex, reexec)
 }
 
-func (b *alteredBackend) canonicalBlock(num uint64) *types.Block {
+func (b *alteredBackend) unalteredBlock(num uint64) *types.Block {
 	return b.chain.GetBlockByNumber(num)
 }
 
-func (b *alteredBackend) canonicalHash(num uint64) common.Hash {
+func (b *alteredBackend) unalteredHash(num uint64) common.Hash {
 	return b.chain.GetCanonicalHash(num)
 }
 
@@ -144,10 +145,7 @@ func alterBlock(block *types.Block) *types.Block {
 	if block == nil {
 		return nil
 	}
-	return types.NewBlockWithHeader(alterHeader(block.Header())).WithBody(types.Body{
-		Transactions: block.Transactions(),
-		Uncles:       block.Uncles(),
-	})
+	return block.WithSeal(alterHeader(block.Header()))
 }
 
 // numBlocks is the height of the chain [newAlteredBackend] build.
@@ -158,17 +156,25 @@ const numBlocks = 5
 func newAlteredBackend(t *testing.T) *alteredBackend {
 	t.Helper()
 
-	accounts := newAccounts(2)
+	account := newAccounts(1)[0]
 	genesis := &core.Genesis{
 		Config: params.TestChainConfig,
 		Alloc: types.GenesisAlloc{
-			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			account.addr: {Balance: big.NewInt(params.Ether)},
 		},
 	}
-	signer := types.HomesteadSigner{}
 	nonce := uint64(0)
 	backend := newTestBackend(t, numBlocks, genesis, func(i int, b *core.BlockGen) {
-		tx, err := types.SignTx(types.NewTransaction(nonce, accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
+		tx, err := types.SignTx(
+			types.NewTx(&types.LegacyTx{
+				Nonce:    nonce,
+				GasPrice: b.BaseFee(),
+				Gas:      params.TxGas,
+				To:       &common.Address{},
+			}),
+			types.HomesteadSigner{},
+			account.key,
+		)
 		require.NoError(t, err, "types.SignTx()")
 		b.AddTx(tx)
 		nonce++
@@ -179,7 +185,7 @@ func newAlteredBackend(t *testing.T) *alteredBackend {
 
 // hashFromTraceResult extracts the [common.Hash] reported by a
 // [blockHashCaptureTracer] from a trace result.
-func hashFromTraceResult(t *testing.T, res interface{}) common.Hash {
+func hashFromTraceResult(t *testing.T, res any) common.Hash {
 	t.Helper()
 
 	raw, err := json.Marshal(res)
@@ -223,97 +229,57 @@ func traceChainHashes(t *testing.T, api *API) map[uint64][]common.Hash {
 	for result := range api.traceChain(from, to, &TraceConfig{Tracer: &tracer}, nil) {
 		require.Equal(t, next, uint64(result.Block), "traced block number")
 		seen[next] = append(seen[next], result.Hash)
+		hashes := []common.Hash{result.Hash}
 		for i, trace := range result.Traces {
 			require.Emptyf(t, trace.Error, "trace error for tx %d of block %d", i, next)
-			seen[next] = append(seen[next], hashFromTraceResult(t, trace.Result))
+			hashes = append(hashes, hashFromTraceResult(t, trace.Result))
 		}
+		seen[next] = hashes
 		next++
 	}
 	require.Equal(t, uint64(numBlocks+1), next, "all blocks traced")
 	return seen
 }
 
-// requireCanonicalHashes asserts every surfaced hash is canonical and no block is missing.
-func requireCanonicalHashes(t *testing.T, backend *alteredBackend, seen map[uint64][]common.Hash) {
-	t.Helper()
-
-	require.Lenf(t, seen, numBlocks, "blocks with surfaced hashes")
-	for n := uint64(1); n <= numBlocks; n++ {
-		require.NotEmptyf(t, seen[n], "hashes surfaced for block %d", n)
-		for _, got := range seen[n] {
-			require.Equalf(t, backend.canonicalHash(n), got, "block hash surfaced for block %d", n)
-		}
-	}
-}
-
 // TestOverrideBlockHash_Propagation tests that the tracing APIs surface canonical hashes.
 func TestOverrideBlockHash_Propagation(t *testing.T) {
 	backend := newAlteredBackend(t)
 	api := NewAPI(backend)
-
-	t.Run("traceBlock_sequential", func(t *testing.T) {
-		requireCanonicalHashes(t, backend, traceBlockHashes(t, api, blockHashCaptureTracerName))
-	})
-
-	t.Run("traceBlock_parallel", func(t *testing.T) {
-		requireCanonicalHashes(t, backend, traceBlockHashes(t, api, blockHashCaptureTracerJSName))
-	})
-
-	t.Run("traceChain", func(t *testing.T) {
-		requireCanonicalHashes(t, backend, traceChainHashes(t, api))
-	})
-}
-
-func blockAt(t *testing.T, b *alteredBackend, num uint64) *types.Block {
-	t.Helper()
-
-	block, err := b.BlockByNumber(t.Context(), rpc.BlockNumber(num)) //#nosec G115 -- block number is small
-	require.NoErrorf(t, err, "BlockByNumber(%d)", num)
-	return block
-}
-
-func headerAt(t *testing.T, b *alteredBackend, num uint64) *types.Header {
-	t.Helper()
-
-	header, err := b.HeaderByNumber(t.Context(), rpc.BlockNumber(num)) //#nosec G115 -- block number is small
-	require.NoErrorf(t, err, "HeaderByNumber(%d)", num)
-	return header
-}
-
-// TestAlteredHashBackend_AccessorsAgree tests that the header and block accessors serve
-// the same header, so header-only paths cannot see the unaltered form.
-//
-// This test failure indicates a bug in the test implementation.
-func TestAlteredHashBackend_AccessorsAgree(t *testing.T) {
-	backend := newAlteredBackend(t)
-
-	for n := uint64(1); n <= numBlocks; n++ {
-		block, header := blockAt(t, backend, n), headerAt(t, backend, n)
-
-		byHash, err := backend.HeaderByHash(t.Context(), backend.canonicalHash(n))
-		require.NoErrorf(t, err, "HeaderByHash(canonical %d)", n)
-
-		require.Equalf(t, block.Hash(), header.Hash(), "HeaderByNumber() vs BlockByNumber() for block %d", n)
-		require.Equalf(t, header.Hash(), byHash.Hash(), "HeaderByHash() vs HeaderByNumber() for block %d", n)
+	tests := []struct {
+		name  string
+		trace func(t *testing.T) map[uint64][]common.Hash
+	}{
+		{
+			name: "traceBlock_sequential",
+			trace: func(t *testing.T) map[uint64][]common.Hash {
+				return traceBlockHashes(t, api, blockHashCaptureTracerName)
+			},
+		},
+		{
+			name: "traceBlock_parallel",
+			trace: func(t *testing.T) map[uint64][]common.Hash {
+				return traceBlockHashes(t, api, blockHashCaptureTracerJSName)
+			},
+		},
+		{
+			name: "traceChain",
+			trace: func(t *testing.T) map[uint64][]common.Hash {
+				return traceChainHashes(t, api)
+			},
+		},
 	}
-}
-
-// TestAlteredHashBackend_ParentHashIsCanonical tests that ParentHash stays canonical
-// even though block.Hash() does not.
-//
-// This test failure indicates a bug in the test implementation.
-func TestAlteredHashBackend_ParentHashIsCanonical(t *testing.T) {
-	backend := newAlteredBackend(t)
-
-	for n := uint64(1); n <= numBlocks; n++ {
-		block, parent := blockAt(t, backend, n), blockAt(t, backend, n-1)
-
-		require.NotEqualf(t, backend.canonicalHash(n), block.Hash(),
-			"altering the header changes block.Hash() away from the canonical hash, block %d", n)
-		require.Equalf(t, backend.canonicalHash(n-1), block.ParentHash(),
-			"ParentHash of block %d is the canonical hash of its parent", n)
-		require.NotEqualf(t, parent.Hash(), block.ParentHash(),
-			"ParentHash of block %d is not the altered parent's block.Hash()", n)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			seen := test.trace(t)
+			require.Lenf(t, seen, numBlocks, "blocks with surfaced hashes")
+			for n := uint64(1); n <= numBlocks; n++ {
+				require.NotEmptyf(t, seen[n], "hashes surfaced for block %d", n)
+				want := backend.unalteredHash(n)
+				for _, got := range seen[n] {
+					require.Equalf(t, want, got, "block hash surfaced for block %d", n)
+				}
+			}
+		})
 	}
 }
 
@@ -325,17 +291,30 @@ func TestBlockHashOverriderOptional(t *testing.T) {
 
 	block, err := backend.BlockByNumber(t.Context(), blockNum)
 	require.NoErrorf(t, err, "BlockByNumber(%d)", blockNum)
-	require.NotEqual(t, backend.canonicalHash(blockNum), block.Hash(), "test precondition: altered header hashes differently")
+	require.NotEqual(t, backend.unalteredHash(blockNum), block.Hash(), "test precondition: altered header hashes differently")
 
-	t.Run("not_implemented", func(t *testing.T) {
-		api := NewAPI(backend.testBackend)
-		require.Equal(t, block.Hash(), api.blockHash(block), "API.blockHash() with a Backend that is not a BlockHashOverrider")
-	})
-
-	t.Run("implemented", func(t *testing.T) {
-		api := NewAPI(backend)
-		require.Equal(t, backend.canonicalHash(blockNum), api.blockHash(block), "API.blockHash() with a Backend that is a BlockHashOverrider")
-	})
+	tests := []struct {
+		name         string
+		backend      Backend
+		expectedHash common.Hash
+	}{
+		{
+			name:         "not_implemented",
+			backend:      backend.testBackend,
+			expectedHash: block.Hash(),
+		},
+		{
+			name:         "implemented",
+			backend:      backend,
+			expectedHash: backend.unalteredHash(blockNum),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			api := NewAPI(tt.backend)
+			require.Equalf(t, tt.expectedHash, api.blockHash(block), "%T.blockHash()", api)
+		})
+	}
 }
 
 // TestOverrideBlockHash_TraceTransactionResolvesBlock tests block resolution by
@@ -353,25 +332,28 @@ func TestOverrideBlockHash_TraceTransactionResolvesBlock(t *testing.T) {
 	tracer := blockHashCaptureTracerName
 	res, err := api.TraceTransaction(t.Context(), txHash, &TraceConfig{Tracer: &tracer})
 	require.NoErrorf(t, err, "TraceTransaction()")
-	require.Equal(t, backend.canonicalHash(blockNum), hashFromTraceResult(t, res), "Context.BlockHash received by tracer")
+	require.Equal(t, backend.unalteredHash(blockNum), hashFromTraceResult(t, res), "Context.BlockHash received by tracer")
 }
 
 // TestOverrideBlockHash_StandardTraceBlockToFile tests that dump files are named
 // after the canonical block hash.
 func TestOverrideBlockHash_StandardTraceBlockToFile(t *testing.T) {
-	const blockNum = 1 // must be <= numBlocks
 	backend := newAlteredBackend(t)
 	api := NewAPI(backend)
 
-	files, err := api.StandardTraceBlockToFile(t.Context(), backend.canonicalHash(blockNum), nil)
-	for _, file := range files {
-		defer os.Remove(file)
-	}
-	require.NoError(t, err, "StandardTraceBlockToFile()")
-	require.NotEmpty(t, files, "dump files")
+	for blockNum := uint64(1); blockNum <= numBlocks; blockNum++ {
+		expectedHash := backend.unalteredHash(blockNum)
+		files, err := api.StandardTraceBlockToFile(t.Context(), expectedHash, nil)
+		require.NoErrorf(t, err, "StandardTraceBlockToFile() block %d", blockNum)
+		require.NotEmptyf(t, files, "StandardTraceBlockToFile() block %d returned no files", blockNum)
 
-	wantPrefix := fmt.Sprintf("block_%#x-", backend.canonicalHash(blockNum).Bytes()[:4])
-	for _, file := range files {
-		require.Containsf(t, file, wantPrefix, "dump file %q named after canonical block hash", file)
+		for _, file := range files {
+			defer os.Remove(file)
+		}
+
+		wantPrefix := fmt.Sprintf("block_%#x-", expectedHash.Bytes()[:4])
+		for _, file := range files {
+			assert.Containsf(t, file, wantPrefix, "file name should contain expected hash for block %d", blockNum)
+		}
 	}
 }

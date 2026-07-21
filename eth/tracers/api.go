@@ -769,8 +769,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// If the transaction needs tracing, swap out the configs
 		if tx.Hash() == txHash || txHash == (common.Hash{}) {
 			// Generate a unique temporary file to dump it into
-			blockHash := api.blockHash(block)
-			prefix := fmt.Sprintf("block_%#x-%d-%#x-", blockHash.Bytes()[:4], i, tx.Hash().Bytes()[:4])
+			prefix := fmt.Sprintf("block_%#x-%d-%#x-", api.blockHash(block).Bytes()[:4], i, tx.Hash().Bytes()[:4])
 			if !canon {
 				prefix = fmt.Sprintf("%valt-", prefix)
 			}
