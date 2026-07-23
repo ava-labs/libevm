@@ -382,7 +382,9 @@ func TestCreditBaseFeeToCoinbase(t *testing.T) {
 
 			tx := types.MustSignNewTx(key, types.LatestSigner(&config), tt.tx)
 
-			// All edits MUST be captured by the tracer.
+			// Unlike checking the state DB directly, a tracer gives insight as
+			// to _when_ the coinbase balance was updated, not just _that_ it
+			// was. If the update is too late then traces are incomplete.
 			tracer, err := tracers.DefaultDirectory.New("prestateTracer", &tracers.Context{}, json.RawMessage(`{"diffMode":true}`))
 			require.NoError(t, err, `tracers.DefaultDirectory.New("prestateTracer", ...)`)
 
