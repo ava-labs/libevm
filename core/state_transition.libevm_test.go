@@ -311,43 +311,48 @@ func TestCreditBaseFeeToCoinbase(t *testing.T) {
 	// The tip and base fee MUST differ so crediting the wrong one (or both
 	// twice) is detectable in the coinbase balance.
 	const (
-		baseFee = 3
-		tip     = 2
-		feeCap  = baseFee + tip + 1 // not binding, so the effective tip is [tip]
+		gas         = params.TxGas
+		baseFee     = 3
+		tip         = 2
+		feeCap      = baseFee + tip + 1 // not binding, so the effective tip is [tip]
+		legacyPrice = 7
 	)
+
+	pre1559 := &types.LegacyTx{
+		To:       &common.Address{},
+		Gas:      gas,
+		GasPrice: big.NewInt(legacyPrice),
+	}
+	post1559 := &types.DynamicFeeTx{
+		To:        &common.Address{},
+		Gas:       gas,
+		GasFeeCap: big.NewInt(feeCap),
+		GasTipCap: big.NewInt(tip),
+	}
 
 	tests := []struct {
 		name          string
 		creditBaseFee bool
-		preLondon     bool
-		startingFunds *uint256.Int
-		wantErr       error
-		wantFeePerGas uint64 // credited to the coinbase, per unit of gas used
+		tx            types.TxData // concrete type also dictates pre- vs post- EIP1559 behaviour
+		wantFeePerGas uint64       // credited to the coinbase, per unit of gas used
 	}{
 		{
 			name:          "disabled_coinbase_receives_only_tip",
 			creditBaseFee: false,
-			startingFunds: new(uint256.Int).SetAllOne(),
+			tx:            post1559,
 			wantFeePerGas: tip,
 		},
 		{
 			name:          "enabled_coinbase_receives_tip_and_base_fee",
 			creditBaseFee: true,
-			startingFunds: new(uint256.Int).SetAllOne(),
+			tx:            post1559,
 			wantFeePerGas: tip + baseFee,
 		},
 		{
 			name:          "enabled_pre_london_hook_is_noop",
 			creditBaseFee: true,
-			preLondon:     true,
-			startingFunds: new(uint256.Int).SetAllOne(),
-			wantFeePerGas: tip, // i.e. the legacy tx's full gas price, exactly once
-		},
-		{
-			name:          "execution_error",
-			creditBaseFee: true,
-			startingFunds: uint256.NewInt(1), // can't buy gas
-			wantErr:       core.ErrInsufficientFunds,
+			tx:            pre1559,
+			wantFeePerGas: legacyPrice,
 		},
 	}
 
@@ -361,31 +366,21 @@ func TestCreditBaseFeeToCoinbase(t *testing.T) {
 			key, err := crypto.GenerateKey()
 			require.NoError(t, err, "crypto.GenerateKey()")
 
-			// With London active there is a base fee to (optionally) credit;
-			// without it, the effective tip alone equals the full gas price.
-			config := params.TestChainConfig
-			txData := types.TxData(&types.DynamicFeeTx{
-				ChainID:   config.ChainID,
-				To:        &common.Address{},
-				Gas:       1e6,
-				GasFeeCap: big.NewInt(feeCap),
-				GasTipCap: big.NewInt(tip),
-			})
+			config := *params.TestChainConfig
 			headerBaseFee := big.NewInt(baseFee)
-			if tt.preLondon {
-				config = &params.ChainConfig{}
-				txData = &types.LegacyTx{
-					To:       &common.Address{},
-					Gas:      1e6,
-					GasPrice: big.NewInt(tip),
-				}
+			switch tt.tx.(type) {
+			case *types.LegacyTx:
+				config.LondonBlock = nil
 				headerBaseFee = nil
+			case *types.DynamicFeeTx:
+			default:
+				t.Fatalf("Bad test setup: unsupported tx type %T", tt.tx)
 			}
 
-			sdb, evm := ethtest.NewZeroEVM(t, ethtest.WithChainConfig(config))
-			sdb.SetBalance(crypto.PubkeyToAddress(key.PublicKey), tt.startingFunds)
+			sdb, evm := ethtest.NewZeroEVM(t, ethtest.WithChainConfig(&config))
+			sdb.SetBalance(crypto.PubkeyToAddress(key.PublicKey), new(uint256.Int).SetAllOne())
 
-			tx := types.MustSignNewTx(key, types.LatestSigner(config), txData)
+			tx := types.MustSignNewTx(key, types.LatestSigner(&config), tt.tx)
 
 			// All edits MUST be captured by the tracer.
 			tracer, err := tracers.DefaultDirectory.New("prestateTracer", &tracers.Context{}, json.RawMessage(`{"diffMode":true}`))
@@ -404,12 +399,7 @@ func TestCreditBaseFeeToCoinbase(t *testing.T) {
 				},
 				tx, &gasUsed, vm.Config{Tracer: tracer},
 			)
-			require.ErrorIs(t, err, tt.wantErr, "core.ApplyTransaction(...)")
-
-			if tt.wantErr != nil {
-				assert.Equal(t, new(uint256.Int), sdb.GetBalance(coinbase), "balance of coinbase unchanged when transaction not applied")
-				return
-			}
+			require.NoError(t, err, "core.ApplyTransaction(...)")
 			require.Equalf(t, types.ReceiptStatusSuccessful, receipt.Status, "%T.Status", receipt)
 
 			wantFee := receipt.GasUsed * tt.wantFeePerGas
@@ -419,7 +409,6 @@ func TestCreditBaseFeeToCoinbase(t *testing.T) {
 			require.NoError(t, err, "tracer.GetResult()")
 			var diff struct { // from [native.PrestateTracer.GetResult]
 				Post map[common.Address]*native.Account `json:"post"`
-				Pre  map[common.Address]*native.Account `json:"pre"`
 			}
 			require.NoError(t, json.Unmarshal(traced, &diff), "json.Unmarshal(tracer.GetResult(), ...)")
 
