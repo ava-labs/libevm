@@ -115,8 +115,6 @@ func (st *StateTransition) afterGasRefund(refunded uint64) {
 		st.gasRemaining,
 		limit-minConsume,
 	)
-
-	st.maybeCreditBaseFeeToCoinbase()
 }
 
 // maybeCreditBaseFeeToCoinbase credits the coinbase with the base-fee portion
@@ -131,14 +129,12 @@ func (st *StateTransition) maybeCreditBaseFeeToCoinbase() {
 		return
 	}
 
-	baseFee := st.evm.Context.BaseFee
+	baseFee, _ := uint256.FromBig(st.evm.Context.BaseFee)
 	if baseFee == nil {
 		return
 	}
-
-	baseFeeU256, _ := uint256.FromBig(baseFee)
-	fee := new(uint256.Int).SetUint64(st.gasUsed())
-	fee.Mul(fee, baseFeeU256)
+	fee := uint256.NewInt(st.gasUsed())
+	fee.Mul(fee, baseFee)
 	st.state.AddBalance(st.evm.Context.Coinbase, fee)
 }
 
