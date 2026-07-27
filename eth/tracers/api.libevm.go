@@ -17,6 +17,8 @@
 package tracers
 
 import (
+	"context"
+
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 )
@@ -39,6 +41,12 @@ func (a *API) blockHash(block *types.Block) common.Hash {
 		return block.Hash()
 	}
 	return overrider.BlockHash(block)
+}
+
+// TraceFullBlock traces all transactions in the given block. It is equivalent
+// to [API.TraceBlock] (which takes the block RLP-encoded), so we rename it here.
+func (api *API) TraceFullBlock(ctx context.Context, block *types.Block, config *TraceConfig) ([]*TxTraceResult, error) {
+	return api.traceBlock(ctx, block, config)
 }
 
 // TxTraceResult exports the [txTraceResult] type, returned per transaction
