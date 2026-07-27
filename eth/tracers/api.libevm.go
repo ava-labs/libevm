@@ -44,9 +44,9 @@ func (a *API) blockHash(block *types.Block) common.Hash {
 }
 
 // TraceBlock traces all transactions in the given block. It is equivalent
-// to [API.TraceBlock] (which takes the block RLP-encoded), so we rename it
-// here. It is a function, not a method on [API], as the RPC server registers
-// all exported methods as endpoints.
+// to [API.TraceBlock] (which takes the block RLP-encoded). It is a function,
+// not a method on [API], as the RPC server registers all exported methods
+// as endpoints.
 func TraceBlock(ctx context.Context, api *API, block *types.Block, config *TraceConfig) ([]*TxTraceResult, error) {
 	return api.traceBlock(ctx, block, config)
 }
