@@ -54,7 +54,3 @@ func TraceBlock(ctx context.Context, api *API, block *types.Block, config *Trace
 // TxTraceResult exports the [txTraceResult] type, returned per transaction
 // by the TraceBlock* methods.
 type TxTraceResult = txTraceResult
-
-// BlockTraceResult exports the [blockTraceResult] type, streamed per block
-// by the TraceChain subscription.
-type BlockTraceResult = blockTraceResult

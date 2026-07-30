@@ -19,11 +19,3 @@ package native
 // FlatCallFrame exports the [flatCallFrame] type, used for JSON-marshalling
 // the results of the flatCallTracer.
 type FlatCallFrame = flatCallFrame
-
-// FlatCallAction exports the [flatCallAction] type, carried by
-// [FlatCallFrame].
-type FlatCallAction = flatCallAction
-
-// FlatCallResult exports the [flatCallResult] type, carried by
-// [FlatCallFrame].
-type FlatCallResult = flatCallResult
