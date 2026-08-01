@@ -16,6 +16,7 @@
 package core_test
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -31,6 +32,8 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/eth/tracers"
+	"github.com/ava-labs/libevm/eth/tracers/native"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/ethtest"
 	"github.com/ava-labs/libevm/libevm/hookstest"
@@ -301,106 +304,118 @@ func TestMinimumGasConsumption(t *testing.T) {
 	}
 }
 
-func TestAfterExecutingTransaction(t *testing.T) {
+// TestCreditBaseFeeToCoinbase tests that the coinbase is credited with the
+// base fee if enabled in the hooks and post-London. Additionally, these state
+// changes should be conveyed to the tracer.
+func TestCreditBaseFeeToCoinbase(t *testing.T) {
+	// The tip and base fee MUST differ so crediting the wrong one (or both
+	// twice) is detectable in the coinbase balance.
 	const (
-		gasPrice = 3
-		reward   = 42
+		gas         = params.TxGas
+		baseFee     = 3
+		tip         = 2
+		feeCap      = baseFee + tip + 1 // not binding, so the effective tip is [tip]
+		legacyPrice = 7
 	)
 
-	var (
-		beneficiary = common.Address{'b', 'e', 'n'}
-		invalidator = common.Address{'i', 'n', 'v'}
-		testErr     = errors.New("test error")
-	)
+	pre1559 := &types.LegacyTx{
+		To:       &common.Address{},
+		Gas:      gas,
+		GasPrice: big.NewInt(legacyPrice),
+	}
+	post1559 := &types.DynamicFeeTx{
+		To:        &common.Address{},
+		Gas:       gas,
+		GasFeeCap: big.NewInt(feeCap),
+		GasTipCap: big.NewInt(tip),
+	}
 
 	tests := []struct {
 		name          string
-		to            *common.Address
-		startingFunds *uint256.Int
-		wantErr       error
+		creditBaseFee bool
+		tx            types.TxData // concrete type also dictates pre- vs post- EIP1559 behaviour
+		wantFeePerGas uint64       // credited to the coinbase, per unit of gas used
 	}{
 		{
-			name:          "successful_execution",
-			to:            &common.Address{},
-			startingFunds: new(uint256.Int).SetAllOne(),
+			name:          "disabled_coinbase_receives_only_tip",
+			creditBaseFee: false,
+			tx:            post1559,
+			wantFeePerGas: tip,
 		},
 		{
-			name:          "execution_invalidated",
-			to:            &invalidator,
-			startingFunds: new(uint256.Int).SetAllOne(),
-			wantErr:       testErr,
+			name:          "enabled_coinbase_receives_tip_and_base_fee",
+			creditBaseFee: true,
+			tx:            post1559,
+			wantFeePerGas: tip + baseFee,
 		},
 		{
-			name:          "execution_error",
-			to:            &common.Address{},
-			startingFunds: uint256.NewInt(1), // can't buy gas
-			wantErr:       core.ErrInsufficientFunds,
+			name:          "enabled_pre_london_hook_is_noop",
+			creditBaseFee: true,
+			tx:            pre1559,
+			wantFeePerGas: legacyPrice,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var (
-				hookCalled bool
-				gotBaseFee *big.Int
-				gotGasUsed uint64
-			)
 			hooks := &hookstest.Stub{
-				AfterExecutingTransactionFn: func(state libevm.StateDB, baseFee *big.Int, gasUsed uint64) {
-					hookCalled = true
-					gotBaseFee = baseFee
-					gotGasUsed = gasUsed
-					state.AddBalance(beneficiary, uint256.NewInt(reward))
-				},
-				PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
-					invalidator: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, _ []byte) ([]byte, error) {
-						env.InvalidateExecution(testErr)
-						return nil, nil
-					}),
-				},
+				CreditBaseFeeToCoinbase: tt.creditBaseFee,
 			}
 			hooks.Register(t)
 
 			key, err := crypto.GenerateKey()
 			require.NoError(t, err, "crypto.GenerateKey()")
 
-			sdb, evm := ethtest.NewZeroEVM(t)
-			sdb.SetBalance(crypto.PubkeyToAddress(key.PublicKey), tt.startingFunds)
+			config := *params.TestChainConfig
+			headerBaseFee := big.NewInt(baseFee)
+			switch tt.tx.(type) {
+			case *types.LegacyTx:
+				config.LondonBlock = nil
+				headerBaseFee = nil
+			case *types.DynamicFeeTx:
+			default:
+				t.Fatalf("Bad test setup: unsupported tx type %T", tt.tx)
+			}
 
-			tx := types.MustSignNewTx(
-				key,
-				types.LatestSigner(evm.ChainConfig()),
-				&types.LegacyTx{
-					To:       tt.to,
-					Gas:      1e6,
-					GasPrice: big.NewInt(gasPrice),
-				},
-			)
+			sdb, evm := ethtest.NewZeroEVM(t, ethtest.WithChainConfig(&config))
+			sdb.SetBalance(crypto.PubkeyToAddress(key.PublicKey), new(uint256.Int).SetAllOne())
 
+			tx := types.MustSignNewTx(key, types.LatestSigner(&config), tt.tx)
+
+			// Unlike checking the state DB directly, a tracer gives insight as
+			// to _when_ the coinbase balance was updated, not just _that_ it
+			// was. If the update is too late then traces are incomplete.
+			tracer, err := tracers.DefaultDirectory.New("prestateTracer", &tracers.Context{}, json.RawMessage(`{"diffMode":true}`))
+			require.NoError(t, err, `tracers.DefaultDirectory.New("prestateTracer", ...)`)
+
+			coinbase := common.Address{'c', 'o', 'i', 'n'}
 			gp := core.GasPool(math.MaxUint64)
 			var gasUsed uint64
 			receipt, err := core.ApplyTransaction(
-				evm.ChainConfig(), nil, &common.Address{}, &gp, sdb,
+				evm.ChainConfig(), nil, &coinbase, &gp, sdb,
 				&types.Header{
-					BaseFee: big.NewInt(gasPrice),
+					BaseFee: headerBaseFee,
 					// Required but irrelevant fields
 					Number:     big.NewInt(0),
 					Difficulty: big.NewInt(0),
 				},
-				tx, &gasUsed, vm.Config{},
+				tx, &gasUsed, vm.Config{Tracer: tracer},
 			)
-			require.ErrorIs(t, err, tt.wantErr, "core.ApplyTransaction(...)")
+			require.NoError(t, err, "core.ApplyTransaction(...)")
+			require.Equalf(t, types.ReceiptStatusSuccessful, receipt.Status, "%T.Status", receipt)
 
-			wantHookCalled := tt.wantErr == nil
-			require.Equal(t, wantHookCalled, hookCalled, "hook called i.f.f. execution succeeds")
-			if !wantHookCalled {
-				assert.Equal(t, new(uint256.Int), sdb.GetBalance(beneficiary), "balance of beneficiary unchanged when hook not called")
-				return
+			wantFee := receipt.GasUsed * tt.wantFeePerGas
+			assert.Equal(t, wantFee, sdb.GetBalance(coinbase).Uint64(), "balance of coinbase")
+
+			traced, err := tracer.GetResult()
+			require.NoError(t, err, "tracer.GetResult()")
+			var diff struct { // from [native.PrestateTracer.GetResult]
+				Post map[common.Address]*native.Account `json:"post"`
 			}
+			require.NoError(t, json.Unmarshal(traced, &diff), "json.Unmarshal(tracer.GetResult(), ...)")
 
-			assert.Equal(t, big.NewInt(gasPrice), gotBaseFee, "base fee received by hook")
-			assert.Equalf(t, receipt.GasUsed, gotGasUsed, "gas used received by hook vs %T.GasUsed", receipt)
-			assert.Equal(t, uint64(reward), sdb.GetBalance(beneficiary).Uint64(), "state modified by hook")
+			require.Containsf(t, diff.Post, coinbase, "coinbase in post-state diff of native prestate tracer")
+			assert.Equal(t, new(big.Int).SetUint64(wantFee), diff.Post[coinbase].Balance, "balance of coinbase in post-state diff of native prestate tracer")
 		})
 	}
 }

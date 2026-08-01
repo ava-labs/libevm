@@ -463,6 +463,7 @@ func (st *StateTransition) transitionDb() (*ExecutionResult, error) {
 		fee := new(uint256.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTipU256)
 		st.state.AddBalance(st.evm.Context.Coinbase, fee)
+		st.maybeCreditBaseFeeToCoinbase() // libevm
 	}
 
 	return &ExecutionResult{

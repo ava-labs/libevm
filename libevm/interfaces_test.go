@@ -31,10 +31,5 @@ var (
 	_ libevm.PrecompiledContract = (vm.PrecompiledContract)(nil)
 )
 
-var (
-	// StateReader MUST be a subset vm.StateDB.
-	_ libevm.StateReader = (vm.StateDB)(nil)
-
-	// StateDB MUST be a non-strict subset of vm.StateDB.
-	_ libevm.StateDB = (vm.StateDB)(nil)
-)
+// StateReader MUST be a subset vm.StateDB.
+var _ libevm.StateReader = (vm.StateDB)(nil)
