@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "version",
+    srcs = [
+        "vcs.go",
+        "version.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/internal/version",
+    visibility = ["//:__subpackages__"],
+    deps = ["//params"],
+)

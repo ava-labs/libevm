@@ -1,0 +1,24 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "era_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/ava-labs/libevm/cmd/era",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//common",
+        "//core/types",
+        "//internal/era",
+        "//internal/ethapi",
+        "//internal/flags",
+        "//params",
+        "//trie",
+        "@com_github_urfave_cli_v2//:cli",
+    ],
+)
+
+go_binary(
+    name = "era",
+    embed = [":era_lib"],
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,21 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "lru",
+    srcs = [
+        "basiclru.go",
+        "blob_lru.go",
+        "lru.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/common/lru",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "lru_test",
+    srcs = [
+        "basiclru_test.go",
+        "blob_lru_test.go",
+    ],
+    embed = [":lru"],
+)

@@ -1,0 +1,55 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "evm_lib",
+    srcs = [
+        "blockrunner.go",
+        "compiler.go",
+        "disasm.go",
+        "main.go",
+        "runner.go",
+        "staterunner.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/cmd/evm",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//cmd/evm/internal/compiler",
+        "//cmd/evm/internal/t8ntool",
+        "//cmd/utils",
+        "//common",
+        "//core",
+        "//core/asm",
+        "//core/rawdb",
+        "//core/state",
+        "//core/vm",
+        "//core/vm/runtime",
+        "//eth/tracers/js",
+        "//eth/tracers/logger",
+        "//eth/tracers/native",
+        "//internal/debug",
+        "//internal/flags",
+        "//params",
+        "//tests",
+        "//triedb",
+        "//triedb/hashdb",
+        "@com_github_urfave_cli_v2//:cli",
+    ],
+)
+
+go_binary(
+    name = "evm",
+    embed = [":evm_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "evm_test",
+    srcs = ["t8n_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":evm_lib"],
+    deps = [
+        "//cmd/evm/internal/t8ntool",
+        "//internal/cmdtest",
+        "//internal/reexec",
+    ],
+)

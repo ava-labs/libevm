@@ -1,0 +1,18 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "difficulty",
+    srcs = ["difficulty-fuzz.go"],
+    importpath = "github.com/ava-labs/libevm/tests/fuzzers/difficulty",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//consensus/ethash",
+        "//core/types",
+    ],
+)
+
+go_test(
+    name = "difficulty_test",
+    srcs = ["difficulty_test.go"],
+    embed = [":difficulty"],
+)
