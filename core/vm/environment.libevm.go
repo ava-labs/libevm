@@ -104,8 +104,10 @@ func (e *environment) Call(addr common.Address, input []byte, gas uint64, value 
 }
 
 func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) (retData []byte, retErr error) {
+	cfg := options.As[callConfig](opts...)
+
 	var caller ContractRef = e.self
-	if options.As[callConfig](opts...).unsafeCallerAddressProxying {
+	if cfg.unsafeCallerAddressProxying {
 		// Note that, in addition to being unsafe, this breaks an EVM
 		// assumption that the caller ContractRef is always a *Contract.
 		caller = AccountRef(e.self.CallerAddress)
@@ -119,7 +121,25 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 	if e.ReadOnly() && value != nil && !value.IsZero() {
 		return nil, ErrWriteProtection
 	}
-	if !e.UseGas(gas) {
+
+	gasForCall := gas
+	charge := gas
+	if e.evm.chainRules.IsEIP150 && !cfg.legacyOutboundCallGas {
+		calleeGas, err := callGas(true, e.self.Gas, 0, new(uint256.Int).SetUint64(gas))
+		if err != nil {
+			return nil, err
+		}
+		gasForCall = calleeGas
+		if value != nil && !value.IsZero() {
+			var overflow bool
+			gasForCall, overflow = math.SafeAdd(calleeGas, params.CallStipend)
+			if overflow {
+				return nil, ErrGasUintOverflow
+			}
+		}
+		charge = calleeGas
+	}
+	if !e.UseGas(charge) {
 		return nil, ErrOutOfGas
 	}
 
@@ -128,9 +148,9 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 		if value != nil {
 			bigVal = value.ToBig()
 		}
-		t.CaptureEnter(typ.OpCode(), caller.Address(), addr, input, gas, bigVal)
+		t.CaptureEnter(typ.OpCode(), caller.Address(), addr, input, gasForCall, bigVal)
 
-		startGas := gas
+		startGas := gasForCall
 		defer func() {
 			t.CaptureEnd(retData, startGas-e.Gas(), retErr)
 		}()
@@ -138,7 +158,7 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 
 	switch typ {
 	case Call:
-		ret, returnGas, callErr := e.evm.Call(caller, addr, input, gas, value)
+		ret, returnGas, callErr := e.evm.Call(caller, addr, input, gasForCall, value)
 		if err := e.refundGas(returnGas); err != nil {
 			return nil, err
 		}

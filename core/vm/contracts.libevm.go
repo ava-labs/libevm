@@ -221,6 +221,10 @@ type PrecompileEnvironment interface {
 	// removed and automatically determined according to the type of call that
 	// invoked the precompile.
 	//
+	// On chains with EIP-150 active, outbound gas follows the same 63/64 rule and
+	// call-value stipend as the CALL opcode.
+	// Use [WithLegacyOutboundCallGas] only when reproducing pre-fix historical behaviour.
+	//
 	// WARNING: using this method makes the precompile susceptible to reentrancy
 	// attacks as with a regular contract. The Checks-Effects-Interactions
 	// pattern, libevm's `reentrancy` package, or some other protection MUST be
