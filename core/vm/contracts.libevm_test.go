@@ -878,3 +878,50 @@ func TestPrecompileCallWithTracer(t *testing.T) {
 	require.NoErrorf(t, json.Unmarshal(gotJSON, &got), "json.Unmarshal(%T.GetResult(), %T)", tracer, &got)
 	require.Equal(t, value, got[contract].Storage[zeroHash], "value loaded with SLOAD")
 }
+
+func TestPrecompileCallWithCallTracer(t *testing.T) {
+	rng := ethtest.NewPseudoRand(42 * 142857)
+	precompile := rng.Address()
+	contract := rng.Address()
+	caller := rng.Address()
+
+	hooks := &hookstest.Stub{
+		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+			precompile: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
+				return env.Call(contract, nil, env.Gas(), uint256.NewInt(0))
+			}),
+		},
+	}
+	hooks.Register(t)
+
+	state, evm := ethtest.NewZeroEVM(t)
+	state.CreateAccount(contract)
+	state.SetCode(contract, convertBytes[vm.OpCode, byte](vm.STOP))
+
+	const tracerName = "callTracer"
+	tracer, err := tracers.DefaultDirectory.New(tracerName, nil, nil)
+	require.NoErrorf(t, err, "tracers.DefaultDirectory.New(%q)", tracerName)
+	evm.Config.Tracer = tracer
+
+	_, _, err = evm.Call(vm.AccountRef(caller), precompile, nil, 1e6, uint256.NewInt(0))
+	require.NoError(t, err, "evm.Call([precompile that calls regular contract])")
+
+	gotJSON, err := tracer.GetResult()
+	require.NoErrorf(t, err, "%T.GetResult()", tracer)
+	var got struct {
+		From  common.Address `json:"from"`
+		To    common.Address `json:"to"`
+		Calls []struct {
+			From  common.Address    `json:"from"`
+			To    common.Address    `json:"to"`
+			Calls []json.RawMessage `json:"calls"`
+		} `json:"calls"`
+	}
+	require.NoErrorf(t, json.Unmarshal(gotJSON, &got), "json.Unmarshal(%T.GetResult(), %T)", tracer, &got)
+	require.Equal(t, caller, got.From)
+	require.Equal(t, precompile, got.To)
+	require.Len(t, got.Calls, 1)
+	require.Equal(t, precompile, got.Calls[0].From)
+	require.Equal(t, contract, got.Calls[0].To)
+	require.Empty(t, got.Calls[0].Calls)
+}

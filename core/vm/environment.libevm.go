@@ -103,7 +103,7 @@ func (e *environment) Call(addr common.Address, input []byte, gas uint64, value 
 	return e.callContract(Call, addr, input, gas, value, opts...)
 }
 
-func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) (retData []byte, retErr error) {
+func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {
 	var caller ContractRef = e.self
 	if options.As[callConfig](opts...).unsafeCallerAddressProxying {
 		// Note that, in addition to being unsafe, this breaks an EVM
@@ -121,19 +121,6 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 	}
 	if !e.UseGas(gas) {
 		return nil, ErrOutOfGas
-	}
-
-	if t := e.evm.Config.Tracer; t != nil {
-		var bigVal *big.Int
-		if value != nil {
-			bigVal = value.ToBig()
-		}
-		t.CaptureEnter(typ.OpCode(), caller.Address(), addr, input, gas, bigVal)
-
-		startGas := gas
-		defer func() {
-			t.CaptureEnd(retData, startGas-e.Gas(), retErr)
-		}()
 	}
 
 	switch typ {
