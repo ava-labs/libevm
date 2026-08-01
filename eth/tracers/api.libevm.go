@@ -17,6 +17,8 @@
 package tracers
 
 import (
+	"context"
+
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 )
@@ -41,10 +43,14 @@ func (a *API) blockHash(block *types.Block) common.Hash {
 	return overrider.BlockHash(block)
 }
 
+// TraceBlock traces all transactions in the given block. It is equivalent
+// to [API.TraceBlock] (which takes the block RLP-encoded). It is a function,
+// not a method on [API], as the RPC server registers all exported methods
+// as endpoints.
+func TraceBlock(ctx context.Context, api *API, block *types.Block, config *TraceConfig) ([]*TxTraceResult, error) {
+	return api.traceBlock(ctx, block, config)
+}
+
 // TxTraceResult exports the [txTraceResult] type, returned per transaction
 // by the TraceBlock* methods.
 type TxTraceResult = txTraceResult
-
-// BlockTraceResult exports the [blockTraceResult] type, streamed per block
-// by the TraceChain subscription.
-type BlockTraceResult = blockTraceResult
