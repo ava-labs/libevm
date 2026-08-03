@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -836,7 +837,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 	}
 }
 
-func TestPrecompileCallWithTracer(t *testing.T) {
+func TestPrecompileCallWithPrestateTracer(t *testing.T) {
 	// The native pre-state tracer, when logging storage, assumes an invariant
 	// that is broken by a precompile calling another contract. This is a test
 	// of the fix, ensuring that an SLOADed value is properly handled by the
@@ -877,4 +878,55 @@ func TestPrecompileCallWithTracer(t *testing.T) {
 	var got map[common.Address]struct{ Storage map[common.Hash]common.Hash }
 	require.NoErrorf(t, json.Unmarshal(gotJSON, &got), "json.Unmarshal(%T.GetResult(), %T)", tracer, &got)
 	require.Equal(t, value, got[contract].Storage[zeroHash], "value loaded with SLOAD")
+}
+
+func TestPrecompileCallWithCallTracer(t *testing.T) {
+	rng := ethtest.NewPseudoRand(42 * 142857)
+	precompile := rng.Address()
+	contract := rng.Address()
+	caller := rng.Address()
+
+	hooks := &hookstest.Stub{
+		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+			precompile: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
+				return env.Call(contract, nil, env.Gas(), uint256.NewInt(0))
+			}),
+		},
+	}
+	hooks.Register(t)
+
+	const tracerName = "callTracer"
+	tracer, err := tracers.DefaultDirectory.New(tracerName, nil, nil)
+	require.NoErrorf(t, err, "tracers.DefaultDirectory.New(%q)", tracerName)
+
+	_, evm := ethtest.NewZeroEVM(t)
+	evm.Config.Tracer = tracer
+	_, _, err = evm.Call(vm.AccountRef(caller), precompile, nil, 1e6, uint256.NewInt(0))
+	require.NoError(t, err, "evm.Call([precompile that calls regular contract])")
+
+	gotJSON, err := tracer.GetResult()
+	require.NoErrorf(t, err, "%T.GetResult()", tracer)
+
+	type call struct {
+		From  common.Address `json:"from"`
+		To    common.Address `json:"to"`
+		Type  string         `json:"type"`
+		Calls []call         `json:"calls"`
+	}
+	var got call
+	require.NoErrorf(t, json.Unmarshal(gotJSON, &got), "json.Unmarshal(%T.GetResult(), %T)", tracer, &got)
+
+	want := call{
+		From: caller,
+		To:   precompile,
+		Type: "CALL",
+		Calls: []call{{
+			From: precompile,
+			To:   contract,
+			Type: "CALL",
+		}},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("%q tracer diff (-want +got):\n%s", tracerName, diff)
+	}
 }
