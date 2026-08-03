@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -836,7 +837,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 	}
 }
 
-func TestPrecompileCallWithTracer(t *testing.T) {
+func TestPrecompileCallWithPrestateTracer(t *testing.T) {
 	// The native pre-state tracer, when logging storage, assumes an invariant
 	// that is broken by a precompile calling another contract. This is a test
 	// of the fix, ensuring that an SLOADed value is properly handled by the
@@ -894,34 +895,35 @@ func TestPrecompileCallWithCallTracer(t *testing.T) {
 	}
 	hooks.Register(t)
 
-	state, evm := ethtest.NewZeroEVM(t)
-	state.CreateAccount(contract)
-	state.SetCode(contract, convertBytes[vm.OpCode, byte](vm.STOP))
-
 	const tracerName = "callTracer"
 	tracer, err := tracers.DefaultDirectory.New(tracerName, nil, nil)
 	require.NoErrorf(t, err, "tracers.DefaultDirectory.New(%q)", tracerName)
-	evm.Config.Tracer = tracer
 
+	_, evm := ethtest.NewZeroEVM(t)
+	evm.Config.Tracer = tracer
 	_, _, err = evm.Call(vm.AccountRef(caller), precompile, nil, 1e6, uint256.NewInt(0))
 	require.NoError(t, err, "evm.Call([precompile that calls regular contract])")
 
 	gotJSON, err := tracer.GetResult()
 	require.NoErrorf(t, err, "%T.GetResult()", tracer)
-	var got struct {
+
+	type call struct {
 		From  common.Address `json:"from"`
 		To    common.Address `json:"to"`
-		Calls []struct {
-			From  common.Address    `json:"from"`
-			To    common.Address    `json:"to"`
-			Calls []json.RawMessage `json:"calls"`
-		} `json:"calls"`
+		Calls []call         `json:"calls"`
 	}
+	var got call
 	require.NoErrorf(t, json.Unmarshal(gotJSON, &got), "json.Unmarshal(%T.GetResult(), %T)", tracer, &got)
-	require.Equal(t, caller, got.From)
-	require.Equal(t, precompile, got.To)
-	require.Len(t, got.Calls, 1)
-	require.Equal(t, precompile, got.Calls[0].From)
-	require.Equal(t, contract, got.Calls[0].To)
-	require.Empty(t, got.Calls[0].Calls)
+
+	want := call{
+		From: caller,
+		To:   precompile,
+		Calls: []call{{
+			From: precompile,
+			To:   contract,
+		}},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("%q tracer diff (-want +got):\n%s", tracerName, diff)
+	}
 }
