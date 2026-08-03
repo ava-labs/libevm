@@ -910,6 +910,7 @@ func TestPrecompileCallWithCallTracer(t *testing.T) {
 	type call struct {
 		From  common.Address `json:"from"`
 		To    common.Address `json:"to"`
+		Type  string         `json:"type"`
 		Calls []call         `json:"calls"`
 	}
 	var got call
@@ -918,9 +919,11 @@ func TestPrecompileCallWithCallTracer(t *testing.T) {
 	want := call{
 		From: caller,
 		To:   precompile,
+		Type: "CALL",
 		Calls: []call{{
 			From: precompile,
 			To:   contract,
+			Type: "CALL",
 		}},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {

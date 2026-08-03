@@ -135,7 +135,8 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 		// early abstraction, to signal to future maintainers. If implementing
 		// them, there's likely no need to honour the
 		// [callOptUNSAFECallerAddressProxy] because it's purely for backwards
-		// compatibility.
+		// compatibility, however the "callTracer" test MUST be extended to
+		// demonstrate the correct type.
 		fallthrough
 	default:
 		return nil, fmt.Errorf("unimplemented precompile call type %v", typ)
