@@ -290,13 +290,13 @@ func (p *bodyPayload) Copy() *bodyPayload {
 	}
 }
 
-var rlpBodyPayloads pseudo.Accessor[*Body, *bodyPayload]
+var bodyPayloads pseudo.Accessor[*Body, *bodyPayload]
 
 func (*bodyPayload) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
 	// Rather than using the receiver directly, we access it through b. This
 	// demonstrates that the hooks can access their own payload via the
 	// [types.Body] they are passed.
-	p := rlpBodyPayloads.Get(b)
+	p := bodyPayloads.Get(b)
 	return &rlp.Fields{
 		Required: []any{b.Transactions, b.Uncles, p.Data},
 		Optional: []any{b.Withdrawals},
@@ -306,7 +306,7 @@ func (*bodyPayload) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
 func (*bodyPayload) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 	// See above comment on why we access the receiver through b rather than
 	// directly.
-	p := rlpBodyPayloads.Get(b)
+	p := bodyPayloads.Get(b)
 	return &rlp.Fields{
 		Required: []any{&b.Transactions, &b.Uncles, &p.Data},
 		Optional: []any{&b.Withdrawals},
@@ -325,7 +325,7 @@ func TestBodyExtraRoundTrip(t *testing.T) {
 		bodyPayload, *bodyPayload,
 		struct{},
 	]()
-	rlpBodyPayloads = extras.Body
+	bodyPayloads = extras.Body
 
 	rng := ethtest.NewPseudoRand(142857)
 	wantBlock := NewBlock(
