@@ -395,31 +395,27 @@ var bodySizes = []bodySize{
 // newBody returns a [Body] with randomly populated fields, holding the number
 // of items described by `size`.
 func newBody(rng *ethtest.PseudoRand, size bodySize) *Body {
-	body := &Body{
-		Transactions: make([]*Transaction, size.txs),
-		Uncles:       make([]*Header, size.uncles),
-		Withdrawals:  make([]*Withdrawal, size.withdrawals),
-	}
-	for i := range size.txs {
-		body.Transactions[i] = NewTx(&LegacyTx{
+	body := &Body{}
+	for range size.txs {
+		body.Transactions = append(body.Transactions, NewTx(&LegacyTx{
 			Nonce:    rng.Uint64(),
 			GasPrice: rng.BigUint64(),
 			Gas:      rng.Uint64(),
 			To:       rng.AddressPtr(),
 			Value:    rng.BigUint64(),
 			Data:     rng.Bytes(64),
-		})
+		}))
 	}
-	for i := range size.uncles {
-		body.Uncles[i] = newHeader(rng)
+	for range size.uncles {
+		body.Uncles = append(body.Uncles, newHeader(rng))
 	}
-	for i := range size.withdrawals {
-		body.Withdrawals[i] = &Withdrawal{
+	for range size.withdrawals {
+		body.Withdrawals = append(body.Withdrawals, &Withdrawal{
 			Index:     rng.Uint64(),
 			Validator: rng.Uint64(),
 			Address:   rng.Address(),
 			Amount:    rng.Uint64(),
-		}
+		})
 	}
 	return body
 }
