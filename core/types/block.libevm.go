@@ -18,6 +18,7 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 
 	"github.com/ava-labs/libevm/internal/libevm/pseudo"
@@ -106,27 +107,14 @@ func (b *Body) DecodeRLP(s *rlp.Stream) error {
 	return b.hooks().BodyRLPFieldPointersForDecoding(b).DecodeRLP(s)
 }
 
-// A [Block] is RLP-encoded as its [Header] followed by the fields of its
-// [Body], hence the [extblock] {en,de}coding reuses the [BlockBodyHooks] body
-// methods, prefixing the header to the required fields.
-
-// body returns a [Body] carrying the fields of `b`. Although it is only a
-// temporary carrier, it shares the [Block] extra payload and is therefore
-// indistinguishable, from the perspective of the hooks, from a Body being
-// {en,de}coded directly; in particular, hooks MAY access their own payload via
-// the Body they are passed.
-func (b *extblock) body() *Body {
-	return &Body{
+func (b *extblock) EncodeRLP(w io.Writer) error {
+	body := Body{
 		Transactions: b.Txs,
 		Uncles:       b.Uncles,
 		Withdrawals:  b.Withdrawals,
 		extra:        b.extra,
 	}
-}
-
-func (b *extblock) EncodeRLP(w io.Writer) error {
-	body := b.body()
-	fields := body.hooks().BodyRLPFieldsForEncoding(body)
+	fields := body.hooks().BodyRLPFieldsForEncoding(&body)
 	fields.Required = append(
 		[]any{b.Header},
 		fields.Required...,
@@ -135,11 +123,12 @@ func (b *extblock) EncodeRLP(w io.Writer) error {
 }
 
 func (b *extblock) DecodeRLP(s *rlp.Stream) error {
-	// Unlike when encoding, the geth fields are the destination of the decoding
-	// so are only copied from the [Body] afterwards. See [extblock.body] re the
-	// extra payload.
-	body := &Body{extra: b.extra}
-	fields := body.hooks().BodyRLPFieldPointersForDecoding(body)
+	body := Body{
+		// The body provided to the hooks is expected to contain the same extra
+		// as the method receiver.
+		extra: b.extra,
+	}
+	fields := body.hooks().BodyRLPFieldPointersForDecoding(&body)
 	fields.Required = append(
 		[]any{&b.Header},
 		fields.Required...,
@@ -151,6 +140,33 @@ func (b *extblock) DecodeRLP(s *rlp.Stream) error {
 	b.Uncles = body.Uncles
 	b.Withdrawals = body.Withdrawals
 	return nil
+}
+
+// BlockBytes combines an RLP encoded [Header] and [Body] into an RLP encoded
+// [Block].
+//
+// If both the header and body are correctly formatted, it is equivalent to, but
+// faster than, decoding a [Header] and a [Body], combining them into a Block,
+// and then encoding it.
+//
+// This function does NOT validate the header or body.
+func BlockBytes(headerBytes, bodyBytes []byte) ([]byte, error) {
+	bodyFields, _, err := rlp.SplitList(bodyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("splitting body: %w", err)
+	}
+
+	w := rlp.NewEncoderBuffer(nil)
+	l := w.List()
+	if _, err := w.Write(headerBytes); err != nil {
+		return nil, fmt.Errorf("writing header: %w", err)
+	}
+	if _, err := w.Write(bodyFields); err != nil {
+		return nil, fmt.Errorf("writing body: %w", err)
+	}
+	w.ListEnd(l)
+	blockBytes := w.ToBytes()
+	return blockBytes, w.Flush() // Flush returns the internal buffer to the pool.
 }
 
 // BlockBodyHooks are required for all types registered with [RegisterExtras]
