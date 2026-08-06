@@ -303,9 +303,6 @@ func (b *Block) cloneExtra() *pseudo.Type {
 	return nil
 }
 
-// extraOrNil returns the extra payload carried by `b`, setting it to the
-// registered default if it is nil, or returns nil if no extras were registered.
-// Unlike [Block.extraPayload] it is safe to call at any time.
 func (b *Block) extraOrNil() *pseudo.Type {
 	if registeredExtras.Registered() {
 		return b.extraPayload()
