@@ -114,12 +114,15 @@ func (b *extblock) EncodeRLP(w io.Writer) error {
 		Withdrawals:  b.Withdrawals,
 		extra:        b.extra,
 	}
-	fields := body.hooks().BodyRLPFieldsForEncoding(&body)
-	fields.Required = append(
-		[]any{b.Header},
-		fields.Required...,
-	)
-	return fields.EncodeRLP(w)
+	bodyFields := body.hooks().BodyRLPFieldsForEncoding(&body)
+	blockFields := rlp.Fields{
+		Required: append(
+			[]any{b.Header},
+			bodyFields.Required...,
+		),
+		Optional: bodyFields.Optional,
+	}
+	return blockFields.EncodeRLP(w)
 }
 
 func (b *extblock) DecodeRLP(s *rlp.Stream) error {
