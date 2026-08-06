@@ -275,24 +275,24 @@ func TestBlockWithX(t *testing.T) {
 	}
 }
 
-// rlpBodyPayload is a [BlockBodyHooks] implementation carrying an extra field
-// that is {en,de}coded as if they were regular RLP fields of both the [Block]
-// and [Body].
-type rlpBodyPayload struct {
+// bodyPayload is a [types.BlockBodyHooks] implementation carrying an extra
+// field that is {en,de}coded as if they were regular RLP fields of both the
+// [types.Block] and [types.Body].
+type bodyPayload struct {
 	Data []byte
 
 	NOOPBlockBodyHooks
 }
 
-func (p *rlpBodyPayload) Copy() *rlpBodyPayload {
-	return &rlpBodyPayload{
+func (p *bodyPayload) Copy() *bodyPayload {
+	return &bodyPayload{
 		Data: slices.Clone(p.Data),
 	}
 }
 
-var rlpBodyPayloads pseudo.Accessor[*Body, *rlpBodyPayload]
+var rlpBodyPayloads pseudo.Accessor[*Body, *bodyPayload]
 
-func (*rlpBodyPayload) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
+func (*bodyPayload) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
 	// Rather than using the receiver directly, we access it through b. This
 	// demonstrates that the hooks can access their own payload via the
 	// [types.Body] they are passed.
@@ -303,7 +303,7 @@ func (*rlpBodyPayload) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
 	}
 }
 
-func (*rlpBodyPayload) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
+func (*bodyPayload) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 	// See above comment on why we access the receiver through b rather than
 	// directly.
 	p := rlpBodyPayloads.Get(b)
@@ -322,7 +322,7 @@ func TestBlockBodyPayloadRLPRoundTrip(t *testing.T) {
 
 	extras := RegisterExtras[
 		NOOPHeaderHooks, *NOOPHeaderHooks,
-		rlpBodyPayload, *rlpBodyPayload,
+		bodyPayload, *bodyPayload,
 		struct{},
 	]()
 	rlpBodyPayloads = extras.Body
