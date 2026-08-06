@@ -313,9 +313,9 @@ func (*bodyPayload) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 	}
 }
 
-// TestBodyExtraRoundTrip demonstrates that the extra payload implementation of
-// [types.BlockBodyHooks] is the same as the payload included in the
-// [types.Body] when RLP encoding and decoding a block..
+// TestBodyExtraRoundTrip demonstrates that the extra from the method receiver
+// is the same as the extra from the argument for [types.BlockBodyHooks]
+// functions.
 func TestBodyExtraRoundTrip(t *testing.T) {
 	TestOnlyClearRegisteredExtras()
 	t.Cleanup(TestOnlyClearRegisteredExtras)
