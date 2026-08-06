@@ -128,12 +128,15 @@ func (b *extblock) DecodeRLP(s *rlp.Stream) error {
 		// as the method receiver.
 		extra: b.extra,
 	}
-	fields := body.hooks().BodyRLPFieldPointersForDecoding(&body)
-	fields.Required = append(
-		[]any{&b.Header},
-		fields.Required...,
-	)
-	if err := fields.DecodeRLP(s); err != nil {
+	bodyFields := body.hooks().BodyRLPFieldPointersForDecoding(&body)
+	blockFields := rlp.Fields{
+		Required: append(
+			[]any{&b.Header},
+			bodyFields.Required...,
+		),
+		Optional: bodyFields.Optional,
+	}
+	if err := blockFields.DecodeRLP(s); err != nil {
 		return err
 	}
 	b.Txs = body.Transactions

@@ -276,7 +276,7 @@ func TestBlockWithX(t *testing.T) {
 }
 
 // bodyPayload is a [types.BlockBodyHooks] implementation carrying an extra
-// field that is {en,de}coded as if they were regular RLP fields of both the
+// field that is {en,de}coded as if it was a regular RLP field of both the
 // [types.Block] and [types.Body].
 type bodyPayload struct {
 	Data []byte
@@ -313,10 +313,10 @@ func (*bodyPayload) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 	}
 }
 
-// TestBodyExtraEqual demonstrates that the extra payload implementation of
+// TestBodyExtraRoundTrip demonstrates that the extra payload implementation of
 // [types.BlockBodyHooks] is the same as the payload included in the
 // [types.Body] when RLP encoding and decoding a block..
-func TestBlockBodyPayloadRLPRoundTrip(t *testing.T) {
+func TestBodyExtraRoundTrip(t *testing.T) {
 	TestOnlyClearRegisteredExtras()
 	t.Cleanup(TestOnlyClearRegisteredExtras)
 
@@ -479,7 +479,7 @@ func BenchmarkBlockBytes(b *testing.B) {
 		headerBytes := encodeRLP(b, newHeader(rng))
 		bodyBytes := encodeRLP(b, newBody(rng, size))
 		b.Run(fmt.Sprintf("%d_txs_%d_uncles_%d_withdrawals", size.txs, size.uncles, size.withdrawals), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, _ = BlockBytes(headerBytes, bodyBytes)
 			}
 		})
