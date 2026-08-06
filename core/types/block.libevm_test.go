@@ -371,42 +371,6 @@ func TestBlockBodyPayloadRLPRoundTrip(t *testing.T) {
 	assert.Equal(t, block.Header().Hash(), got.Header().Hash(), "header after RLP round trip")
 }
 
-// referenceBlockBytes is the reference implementation against which
-// [BlockBytes] is tested and benchmarked.
-func referenceBlockBytes(headerBytes, bodyBytes []byte) ([]byte, error) {
-	header := new(Header)
-	if err := rlp.DecodeBytes(headerBytes, header); err != nil {
-		return nil, err
-	}
-	body := new(Body)
-	if err := rlp.DecodeBytes(bodyBytes, body); err != nil {
-		return nil, err
-	}
-	block := NewBlockWithHeader(header).
-		WithBody(*body).
-		WithWithdrawals(body.Withdrawals)
-	return rlp.EncodeToBytes(block)
-}
-
-// bodySize describes the number of items in the [Body] of a test case.
-type bodySize struct {
-	txs, uncles, withdrawals int
-}
-
-// bodySizes are the [Body] shapes covered by [FuzzBlockBytes] seeds and by
-// [BenchmarkBlockBytes]. They cover every combination of empty and non-empty
-// fields, the last of which is optional in RLP.
-var bodySizes = []bodySize{
-	{txs: 0, uncles: 0, withdrawals: 0},
-	{txs: 1, uncles: 0, withdrawals: 0},
-	{txs: 0, uncles: 1, withdrawals: 0},
-	{txs: 0, uncles: 0, withdrawals: 1},
-	{txs: 10, uncles: 0, withdrawals: 0},
-	{txs: 10, uncles: 2, withdrawals: 4},
-	{txs: 100, uncles: 0, withdrawals: 0},
-	{txs: 100, uncles: 2, withdrawals: 16},
-}
-
 // newHeader returns a [Header] with randomly populated fields.
 func newHeader(rng *ethtest.PseudoRand) *Header {
 	return &Header{
@@ -427,6 +391,25 @@ func newHeader(rng *ethtest.PseudoRand) *Header {
 		Nonce:       rng.BlockNonce(),
 		BaseFee:     rng.BigUint64(),
 	}
+}
+
+// bodySize describes the number of items in the [Body] of a test case.
+type bodySize struct {
+	txs, uncles, withdrawals int
+}
+
+// bodySizes are the [Body] shapes covered by [FuzzBlockBytes] seeds and by
+// [BenchmarkBlockBytes]. They cover every combination of empty and non-empty
+// fields, the last of which is optional in RLP.
+var bodySizes = []bodySize{
+	{txs: 0, uncles: 0, withdrawals: 0},
+	{txs: 1, uncles: 0, withdrawals: 0},
+	{txs: 0, uncles: 1, withdrawals: 0},
+	{txs: 0, uncles: 0, withdrawals: 1},
+	{txs: 10, uncles: 0, withdrawals: 0},
+	{txs: 10, uncles: 2, withdrawals: 4},
+	{txs: 100, uncles: 0, withdrawals: 0},
+	{txs: 100, uncles: 2, withdrawals: 16},
 }
 
 // newBody returns a [Body] with randomly populated fields, holding the number
@@ -467,6 +450,23 @@ func encodeRLP(tb testing.TB, v any) []byte {
 	b, err := rlp.EncodeToBytes(v)
 	require.NoErrorf(tb, err, "rlp.EncodeToBytes(%T)", v)
 	return b
+}
+
+// referenceBlockBytes is the reference implementation against which
+// [BlockBytes] is tested and benchmarked.
+func referenceBlockBytes(headerBytes, bodyBytes []byte) ([]byte, error) {
+	header := new(Header)
+	if err := rlp.DecodeBytes(headerBytes, header); err != nil {
+		return nil, err
+	}
+	body := new(Body)
+	if err := rlp.DecodeBytes(bodyBytes, body); err != nil {
+		return nil, err
+	}
+	block := NewBlockWithHeader(header).
+		WithBody(*body).
+		WithWithdrawals(body.Withdrawals)
+	return rlp.EncodeToBytes(block)
 }
 
 // FuzzBlockBytes demonstrates that [BlockBytes] is equivalent to
