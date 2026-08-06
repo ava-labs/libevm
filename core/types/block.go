@@ -222,7 +222,7 @@ type extblock struct {
 	Uncles      []*Header
 	Withdrawals []*Withdrawal `rlp:"optional"`
 
-	hooks BlockBodyHooks // libevm: MUST be unexported + populated from [Block.hooks]
+	extra *pseudo.Type // libevm: MUST be unexported + populated from [Block.extraOrNil]
 }
 
 // NewBlock creates a new block. The input data is copied, changes to header and to the
@@ -322,7 +322,7 @@ func CopyHeader(h *Header) *Header {
 // DecodeRLP decodes a block from RLP.
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	var eb extblock
-	eb.hooks = b.hooks()
+	eb.extra = b.extraOrNil()
 	_, size, _ := s.Kind()
 	if err := s.Decode(&eb); err != nil {
 		return err
@@ -339,7 +339,7 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 		Txs:         b.transactions,
 		Uncles:      b.uncles,
 		Withdrawals: b.withdrawals,
-		hooks:       b.hooks(),
+		extra:       b.extraOrNil(),
 	})
 }
 

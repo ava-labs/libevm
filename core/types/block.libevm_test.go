@@ -272,3 +272,101 @@ func TestBlockWithX(t *testing.T) {
 		})
 	}
 }
+
+// rlpBodyPayload is a [BlockBodyHooks] implementation carrying extra fields that
+// are {en,de}coded as if they were regular RLP fields of both the [Block] and
+// the [Body].
+type rlpBodyPayload struct {
+	Version uint32
+	Data    []byte
+
+	NOOPBlockBodyHooks
+}
+
+func (p *rlpBodyPayload) Copy() *rlpBodyPayload {
+	return &rlpBodyPayload{
+		Version: p.Version,
+		Data:    append([]byte{}, p.Data...),
+	}
+}
+
+// rlpBodyPayloads MUST be set to the accessor returned by [RegisterExtras]
+// before any {en,de}coding of an [rlpBodyPayload]-carrying [Block] or [Body].
+var rlpBodyPayloads pseudo.Accessor[*Body, *rlpBodyPayload]
+
+// self returns the payload carried by `b`, which MUST be identical to the
+// receiver. Sourcing the extra RLP fields from it instead of from the receiver
+// demonstrates that hooks can access their own payload via the [Body] they are
+// passed, including when that Body was constructed for [Block] {en,de}coding.
+func (p *rlpBodyPayload) self(b *Body) *rlpBodyPayload {
+	return rlpBodyPayloads.Get(b)
+}
+
+func (p *rlpBodyPayload) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
+	self := p.self(b)
+	return &rlp.Fields{
+		Required: []any{b.Transactions, b.Uncles, self.Version, self.Data},
+		Optional: []any{b.Withdrawals},
+	}
+}
+
+func (p *rlpBodyPayload) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
+	self := p.self(b)
+	return &rlp.Fields{
+		Required: []any{&b.Transactions, &b.Uncles, &self.Version, &self.Data},
+		Optional: []any{&b.Withdrawals},
+	}
+}
+
+// TestBlockBodyPayloadRLPRoundTrip demonstrates that the extra payload carried
+// by a [Block] survives a round trip through RLP {en,de}coding, and is
+// propagated to the [Body] returned by [Block.Body].
+func TestBlockBodyPayloadRLPRoundTrip(t *testing.T) {
+	TestOnlyClearRegisteredExtras()
+	t.Cleanup(TestOnlyClearRegisteredExtras)
+
+	extras := RegisterExtras[
+		NOOPHeaderHooks, *NOOPHeaderHooks,
+		rlpBodyPayload, *rlpBodyPayload,
+		struct{},
+	]()
+	rlpBodyPayloads = extras.Body
+	rng := ethtest.NewPseudoRand(142857)
+
+	want := &rlpBodyPayload{
+		Version: 314159,
+		Data:    rng.Bytes(8),
+	}
+
+	body := &Body{
+		Transactions: []*Transaction{NewTx(&LegacyTx{Nonce: 42})},
+		Uncles:       []*Header{{ParentHash: rng.Hash()}},
+		Withdrawals:  []*Withdrawal{{Index: 1}},
+	}
+	extras.Body.Set(body, want)
+
+	block := NewBlockWithHeader(&Header{ParentHash: rng.Hash()}).
+		WithBody(*body).
+		WithWithdrawals(body.Withdrawals)
+	// The payload is cloned from the [Body] into the [Block] so a failure here
+	// invalidates everything that follows.
+	require.Equalf(t, want, extras.Block.Get(block), "%T payload after %T.WithBody()", block, block)
+
+	enc, err := rlp.EncodeToBytes(block)
+	require.NoErrorf(t, err, "rlp.EncodeToBytes(%T)", block)
+
+	got := new(Block)
+	require.NoErrorf(t, rlp.DecodeBytes(enc, got), "rlp.DecodeBytes(rlp.EncodeToBytes(%T), %T)", block, got)
+
+	assert.Equalf(t, want, extras.Block.Get(got), "%T payload after RLP round trip", got)
+	assert.Equalf(t, want, extras.Body.Get(got.Body()), "payload of %T returned by %T.Body() after RLP round trip", got.Body(), got)
+
+	// Sanity check that the geth fields also round tripped, otherwise the
+	// payload might be being decoded from the wrong part of the RLP.
+	require.Lenf(t, got.Transactions(), 1, "%T.Transactions() after RLP round trip", got)
+	assert.Equal(t, block.Transactions()[0].Hash(), got.Transactions()[0].Hash(), "transaction after RLP round trip")
+	require.Lenf(t, got.Uncles(), 1, "%T.Uncles() after RLP round trip", got)
+	assert.Equal(t, block.Uncles()[0].Hash(), got.Uncles()[0].Hash(), "uncle after RLP round trip")
+	assert.Equal(t, block.Withdrawals(), got.Withdrawals(), "withdrawals after RLP round trip")
+	assert.Equal(t, block.Header().Hash(), got.Header().Hash(), "header after RLP round trip")
+}

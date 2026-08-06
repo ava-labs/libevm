@@ -35,7 +35,7 @@ func (b *tempBlockBodyHooks) Copy() *tempBlockBodyHooks {
 	return &tempBlockBodyHooks{X: b.X}
 }
 
-func (b *tempBlockBodyHooks) BlockRLPFieldsForEncoding(*BlockRLPProxy) *rlp.Fields {
+func (b *tempBlockBodyHooks) BodyRLPFieldsForEncoding(*Body) *rlp.Fields {
 	return &rlp.Fields{
 		Required: []any{b.X},
 	}
@@ -62,14 +62,20 @@ func TestTempRegisteredExtras(t *testing.T) {
 		err := libevm.WithTemporaryExtrasLock(func(lock libevm.ExtrasLock) error {
 			return WithTempRegisteredExtras(lock, func(extras ExtraPayloads[*NOOPHeaderHooks, *tempBlockBodyHooks, bool]) error {
 				const val = "Hello, world"
-				b := new(Block)
+				b := NewBlockWithHeader(&Header{})
 				payload := &tempBlockBodyHooks{X: val}
 				extras.Block.Set(b, payload)
 
 				got, err := rlp.EncodeToBytes(b)
 				require.NoErrorf(t, err, "rlp.EncodeToBytes(%T) with %T hooks", b, extras.Block.Get(b))
-				want, err := rlp.EncodeToBytes([]string{val})
-				require.NoErrorf(t, err, "rlp.EncodeToBytes(%T{%[1]v})", []string{val})
+				// The header is always prefixed to the fields returned by
+				// [BlockBodyHooks.BodyRLPFieldsForEncoding].
+				type headerAndX struct {
+					Header *Header
+					X      string
+				}
+				want, err := rlp.EncodeToBytes(&headerAndX{b.Header(), val})
+				require.NoErrorf(t, err, "rlp.EncodeToBytes(%T)", &headerAndX{})
 
 				assert.Equalf(t, want, got, "rlp.EncodeToBytes(%T) with %T hooks", b, payload)
 				return nil

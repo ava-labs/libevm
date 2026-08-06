@@ -106,25 +106,58 @@ func (b *Body) DecodeRLP(s *rlp.Stream) error {
 	return b.hooks().BodyRLPFieldPointersForDecoding(b).DecodeRLP(s)
 }
 
-// BlockRLPProxy exports the geth-internal type used for RLP {en,de}coding of a
-// [Block].
-type BlockRLPProxy extblock
+// A [Block] is RLP-encoded as its [Header] followed by the fields of its
+// [Body], hence the [extblock] {en,de}coding reuses the [BlockBodyHooks] body
+// methods, prefixing the header to the required fields.
+
+// body returns a [Body] carrying the fields of `b`. Although it is only a
+// temporary carrier, it shares the [Block] extra payload and is therefore
+// indistinguishable, from the perspective of the hooks, from a Body being
+// {en,de}coded directly; in particular, hooks MAY access their own payload via
+// the Body they are passed.
+func (b *extblock) body() *Body {
+	return &Body{
+		Transactions: b.Txs,
+		Uncles:       b.Uncles,
+		Withdrawals:  b.Withdrawals,
+		extra:        b.extra,
+	}
+}
 
 func (b *extblock) EncodeRLP(w io.Writer) error {
-	bb := (*BlockRLPProxy)(b)
-	return b.hooks.BlockRLPFieldsForEncoding(bb).EncodeRLP(w)
+	body := b.body()
+	fields := body.hooks().BodyRLPFieldsForEncoding(body)
+	fields.Required = append(
+		[]any{b.Header},
+		fields.Required...,
+	)
+	return fields.EncodeRLP(w)
 }
 
 func (b *extblock) DecodeRLP(s *rlp.Stream) error {
-	bb := (*BlockRLPProxy)(b)
-	return b.hooks.BlockRLPFieldPointersForDecoding(bb).DecodeRLP(s)
+	// Unlike when encoding, the geth fields are the destination of the decoding
+	// so are only copied from the [Body] afterwards. See [extblock.body] re the
+	// extra payload.
+	body := &Body{extra: b.extra}
+	fields := body.hooks().BodyRLPFieldPointersForDecoding(body)
+	fields.Required = append(
+		[]any{&b.Header},
+		fields.Required...,
+	)
+	if err := fields.DecodeRLP(s); err != nil {
+		return err
+	}
+	b.Txs = body.Transactions
+	b.Uncles = body.Uncles
+	b.Withdrawals = body.Withdrawals
+	return nil
 }
 
 // BlockBodyHooks are required for all types registered with [RegisterExtras]
-// for [Block] and [Body] payloads.
+// for [Block] and [Body] payloads. The same methods are used for both [Block]
+// and [Body] {en,de}coding as a Block is encoded as its [Header] followed by
+// the fields of its [Body].
 type BlockBodyHooks interface {
-	BlockRLPFieldsForEncoding(*BlockRLPProxy) *rlp.Fields
-	BlockRLPFieldPointersForDecoding(*BlockRLPProxy) *rlp.Fields
 	BodyRLPFieldsForEncoding(*Body) *rlp.Fields
 	BodyRLPFieldPointersForDecoding(*Body) *rlp.Fields
 	PostRPCMarshal(b *Block, marshalled map[string]any)
@@ -149,26 +182,9 @@ var (
 	}
 	_ = extblock{
 		&Header{}, []*Transaction{}, []*Header{}, []*Withdrawal{}, // geth
-		BlockBodyHooks(nil), // libevm
+		&pseudo.Type{}, // libevm
 	}
-	// Demonstrate identity of these two types, by definition but useful for
-	// inspection here.
-	_ = extblock(BlockRLPProxy{})
 )
-
-func (NOOPBlockBodyHooks) BlockRLPFieldsForEncoding(b *BlockRLPProxy) *rlp.Fields {
-	return &rlp.Fields{
-		Required: []any{b.Header, b.Txs, b.Uncles},
-		Optional: []any{b.Withdrawals},
-	}
-}
-
-func (NOOPBlockBodyHooks) BlockRLPFieldPointersForDecoding(b *BlockRLPProxy) *rlp.Fields {
-	return &rlp.Fields{
-		Required: []any{&b.Header, &b.Txs, &b.Uncles},
-		Optional: []any{&b.Withdrawals},
-	}
-}
 
 func (NOOPBlockBodyHooks) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
 	return &rlp.Fields{

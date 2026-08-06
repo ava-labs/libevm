@@ -240,14 +240,6 @@ func (e *cChainBodyExtras) Copy() *cChainBodyExtras {
 	panic("unimplemented")
 }
 
-func (e *cChainBodyExtras) BlockRLPFieldsForEncoding(b *BlockRLPProxy) *rlp.Fields {
-	panic("unimplemented")
-}
-
-func (e *cChainBodyExtras) BlockRLPFieldPointersForDecoding(b *BlockRLPProxy) *rlp.Fields {
-	panic("unimplemented")
-}
-
 func TestBodyRLPCChainCompat(t *testing.T) {
 	// The inputs to this test were used to generate the expected RLP with
 	// ava-labs/coreth. This serves as both an example of how to use [BodyHooks]
