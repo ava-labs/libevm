@@ -388,12 +388,15 @@ func referenceBlockBytes(headerBytes, bodyBytes []byte) ([]byte, error) {
 	return rlp.EncodeToBytes(block)
 }
 
-// blockBodySize describes the [Body] contents of a test case.
-type blockBodySize struct {
+// bodySize describes the number of items in the [Body] of a test case.
+type bodySize struct {
 	txs, uncles, withdrawals int
 }
 
-var blockBodySizes = []blockBodySize{
+// bodySizes are the [Body] shapes covered by [FuzzBlockBytes] seeds and by
+// [BenchmarkBlockBytes]. They cover every combination of empty and non-empty
+// fields, the last of which is optional in RLP.
+var bodySizes = []bodySize{
 	{txs: 0, uncles: 0, withdrawals: 0},
 	{txs: 1, uncles: 0, withdrawals: 0},
 	{txs: 0, uncles: 1, withdrawals: 0},
@@ -404,6 +407,7 @@ var blockBodySizes = []blockBodySize{
 	{txs: 100, uncles: 2, withdrawals: 16},
 }
 
+// newHeader returns a [Header] with randomly populated fields.
 func newHeader(rng *ethtest.PseudoRand) *Header {
 	return &Header{
 		ParentHash:  rng.Hash(),
@@ -425,9 +429,9 @@ func newHeader(rng *ethtest.PseudoRand) *Header {
 	}
 }
 
-// newTestHeaderAndBody returns a [Header] and a [Body] with pseudorandomly
-// populated fields, the latter holding the number of items described by `size`.
-func newBody(rng *ethtest.PseudoRand, size blockBodySize) *Body {
+// newBody returns a [Body] with randomly populated fields, holding the number
+// of items described by `size`.
+func newBody(rng *ethtest.PseudoRand, size bodySize) *Body {
 	body := &Body{
 		Transactions: make([]*Transaction, size.txs),
 		Uncles:       make([]*Header, size.uncles),
@@ -457,16 +461,20 @@ func newBody(rng *ethtest.PseudoRand, size blockBodySize) *Body {
 	return body
 }
 
-func encodeRLP(tb testing.TB, x any) []byte {
+// encodeRLP RLP-encodes `v`, failing the test if it can't be encoded.
+func encodeRLP(tb testing.TB, v any) []byte {
 	tb.Helper()
-	b, err := rlp.EncodeToBytes(x)
-	require.NoErrorf(tb, err, "rlp.EncodeToBytes(%T)", x)
+	b, err := rlp.EncodeToBytes(v)
+	require.NoErrorf(tb, err, "rlp.EncodeToBytes(%T)", v)
 	return b
 }
 
+// FuzzBlockBytes demonstrates that [BlockBytes] is equivalent to
+// [referenceBlockBytes] for all inputs that the latter accepts. The seed corpus
+// covers every shape in [bodySizes].
 func FuzzBlockBytes(f *testing.F) {
 	rng := ethtest.NewPseudoRand(20250806)
-	for _, size := range blockBodySizes {
+	for _, size := range bodySizes {
 		f.Add(
 			encodeRLP(f, newHeader(rng)),
 			encodeRLP(f, newBody(rng, size)),
@@ -486,13 +494,13 @@ func FuzzBlockBytes(f *testing.F) {
 }
 
 func BenchmarkBlockBytes(b *testing.B) {
-	for _, size := range blockBodySizes {
+	for _, size := range bodySizes {
 		rng := ethtest.NewPseudoRand(2718281828)
 		headerBytes := encodeRLP(b, newHeader(rng))
 		bodyBytes := encodeRLP(b, newBody(rng, size))
 		b.Run(fmt.Sprintf("%d_txs_%d_uncles_%d_withdrawals", size.txs, size.uncles, size.withdrawals), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				_, _ = referenceBlockBytes(headerBytes, bodyBytes)
+				_, _ = BlockBytes(headerBytes, bodyBytes)
 			}
 		})
 	}
