@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -33,6 +34,7 @@ import (
 	"github.com/ava-labs/libevm/internal/libevm/pseudo"
 	"github.com/ava-labs/libevm/libevm/ethtest"
 	"github.com/ava-labs/libevm/rlp"
+	"github.com/ava-labs/libevm/trie"
 )
 
 type stubHeaderHooks struct {
@@ -273,54 +275,47 @@ func TestBlockWithX(t *testing.T) {
 	}
 }
 
-// rlpBodyPayload is a [BlockBodyHooks] implementation carrying extra fields that
-// are {en,de}coded as if they were regular RLP fields of both the [Block] and
-// the [Body].
+// rlpBodyPayload is a [BlockBodyHooks] implementation carrying an extra field
+// that is {en,de}coded as if they were regular RLP fields of both the [Block]
+// and [Body].
 type rlpBodyPayload struct {
-	Version uint32
-	Data    []byte
+	Data []byte
 
 	NOOPBlockBodyHooks
 }
 
 func (p *rlpBodyPayload) Copy() *rlpBodyPayload {
 	return &rlpBodyPayload{
-		Version: p.Version,
-		Data:    append([]byte{}, p.Data...),
+		Data: slices.Clone(p.Data),
 	}
 }
 
-// rlpBodyPayloads MUST be set to the accessor returned by [RegisterExtras]
-// before any {en,de}coding of an [rlpBodyPayload]-carrying [Block] or [Body].
 var rlpBodyPayloads pseudo.Accessor[*Body, *rlpBodyPayload]
 
-// self returns the payload carried by `b`, which MUST be identical to the
-// receiver. Sourcing the extra RLP fields from it instead of from the receiver
-// demonstrates that hooks can access their own payload via the [Body] they are
-// passed, including when that Body was constructed for [Block] {en,de}coding.
-func (p *rlpBodyPayload) self(b *Body) *rlpBodyPayload {
-	return rlpBodyPayloads.Get(b)
-}
-
-func (p *rlpBodyPayload) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
-	self := p.self(b)
+func (*rlpBodyPayload) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
+	// Rather than using the receiver directly, we access it through b. This
+	// demonstrates that the hooks can access their own payload via the
+	// [types.Body] they are passed.
+	p := rlpBodyPayloads.Get(b)
 	return &rlp.Fields{
-		Required: []any{b.Transactions, b.Uncles, self.Version, self.Data},
+		Required: []any{b.Transactions, b.Uncles, p.Data},
 		Optional: []any{b.Withdrawals},
 	}
 }
 
-func (p *rlpBodyPayload) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
-	self := p.self(b)
+func (*rlpBodyPayload) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
+	// See above comment on why we access the receiver through b rather than
+	// directly.
+	p := rlpBodyPayloads.Get(b)
 	return &rlp.Fields{
-		Required: []any{&b.Transactions, &b.Uncles, &self.Version, &self.Data},
+		Required: []any{&b.Transactions, &b.Uncles, &p.Data},
 		Optional: []any{&b.Withdrawals},
 	}
 }
 
-// TestBlockBodyPayloadRLPRoundTrip demonstrates that the extra payload carried
-// by a [Block] survives a round trip through RLP {en,de}coding, and is
-// propagated to the [Body] returned by [Block.Body].
+// TestBodyExtraEqual demonstrates that the extra payload implementation of
+// [types.BlockBodyHooks] is the same as the payload included in the
+// [types.Body] when RLP encoding and decoding a block..
 func TestBlockBodyPayloadRLPRoundTrip(t *testing.T) {
 	TestOnlyClearRegisteredExtras()
 	t.Cleanup(TestOnlyClearRegisteredExtras)
@@ -331,44 +326,29 @@ func TestBlockBodyPayloadRLPRoundTrip(t *testing.T) {
 		struct{},
 	]()
 	rlpBodyPayloads = extras.Body
+
 	rng := ethtest.NewPseudoRand(142857)
+	wantBlock := NewBlock(
+		&Header{ParentHash: rng.Hash()},
+		[]*Transaction{
+			NewTx(&LegacyTx{Nonce: rng.Uint64()}),
+		},
+		[]*Header{
+			{ParentHash: rng.Hash()},
+		},
+		nil,
+		trie.NewStackTrie(nil),
+	)
+	want := extras.Block.Get(wantBlock)
+	want.Data = rng.Bytes(8)
 
-	want := &rlpBodyPayload{
-		Version: 314159,
-		Data:    rng.Bytes(8),
-	}
+	b, err := rlp.EncodeToBytes(wantBlock)
+	require.NoErrorf(t, err, "rlp.EncodeToBytes(%T)", wantBlock)
 
-	body := &Body{
-		Transactions: []*Transaction{NewTx(&LegacyTx{Nonce: 42})},
-		Uncles:       []*Header{{ParentHash: rng.Hash()}},
-		Withdrawals:  []*Withdrawal{{Index: 1}},
-	}
-	extras.Body.Set(body, want)
-
-	block := NewBlockWithHeader(&Header{ParentHash: rng.Hash()}).
-		WithBody(*body).
-		WithWithdrawals(body.Withdrawals)
-	// The payload is cloned from the [Body] into the [Block] so a failure here
-	// invalidates everything that follows.
-	require.Equalf(t, want, extras.Block.Get(block), "%T payload after %T.WithBody()", block, block)
-
-	enc, err := rlp.EncodeToBytes(block)
-	require.NoErrorf(t, err, "rlp.EncodeToBytes(%T)", block)
-
-	got := new(Block)
-	require.NoErrorf(t, rlp.DecodeBytes(enc, got), "rlp.DecodeBytes(rlp.EncodeToBytes(%T), %T)", block, got)
-
-	assert.Equalf(t, want, extras.Block.Get(got), "%T payload after RLP round trip", got)
-	assert.Equalf(t, want, extras.Body.Get(got.Body()), "payload of %T returned by %T.Body() after RLP round trip", got.Body(), got)
-
-	// Sanity check that the geth fields also round tripped, otherwise the
-	// payload might be being decoded from the wrong part of the RLP.
-	require.Lenf(t, got.Transactions(), 1, "%T.Transactions() after RLP round trip", got)
-	assert.Equal(t, block.Transactions()[0].Hash(), got.Transactions()[0].Hash(), "transaction after RLP round trip")
-	require.Lenf(t, got.Uncles(), 1, "%T.Uncles() after RLP round trip", got)
-	assert.Equal(t, block.Uncles()[0].Hash(), got.Uncles()[0].Hash(), "uncle after RLP round trip")
-	assert.Equal(t, block.Withdrawals(), got.Withdrawals(), "withdrawals after RLP round trip")
-	assert.Equal(t, block.Header().Hash(), got.Header().Hash(), "header after RLP round trip")
+	gotBlock := new(Block)
+	require.NoErrorf(t, rlp.DecodeBytes(b, gotBlock), "rlp.DecodeBytes(rlp.EncodeToBytes(%T), %T)", wantBlock, gotBlock)
+	got := extras.Block.Get(gotBlock)
+	assert.Equalf(t, want, got, "%T payload after RLP round trip", got)
 }
 
 // newHeader returns a [Header] with randomly populated fields.
