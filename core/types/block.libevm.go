@@ -145,9 +145,10 @@ func (b *extblock) DecodeRLP(s *rlp.Stream) error {
 // BlockBytes combines an RLP encoded [Header] and [Body] into an RLP encoded
 // [Block].
 //
-// If both the header and body are correctly formatted, it is equivalent to, but
-// faster than, decoding a [Header] and a [Body], combining them into a Block,
-// and then encoding it.
+// For correctly formatted inputs it is a faster equivalent of:
+//   - Decoding into a [Header] and [Body]
+//   - Combining them into a Block
+//   - Encoding the Block
 //
 // This function does NOT validate the header or body.
 func BlockBytes(headerBytes, bodyBytes []byte) ([]byte, error) {
