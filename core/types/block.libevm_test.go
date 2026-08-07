@@ -336,7 +336,7 @@ func TestBodyExtraRoundTrip(t *testing.T) {
 		[]*Header{
 			{ParentHash: rng.Hash()},
 		},
-		nil,
+		nil, // Receipts don't meaningfully impact the RLP of the block.
 		trie.NewStackTrie(nil),
 	)
 	want := extras.Block.Get(wantBlock)
