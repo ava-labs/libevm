@@ -157,23 +157,23 @@ func (b *extblock) DecodeRLP(s *rlp.Stream) error {
 //   - Encoding the Block
 //
 // This function does NOT validate the header or body.
-func BlockBytes(headerBytes, bodyBytes []byte) ([]byte, error) {
-	bodyFields, _, err := rlp.SplitList(bodyBytes)
+func BlockBytes(header, body rlp.RawValue) (rlp.RawValue, error) {
+	bodyFields, _, err := rlp.SplitList(body)
 	if err != nil {
 		return nil, fmt.Errorf("splitting body: %w", err)
 	}
 
 	w := rlp.NewEncoderBuffer(nil)
 	l := w.List()
-	if _, err := w.Write(headerBytes); err != nil {
+	if _, err := w.Write(header); err != nil {
 		return nil, fmt.Errorf("writing header: %w", err)
 	}
 	if _, err := w.Write(bodyFields); err != nil {
 		return nil, fmt.Errorf("writing body: %w", err)
 	}
 	w.ListEnd(l)
-	blockBytes := w.ToBytes()
-	return blockBytes, w.Flush() // Flush returns the internal buffer to the pool.
+	block := w.ToBytes()
+	return block, w.Flush() // Flush returns the internal buffer to the pool.
 }
 
 // BlockBodyHooks are required for all types registered with [RegisterExtras]
