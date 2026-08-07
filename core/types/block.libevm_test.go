@@ -329,12 +329,12 @@ func TestBodyExtraRoundTrip(t *testing.T) {
 
 	rng := ethtest.NewPseudoRand(142857)
 	wantBlock := NewBlock(
-		&Header{ParentHash: rng.Hash()},
+		newHeader(rng),
 		[]*Transaction{
-			NewTx(&LegacyTx{Nonce: rng.Uint64()}),
+			newTx(rng),
 		},
 		[]*Header{
-			{ParentHash: rng.Hash()},
+			newHeader(rng),
 		},
 		nil, // Receipts don't meaningfully impact the RLP of the block.
 		trie.NewStackTrie(nil),
@@ -373,6 +373,18 @@ func newHeader(rng *ethtest.PseudoRand) *Header {
 	}
 }
 
+// newTx returns a [Transaction] with randomly populated fields.
+func newTx(rng *ethtest.PseudoRand) *Transaction {
+	return NewTx(&LegacyTx{
+		Nonce:    rng.Uint64(),
+		GasPrice: rng.BigUint64(),
+		Gas:      rng.Uint64(),
+		To:       rng.AddressPtr(),
+		Value:    rng.BigUint64(),
+		Data:     rng.Bytes(64),
+	})
+}
+
 // bodySize describes the number of items in the [Body] of a test case.
 type bodySize struct {
 	txs, uncles, withdrawals int
@@ -397,14 +409,7 @@ var bodySizes = []bodySize{
 func newBody(rng *ethtest.PseudoRand, size bodySize) *Body {
 	body := &Body{}
 	for range size.txs {
-		body.Transactions = append(body.Transactions, NewTx(&LegacyTx{
-			Nonce:    rng.Uint64(),
-			GasPrice: rng.BigUint64(),
-			Gas:      rng.Uint64(),
-			To:       rng.AddressPtr(),
-			Value:    rng.BigUint64(),
-			Data:     rng.Bytes(64),
-		}))
+		body.Transactions = append(body.Transactions, newTx(rng))
 	}
 	for range size.uncles {
 		body.Uncles = append(body.Uncles, newHeader(rng))
