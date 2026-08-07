@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 
@@ -208,11 +207,25 @@ func TestHeaderHooks(t *testing.T) {
 
 type blockPayload struct {
 	NOOPBlockBodyHooks
-	x int
+	x uint64
 }
 
 func (p *blockPayload) Copy() *blockPayload {
 	return &blockPayload{x: p.x}
+}
+
+func (p *blockPayload) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
+	return &rlp.Fields{
+		Required: []any{b.Transactions, b.Uncles, p.x},
+		Optional: []any{b.Withdrawals},
+	}
+}
+
+func (p *blockPayload) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
+	return &rlp.Fields{
+		Required: []any{&b.Transactions, &b.Uncles, &p.x},
+		Optional: []any{&b.Withdrawals},
+	}
 }
 
 func TestBlockWithX(t *testing.T) {
@@ -225,7 +238,7 @@ func TestBlockWithX(t *testing.T) {
 		struct{},
 	]()
 
-	typ := reflect.TypeOf(&Block{})
+	typ := reflect.TypeFor[*Block]()
 	for i := 0; i < typ.NumMethod(); i++ {
 		method := typ.Method(i).Name
 		if method == "Withdrawals" || !strings.HasPrefix(method, "With") {
@@ -233,7 +246,7 @@ func TestBlockWithX(t *testing.T) {
 		}
 
 		block := NewBlockWithHeader(&Header{})
-		const initialPayload = int(42)
+		const initialPayload uint64 = 42
 		payload := &blockPayload{
 			x: initialPayload,
 		}
@@ -274,62 +287,22 @@ func TestBlockWithX(t *testing.T) {
 	}
 }
 
-// bodyPayload is a [types.BlockBodyHooks] implementation carrying an extra
-// field that is {en,de}coded as if it was a regular RLP field of both the
-// [types.Block] and [types.Body].
-type bodyPayload struct {
-	Data []byte
-
-	NOOPBlockBodyHooks
-}
-
-func (p *bodyPayload) Copy() *bodyPayload {
-	return &bodyPayload{
-		Data: slices.Clone(p.Data),
-	}
-}
-
-var bodyPayloads pseudo.Accessor[*Body, *bodyPayload]
-
-func (*bodyPayload) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
-	// Rather than using the receiver directly, we access it through b. This
-	// demonstrates that the hooks can access their own payload via the
-	// [types.Body] they are passed.
-	p := bodyPayloads.Get(b)
-	return &rlp.Fields{
-		Required: []any{b.Transactions, b.Uncles, p.Data},
-		Optional: []any{b.Withdrawals},
-	}
-}
-
-func (*bodyPayload) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
-	// See above comment on why we access the receiver through b rather than
-	// directly.
-	p := bodyPayloads.Get(b)
-	return &rlp.Fields{
-		Required: []any{&b.Transactions, &b.Uncles, &p.Data},
-		Optional: []any{&b.Withdrawals},
-	}
-}
-
-// TestBodyExtraRoundTrip demonstrates that the extra from the method receiver
-// is the same as the extra from the argument for [types.BlockBodyHooks]
-// functions.
+// TestBodyExtraRoundTrip demonstrates that the body extra's round-trip
+// correctly through RLP serialization.
 func TestBodyExtraRoundTrip(t *testing.T) {
 	TestOnlyClearRegisteredExtras()
 	t.Cleanup(TestOnlyClearRegisteredExtras)
 
 	extras := RegisterExtras[
 		NOOPHeaderHooks, *NOOPHeaderHooks,
-		bodyPayload, *bodyPayload,
+		blockPayload, *blockPayload,
 		struct{},
 	]()
-	bodyPayloads = extras.Body
 
 	rng := ethtest.NewPseudoRand(142857)
 	wantBlock := NewBlockWithHeader(newHeader(rng))
 	want := extras.Block.Get(wantBlock)
-	want.Data = rng.Bytes(8)
+	want.x = rng.Uint64()
 
 	b, err := rlp.EncodeToBytes(wantBlock)
 	require.NoErrorf(t, err, "rlp.EncodeToBytes(%T)", wantBlock)
