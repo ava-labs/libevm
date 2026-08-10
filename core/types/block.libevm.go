@@ -18,6 +18,7 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 
 	"github.com/ava-labs/libevm/internal/libevm/pseudo"
@@ -106,25 +107,84 @@ func (b *Body) DecodeRLP(s *rlp.Stream) error {
 	return b.hooks().BodyRLPFieldPointersForDecoding(b).DecodeRLP(s)
 }
 
-// BlockRLPProxy exports the geth-internal type used for RLP {en,de}coding of a
-// [Block].
-type BlockRLPProxy extblock
-
 func (b *extblock) EncodeRLP(w io.Writer) error {
-	bb := (*BlockRLPProxy)(b)
-	return b.hooks.BlockRLPFieldsForEncoding(bb).EncodeRLP(w)
+	body := Body{
+		Transactions: b.Txs,
+		Uncles:       b.Uncles,
+		Withdrawals:  b.Withdrawals,
+		extra:        b.extra,
+	}
+	bodyFields := body.hooks().BodyRLPFieldsForEncoding(&body)
+	blockFields := rlp.Fields{
+		Required: append(
+			[]any{b.Header},
+			bodyFields.Required...,
+		),
+		Optional: bodyFields.Optional,
+	}
+	return blockFields.EncodeRLP(w)
 }
 
 func (b *extblock) DecodeRLP(s *rlp.Stream) error {
-	bb := (*BlockRLPProxy)(b)
-	return b.hooks.BlockRLPFieldPointersForDecoding(bb).DecodeRLP(s)
+	body := Body{
+		// The [pseudo.Type] extra payload carried in [extblock] is the same one
+		// carried by the [Block] that is ultimately being RLP-decoded. To
+		// ensure that the below call to [body.hooks] returns the same instance,
+		// we copy it here too. Without this instance equality, hook
+		// implementations won't be able to use their method receivers to access
+		// additional RLP fields.
+		extra: b.extra,
+	}
+	bodyFields := body.hooks().BodyRLPFieldPointersForDecoding(&body)
+	blockFields := rlp.Fields{
+		Required: append(
+			[]any{&b.Header},
+			bodyFields.Required...,
+		),
+		Optional: bodyFields.Optional,
+	}
+	if err := blockFields.DecodeRLP(s); err != nil {
+		return err
+	}
+	b.Txs = body.Transactions
+	b.Uncles = body.Uncles
+	b.Withdrawals = body.Withdrawals
+	return nil
+}
+
+// BlockBytes combines an RLP encoded [Header] and [Body] into an RLP encoded
+// [Block].
+//
+// For correctly formatted inputs it is a faster equivalent of:
+//   - Decoding into a [Header] and [Body]
+//   - Combining them into a Block
+//   - Encoding the Block
+//
+// This function does NOT validate the header or body.
+func BlockBytes(header, body rlp.RawValue) (rlp.RawValue, error) {
+	bodyFields, _, err := rlp.SplitList(body)
+	if err != nil {
+		return nil, fmt.Errorf("splitting body: %w", err)
+	}
+
+	w := rlp.NewEncoderBuffer(nil)
+	l := w.List()
+	if _, err := w.Write(header); err != nil {
+		return nil, fmt.Errorf("writing header: %w", err)
+	}
+	if _, err := w.Write(bodyFields); err != nil {
+		return nil, fmt.Errorf("writing body: %w", err)
+	}
+	w.ListEnd(l)
+	block := w.ToBytes()
+	return block, w.Flush() // Flush returns the internal buffer to the pool.
 }
 
 // BlockBodyHooks are required for all types registered with [RegisterExtras]
-// for [Block] and [Body] payloads.
+// for [Block] and [Body] payloads. The same methods are used for both [Block]
+// and [Body] {en,de}coding as a Block is encoded as its [Header] followed by
+// the fields of its [Body].
 type BlockBodyHooks interface {
-	BlockRLPFieldsForEncoding(*BlockRLPProxy) *rlp.Fields
-	BlockRLPFieldPointersForDecoding(*BlockRLPProxy) *rlp.Fields
 	BodyRLPFieldsForEncoding(*Body) *rlp.Fields
 	BodyRLPFieldPointersForDecoding(*Body) *rlp.Fields
 	PostRPCMarshal(b *Block, marshalled map[string]any)
@@ -149,26 +209,9 @@ var (
 	}
 	_ = extblock{
 		&Header{}, []*Transaction{}, []*Header{}, []*Withdrawal{}, // geth
-		BlockBodyHooks(nil), // libevm
+		&pseudo.Type{}, // libevm
 	}
-	// Demonstrate identity of these two types, by definition but useful for
-	// inspection here.
-	_ = extblock(BlockRLPProxy{})
 )
-
-func (NOOPBlockBodyHooks) BlockRLPFieldsForEncoding(b *BlockRLPProxy) *rlp.Fields {
-	return &rlp.Fields{
-		Required: []any{b.Header, b.Txs, b.Uncles},
-		Optional: []any{b.Withdrawals},
-	}
-}
-
-func (NOOPBlockBodyHooks) BlockRLPFieldPointersForDecoding(b *BlockRLPProxy) *rlp.Fields {
-	return &rlp.Fields{
-		Required: []any{&b.Header, &b.Txs, &b.Uncles},
-		Optional: []any{&b.Withdrawals},
-	}
-}
 
 func (NOOPBlockBodyHooks) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
 	return &rlp.Fields{

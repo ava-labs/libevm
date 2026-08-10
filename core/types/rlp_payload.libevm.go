@@ -303,6 +303,13 @@ func (b *Block) cloneExtra() *pseudo.Type {
 	return nil
 }
 
+func (b *Block) extraOrNil() *pseudo.Type {
+	if registeredExtras.Registered() {
+		return b.extraPayload()
+	}
+	return nil
+}
+
 // StateOrSlimAccount is implemented by both [StateAccount] and [SlimAccount],
 // allowing for their [StateAccountExtra] payloads to be accessed in a type-safe
 // manner by [ExtraPayloads] instances.
