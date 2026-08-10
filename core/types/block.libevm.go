@@ -127,8 +127,12 @@ func (b *extblock) EncodeRLP(w io.Writer) error {
 
 func (b *extblock) DecodeRLP(s *rlp.Stream) error {
 	body := Body{
-		// The body provided to the hooks is expected to contain the same extra
-		// as the method receiver.
+		// The [psuedo.Type] extra payload carried in [extblock] is the same one
+		// carried by the [Block] that is ultimately being RLP-decoded. To
+		// ensure that the below call to [body.hooks] returns the same instance,
+		// we copy it here too. Without this instance equality, hook
+		// implementations won't be able to use their method receivers to access
+		// additional RLP fields.
 		extra: b.extra,
 	}
 	bodyFields := body.hooks().BodyRLPFieldPointersForDecoding(&body)

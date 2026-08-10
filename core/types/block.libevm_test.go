@@ -392,7 +392,7 @@ func encodeRLP(tb testing.TB, v any) []byte {
 
 // referenceBlockBytes is the reference implementation against which
 // [BlockBytes] is tested and benchmarked.
-func referenceBlockBytes(headerBytes, bodyBytes []byte) ([]byte, error) {
+func referenceBlockBytes(headerBytes, bodyBytes rlp.RawValue) (rlp.RawValue, error) {
 	header := new(Header)
 	if err := rlp.DecodeBytes(headerBytes, header); err != nil {
 		return nil, err
