@@ -127,7 +127,7 @@ func (b *extblock) EncodeRLP(w io.Writer) error {
 
 func (b *extblock) DecodeRLP(s *rlp.Stream) error {
 	body := Body{
-		// The [psuedo.Type] extra payload carried in [extblock] is the same one
+		// The [pseudo.Type] extra payload carried in [extblock] is the same one
 		// carried by the [Block] that is ultimately being RLP-decoded. To
 		// ensure that the below call to [body.hooks] returns the same instance,
 		// we copy it here too. Without this instance equality, hook
