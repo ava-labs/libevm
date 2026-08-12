@@ -109,8 +109,9 @@ func payloadsAndConstructors[
 //
 // This MUST NOT be used on a live chain. It is solely intended for off-chain
 // consumers that require access to extras. Said consumers SHOULD NOT, however
-// call this function directly. Use the libevm/temporary.WithRegisteredExtras()
-// function instead as it atomically overrides all possible packages.
+// call this function directly. Use the [libevm.WithTemporaryExtrasLock]
+// function instead in combination with all other registrations to ensure
+// that temporary registrations are atomically applied.
 func WithTempRegisteredExtras[
 	H, B, SA any,
 	HPtr HeaderHooksPointer[H],
@@ -209,6 +210,12 @@ func (h *Header) hooks() HeaderHooks {
 	return new(NOOPHeaderHooks)
 }
 
+// PostRPCMarshal propagates `h` and `m` to the respective method on the
+// registered [HeaderHooks], if any, and is otherwise a noop.
+func (h *Header) PostRPCMarshal(m map[string]any) {
+	h.hooks().PostRPCMarshal(h, m)
+}
+
 func (b *Body) hooks() BlockBodyHooks {
 	if r := registeredExtras; r.Registered() {
 		return r.Get().hooks.hooksFromBody(b)
@@ -221,6 +228,12 @@ func (b *Block) hooks() BlockBodyHooks {
 		return r.Get().hooks.hooksFromBlock(b)
 	}
 	return NOOPBlockBodyHooks{}
+}
+
+// PostRPCMarshal propagates `b` and `m` to the respective method on the
+// registered [BlockBodyHooks], if any, and is otherwise a noop.
+func (b *Block) PostRPCMarshal(m map[string]any) {
+	b.hooks().PostRPCMarshal(b, m)
 }
 
 func (e *StateAccountExtra) clone() *StateAccountExtra {
@@ -286,6 +299,13 @@ func (b *Body) cloneExtra() *pseudo.Type {
 func (b *Block) cloneExtra() *pseudo.Type {
 	if r := registeredExtras; r.Registered() {
 		return r.Get().hooks.cloneBlockPayload(b)
+	}
+	return nil
+}
+
+func (b *Block) extraOrNil() *pseudo.Type {
+	if registeredExtras.Registered() {
+		return b.extraPayload()
 	}
 	return nil
 }

@@ -43,6 +43,8 @@ type stubHeaderHooks struct {
 	toCopy                                   *stubHeaderHooks
 
 	errMarshal, errUnmarshal, errEncode, errDecode error
+
+	NOOPHeaderHooks
 }
 
 func fakeHeaderJSON(h *Header, suffix []byte) []byte {
@@ -205,11 +207,25 @@ func TestHeaderHooks(t *testing.T) {
 
 type blockPayload struct {
 	NOOPBlockBodyHooks
-	x int
+	x uint64
 }
 
 func (p *blockPayload) Copy() *blockPayload {
 	return &blockPayload{x: p.x}
+}
+
+func (p *blockPayload) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
+	return &rlp.Fields{
+		Required: []any{b.Transactions, b.Uncles, p.x},
+		Optional: []any{b.Withdrawals},
+	}
+}
+
+func (p *blockPayload) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
+	return &rlp.Fields{
+		Required: []any{&b.Transactions, &b.Uncles, &p.x},
+		Optional: []any{&b.Withdrawals},
+	}
 }
 
 func TestBlockWithX(t *testing.T) {
@@ -222,7 +238,7 @@ func TestBlockWithX(t *testing.T) {
 		struct{},
 	]()
 
-	typ := reflect.TypeOf(&Block{})
+	typ := reflect.TypeFor[*Block]()
 	for i := 0; i < typ.NumMethod(); i++ {
 		method := typ.Method(i).Name
 		if method == "Withdrawals" || !strings.HasPrefix(method, "With") {
@@ -230,7 +246,7 @@ func TestBlockWithX(t *testing.T) {
 		}
 
 		block := NewBlockWithHeader(&Header{})
-		const initialPayload = int(42)
+		const initialPayload uint64 = 42
 		payload := &blockPayload{
 			x: initialPayload,
 		}
@@ -266,6 +282,163 @@ func TestBlockWithX(t *testing.T) {
 				t.Errorf("%T payload %T got same value as modified original; the payload was probably shallow copied", newBlock, got)
 			default:
 				t.Errorf("%T payload %T got %d, want %d; this is unexpected even as an error so you're on your own here", newBlock, got, got.x, initialPayload)
+			}
+		})
+	}
+}
+
+// TestBodyExtraRoundTrip demonstrates that the body extra's round-trip
+// correctly through RLP serialization.
+func TestBodyExtraRoundTrip(t *testing.T) {
+	TestOnlyClearRegisteredExtras()
+	t.Cleanup(TestOnlyClearRegisteredExtras)
+
+	extras := RegisterExtras[
+		NOOPHeaderHooks, *NOOPHeaderHooks,
+		blockPayload, *blockPayload,
+		struct{},
+	]()
+
+	rng := ethtest.NewPseudoRand(142857)
+	wantBlock := NewBlockWithHeader(newHeader(rng))
+	want := extras.Block.Get(wantBlock)
+	want.x = rng.Uint64()
+
+	b, err := rlp.EncodeToBytes(wantBlock)
+	require.NoErrorf(t, err, "rlp.EncodeToBytes(%T)", wantBlock)
+
+	gotBlock := new(Block)
+	require.NoErrorf(t, rlp.DecodeBytes(b, gotBlock), "rlp.DecodeBytes(rlp.EncodeToBytes(%T), %T)", wantBlock, gotBlock)
+	got := extras.Block.Get(gotBlock)
+	assert.Equalf(t, want, got, "%T payload after RLP round trip", got)
+}
+
+// newHeader returns a [Header] with randomly populated fields.
+func newHeader(rng *ethtest.PseudoRand) *Header {
+	return &Header{
+		ParentHash:  rng.Hash(),
+		UncleHash:   rng.Hash(),
+		Coinbase:    rng.Address(),
+		Root:        rng.Hash(),
+		TxHash:      rng.Hash(),
+		ReceiptHash: rng.Hash(),
+		Bloom:       rng.Bloom(),
+		Difficulty:  rng.BigUint64(),
+		Number:      rng.BigUint64(),
+		GasLimit:    rng.Uint64(),
+		GasUsed:     rng.Uint64(),
+		Time:        rng.Uint64(),
+		Extra:       rng.Bytes(32),
+		MixDigest:   rng.Hash(),
+		Nonce:       rng.BlockNonce(),
+		BaseFee:     rng.BigUint64(),
+	}
+}
+
+// bodySize describes the number of items in the [Body] of a test case.
+type bodySize struct {
+	txs, uncles, withdrawals int
+}
+
+// bodySizes are the [Body] shapes covered by [FuzzBlockBytes] seeds and by
+// [BenchmarkBlockBytes]. They cover every combination of empty and non-empty
+// fields, the last of which is optional in RLP.
+var bodySizes = []bodySize{
+	{txs: 0, uncles: 0, withdrawals: 0},
+	{txs: 1, uncles: 0, withdrawals: 0},
+	{txs: 0, uncles: 1, withdrawals: 0},
+	{txs: 0, uncles: 0, withdrawals: 1},
+	{txs: 10, uncles: 0, withdrawals: 0},
+	{txs: 10, uncles: 2, withdrawals: 4},
+	{txs: 100, uncles: 0, withdrawals: 0},
+	{txs: 100, uncles: 2, withdrawals: 16},
+}
+
+// newBody returns a [Body] with randomly populated fields, holding the number
+// of items described by `size`.
+func newBody(rng *ethtest.PseudoRand, size bodySize) *Body {
+	body := &Body{}
+	for range size.txs {
+		body.Transactions = append(body.Transactions, NewTx(&LegacyTx{
+			Nonce:    rng.Uint64(),
+			GasPrice: rng.BigUint64(),
+			Gas:      rng.Uint64(),
+			To:       rng.AddressPtr(),
+			Value:    rng.BigUint64(),
+			Data:     rng.Bytes(64),
+		}))
+	}
+	for range size.uncles {
+		body.Uncles = append(body.Uncles, newHeader(rng))
+	}
+	for range size.withdrawals {
+		body.Withdrawals = append(body.Withdrawals, &Withdrawal{
+			Index:     rng.Uint64(),
+			Validator: rng.Uint64(),
+			Address:   rng.Address(),
+			Amount:    rng.Uint64(),
+		})
+	}
+	return body
+}
+
+// encodeRLP RLP-encodes `v`, failing the test if it can't be encoded.
+func encodeRLP(tb testing.TB, v any) []byte {
+	tb.Helper()
+	b, err := rlp.EncodeToBytes(v)
+	require.NoErrorf(tb, err, "rlp.EncodeToBytes(%T)", v)
+	return b
+}
+
+// referenceBlockBytes is the reference implementation against which
+// [BlockBytes] is tested and benchmarked.
+func referenceBlockBytes(headerBytes, bodyBytes rlp.RawValue) (rlp.RawValue, error) {
+	header := new(Header)
+	if err := rlp.DecodeBytes(headerBytes, header); err != nil {
+		return nil, err
+	}
+	body := new(Body)
+	if err := rlp.DecodeBytes(bodyBytes, body); err != nil {
+		return nil, err
+	}
+	block := NewBlockWithHeader(header).
+		WithBody(*body).
+		WithWithdrawals(body.Withdrawals)
+	return rlp.EncodeToBytes(block)
+}
+
+// FuzzBlockBytes demonstrates that [BlockBytes] is equivalent to
+// [referenceBlockBytes] for all inputs that the latter accepts. The seed corpus
+// covers every shape in [bodySizes].
+func FuzzBlockBytes(f *testing.F) {
+	rng := ethtest.NewPseudoRand(20250806)
+	for _, size := range bodySizes {
+		f.Add(
+			encodeRLP(f, newHeader(rng)),
+			encodeRLP(f, newBody(rng, size)),
+		)
+	}
+
+	f.Fuzz(func(t *testing.T, headerBytes, bodyBytes []byte) {
+		want, err := referenceBlockBytes(headerBytes, bodyBytes)
+		if err != nil {
+			t.Skip("invalid input bytes")
+		}
+
+		got, err := BlockBytes(headerBytes, bodyBytes)
+		require.NoError(t, err, "BlockBytes()")
+		assert.Equal(t, want, got, "referenceBlockBytes() == BlockBytes()")
+	})
+}
+
+func BenchmarkBlockBytes(b *testing.B) {
+	for _, size := range bodySizes {
+		rng := ethtest.NewPseudoRand(2718281828)
+		headerBytes := encodeRLP(b, newHeader(rng))
+		bodyBytes := encodeRLP(b, newBody(rng, size))
+		b.Run(fmt.Sprintf("%d_txs_%d_uncles_%d_withdrawals", size.txs, size.uncles, size.withdrawals), func(b *testing.B) {
+			for b.Loop() {
+				_, _ = BlockBytes(headerBytes, bodyBytes)
 			}
 		})
 	}

@@ -35,7 +35,7 @@ func (b *tempBlockBodyHooks) Copy() *tempBlockBodyHooks {
 	return &tempBlockBodyHooks{X: b.X}
 }
 
-func (b *tempBlockBodyHooks) BlockRLPFieldsForEncoding(*BlockRLPProxy) *rlp.Fields {
+func (b *tempBlockBodyHooks) BodyRLPFieldsForEncoding(*Body) *rlp.Fields {
 	return &rlp.Fields{
 		Required: []any{b.X},
 	}
@@ -62,12 +62,12 @@ func TestTempRegisteredExtras(t *testing.T) {
 		err := libevm.WithTemporaryExtrasLock(func(lock libevm.ExtrasLock) error {
 			return WithTempRegisteredExtras(lock, func(extras ExtraPayloads[*NOOPHeaderHooks, *tempBlockBodyHooks, bool]) error {
 				const val = "Hello, world"
-				b := new(Block)
+				b := new(Body)
 				payload := &tempBlockBodyHooks{X: val}
-				extras.Block.Set(b, payload)
+				extras.Body.Set(b, payload)
 
 				got, err := rlp.EncodeToBytes(b)
-				require.NoErrorf(t, err, "rlp.EncodeToBytes(%T) with %T hooks", b, extras.Block.Get(b))
+				require.NoErrorf(t, err, "rlp.EncodeToBytes(%T) with %T hooks", b, extras.Body.Get(b))
 				want, err := rlp.EncodeToBytes([]string{val})
 				require.NoErrorf(t, err, "rlp.EncodeToBytes(%T{%[1]v})", []string{val})
 

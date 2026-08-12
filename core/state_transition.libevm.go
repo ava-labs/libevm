@@ -18,8 +18,13 @@ package core
 
 import (
 	"fmt"
+	"math"
 
+	"github.com/holiman/uint256"
+
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/params"
 )
@@ -91,11 +96,16 @@ func (st *StateTransition) canExecuteTransaction() error {
 	return nil
 }
 
-// consumeMinimumGas updates the gas remaining to reflect the value returned by
-// [params.RulesHooks.MinimumGasConsumption]. It MUST be called after all code
-// that modifies gas consumption but before the balance is returned for
+// afterGasRefund updates the gas remaining to reflect the
+// [params.RulesHooks.ShouldRefundGas] and
+// [params.RulesHooks.MinimumGasConsumption] methods. It MUST be called after
+// all code that modifies gas consumption but before the balance is returned for
 // remaining gas.
-func (st *StateTransition) consumeMinimumGas() {
+func (st *StateTransition) afterGasRefund(refunded uint64) {
+	if !st.rulesHooks().ShouldRefundGas() {
+		st.gasRemaining -= refunded
+	}
+
 	limit := st.msg.GasLimit
 	minConsume := min(
 		limit, // as documented in [params.RulesHooks]
@@ -105,4 +115,51 @@ func (st *StateTransition) consumeMinimumGas() {
 		st.gasRemaining,
 		limit-minConsume,
 	)
+}
+
+// maybeCreditBaseFeeToCoinbase credits the coinbase with the base-fee portion
+// of the transaction fee, which EIP-1559 would otherwise burn. The effective
+// tip is unconditionally credited by transitionDb so MUST NOT be included here.
+//
+// This MUST be called after [StateTransition.refundGas] and before
+// [vm.EVMLogger.CaptureEnd] in the defer of
+// [StateTransition.transitionDb].
+func (st *StateTransition) maybeCreditBaseFeeToCoinbase() {
+	if !st.rulesHooks().ShouldCreditBaseFeeToCoinbase() {
+		return
+	}
+
+	baseFee, _ := uint256.FromBig(st.evm.Context.BaseFee)
+	if baseFee == nil {
+		return
+	}
+	fee := uint256.NewInt(st.gasUsed())
+	fee.Mul(fee, baseFee)
+	st.state.AddBalance(st.evm.Context.Coinbase, fee)
+}
+
+// libevmAccessListGas is a convenience wrapper for calling the
+// [params.RulesHooks.AccessListGas] hook. It converts the raw access list to a
+// DTO and calls the hook. Returns the gas to be charged for the access list,
+// whether the hook overrides the default calculation and any error.
+// It MAY return an error for gas overflow if the hook returns a gas value that
+// would cause an overflow with [currGas]. It MUST be called with a non-nil
+// access list.
+func libevmAccessListGas(currGas uint64, raw types.AccessList, rules params.Rules) (gas uint64, override bool, err error) {
+	list := make(libevm.AccessList, len(raw))
+	for i, tuple := range raw {
+		list[i] = libevm.AccessTuple{
+			Address:     tuple.Address,
+			StorageKeys: tuple.StorageKeys,
+		}
+	}
+
+	hookGas, override, err := rules.Hooks().AccessListGas(list)
+	if !override || err != nil {
+		return 0, false, err
+	}
+	if math.MaxUint64-currGas < hookGas {
+		return 0, false, ErrGasUintOverflow
+	}
+	return hookGas, true, nil
 }

@@ -55,12 +55,26 @@ type RulesHooks interface {
 	// received slice. The value it returns MUST be consistent with the
 	// behaviour of the PrecompileOverride hook.
 	ActivePrecompiles([]common.Address) []common.Address
+	// AccessListGas receives the transaction access list and returns the
+	// intrinsic gas to be charged for it. If override is true, the returned gas
+	// replaces the default per-address and per-storage-key calculation. If
+	// override is false, the default calculation is used. This hook is not
+	// called if the access list is nil. The hook MAY return an error (e.g., for
+	// gas overflow).
+	AccessListGas(accessList libevm.AccessList) (gas uint64, override bool, err error)
+	// ShouldRefundGas returns whether or not to honour gas refunds, which is
+	// otherwise the default behaviour.
+	ShouldRefundGas() bool
 	// MinimumGasConsumption receives a transaction's gas limit and returns the
 	// minimum quantity of gas units to be charged for said transaction. If the
 	// returned value is greater than the transaction's limit, the minimum spend
 	// will be capped at the limit. The minimum spend will be applied _after_
 	// refunds, if any.
 	MinimumGasConsumption(txGasLimit uint64) (gas uint64)
+	// ShouldCreditBaseFeeToCoinbase returns whether or not to credit the
+	// block's base fee to the coinbase address. By default, it will NOT be
+	// credited.
+	ShouldCreditBaseFeeToCoinbase() bool
 }
 
 // RulesAllowlistHooks are a subset of [RulesHooks] that gate actions, signalled
@@ -140,7 +154,22 @@ func (NOOPHooks) ActivePrecompiles(active []common.Address) []common.Address {
 	return active
 }
 
+// AccessListGas returns override=false and nil error, signalling to use the default calculation.
+func (NOOPHooks) AccessListGas(_ libevm.AccessList) (uint64, bool, error) {
+	return 0, false, nil
+}
+
+// ShouldRefundGas always returns true.
+func (NOOPHooks) ShouldRefundGas() bool {
+	return true
+}
+
 // MinimumGasConsumption always returns 0.
 func (NOOPHooks) MinimumGasConsumption(uint64) uint64 {
 	return 0
+}
+
+// ShouldCreditBaseFeeToCoinbase always returns false.
+func (NOOPHooks) ShouldCreditBaseFeeToCoinbase() bool {
+	return false
 }

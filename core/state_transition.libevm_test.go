@@ -16,11 +16,15 @@
 package core_test
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"testing"
 
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
@@ -28,6 +32,8 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/eth/tracers"
+	"github.com/ava-labs/libevm/eth/tracers/native"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/ethtest"
 	"github.com/ava-labs/libevm/libevm/hookstest"
@@ -59,6 +65,103 @@ func TestCanExecuteTransaction(t *testing.T) {
 	}
 	_, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(30e6))
 	require.EqualError(t, err, makeErr(msg.From, msg.To, value).Error())
+}
+
+func TestIntrinsicGasAccessListHook(t *testing.T) {
+	accessList := types.AccessList{{
+		Address: common.Address{1},
+		StorageKeys: []common.Hash{
+			{1},
+			{2},
+		},
+	}}
+	defaultAccessListGas := uint64(len(accessList))*params.TxAccessListAddressGas +
+		uint64(accessList.StorageKeys())*params.TxAccessListStorageKeyGas //nolint:gosec // Known to not overflow
+
+	testErr := errors.New("test error")
+
+	tests := []struct {
+		name       string
+		accessList types.AccessList
+		hookGas    uint64
+		hookErr    error
+		override   bool
+		wantGas    uint64
+		wantErr    error
+	}{
+		{
+			name:       "hook_overrides_with_custom_gas",
+			accessList: accessList,
+			hookGas:    100,
+			override:   true,
+			wantGas:    params.TxGas + 100,
+		},
+		{
+			name:       "hook_overrides_with_zero",
+			accessList: accessList,
+			hookGas:    0,
+			override:   true,
+			wantGas:    params.TxGas,
+		},
+		{
+			name:       "hook_does_not_override_uses_default",
+			accessList: accessList,
+			hookGas:    0,
+			override:   false,
+			wantGas:    params.TxGas + defaultAccessListGas,
+		},
+		{
+			name:       "nil_access_list_hook_not_called",
+			accessList: nil,
+			wantGas:    params.TxGas,
+		},
+		{
+			name:       "empty_access_list_with_override",
+			accessList: types.AccessList{},
+			hookGas:    100,
+			override:   true,
+			wantGas:    params.TxGas + 100,
+		},
+		{
+			name:       "hook_gas_causes_overflow",
+			accessList: accessList,
+			hookGas:    math.MaxUint64,
+			override:   true,
+			wantErr:    core.ErrGasUintOverflow,
+		},
+		{
+			name:       "hook_returns_error",
+			accessList: accessList,
+			hookErr:    testErr,
+			override:   true,
+			wantErr:    testErr,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hookCalled := false
+			hooks := &hookstest.Stub{
+				AccessListGasFn: func(dto libevm.AccessList) (uint64, bool, error) {
+					require.Len(t, dto, len(tt.accessList), "access list length mismatch")
+					for i, tuple := range tt.accessList {
+						assert.Equal(t, tuple.Address, dto[i].Address, "address mismatch at index %d", i)
+						assert.Equal(t, tuple.StorageKeys, dto[i].StorageKeys, "storage keys mismatch at index %d", i)
+					}
+					hookCalled = true
+					return tt.hookGas, tt.override, tt.hookErr
+				},
+			}
+			hooks.Register(t)
+
+			rules := params.NonActivatedConfig.Rules(new(big.Int), false, 0)
+			got, err := core.IntrinsicGas(nil, tt.accessList, false, rules)
+
+			require.ErrorIs(t, err, tt.wantErr, "core.IntrinsicGas(...)")
+			require.Equal(t, tt.wantGas, got, "core.IntrinsicGas(...)")
+			require.Equal(t, tt.accessList != nil, hookCalled)
+		})
+	}
 }
 
 func TestMinimumGasConsumption(t *testing.T) {
@@ -197,6 +300,188 @@ func TestMinimumGasConsumption(t *testing.T) {
 			if got := stateDB.GetBalance(from); !got.Eq(wantBalance) {
 				t.Errorf("got remaining balance %d; want %d", got, wantBalance)
 			}
+		})
+	}
+}
+
+// TestCreditBaseFeeToCoinbase tests that the coinbase is credited with the
+// base fee if enabled in the hooks and post-London. Additionally, these state
+// changes should be conveyed to the tracer.
+func TestCreditBaseFeeToCoinbase(t *testing.T) {
+	// The tip and base fee MUST differ so crediting the wrong one (or both
+	// twice) is detectable in the coinbase balance.
+	const (
+		gas         = params.TxGas
+		baseFee     = 3
+		tip         = 2
+		feeCap      = baseFee + tip + 1 // not binding, so the effective tip is [tip]
+		legacyPrice = 7
+	)
+
+	pre1559 := &types.LegacyTx{
+		To:       &common.Address{},
+		Gas:      gas,
+		GasPrice: big.NewInt(legacyPrice),
+	}
+	post1559 := &types.DynamicFeeTx{
+		To:        &common.Address{},
+		Gas:       gas,
+		GasFeeCap: big.NewInt(feeCap),
+		GasTipCap: big.NewInt(tip),
+	}
+
+	tests := []struct {
+		name          string
+		creditBaseFee bool
+		tx            types.TxData // concrete type also dictates pre- vs post- EIP1559 behaviour
+		wantFeePerGas uint64       // credited to the coinbase, per unit of gas used
+	}{
+		{
+			name:          "disabled_coinbase_receives_only_tip",
+			creditBaseFee: false,
+			tx:            post1559,
+			wantFeePerGas: tip,
+		},
+		{
+			name:          "enabled_coinbase_receives_tip_and_base_fee",
+			creditBaseFee: true,
+			tx:            post1559,
+			wantFeePerGas: tip + baseFee,
+		},
+		{
+			name:          "enabled_pre_london_hook_is_noop",
+			creditBaseFee: true,
+			tx:            pre1559,
+			wantFeePerGas: legacyPrice,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hooks := &hookstest.Stub{
+				CreditBaseFeeToCoinbase: tt.creditBaseFee,
+			}
+			hooks.Register(t)
+
+			key, err := crypto.GenerateKey()
+			require.NoError(t, err, "crypto.GenerateKey()")
+
+			config := *params.TestChainConfig
+			headerBaseFee := big.NewInt(baseFee)
+			switch tt.tx.(type) {
+			case *types.LegacyTx:
+				config.LondonBlock = nil
+				headerBaseFee = nil
+			case *types.DynamicFeeTx:
+			default:
+				t.Fatalf("Bad test setup: unsupported tx type %T", tt.tx)
+			}
+
+			sdb, evm := ethtest.NewZeroEVM(t, ethtest.WithChainConfig(&config))
+			sdb.SetBalance(crypto.PubkeyToAddress(key.PublicKey), new(uint256.Int).SetAllOne())
+
+			tx := types.MustSignNewTx(key, types.LatestSigner(&config), tt.tx)
+
+			// Unlike checking the state DB directly, a tracer gives insight as
+			// to _when_ the coinbase balance was updated, not just _that_ it
+			// was. If the update is too late then traces are incomplete.
+			tracer, err := tracers.DefaultDirectory.New("prestateTracer", &tracers.Context{}, json.RawMessage(`{"diffMode":true}`))
+			require.NoError(t, err, `tracers.DefaultDirectory.New("prestateTracer", ...)`)
+
+			coinbase := common.Address{'c', 'o', 'i', 'n'}
+			gp := core.GasPool(math.MaxUint64)
+			var gasUsed uint64
+			receipt, err := core.ApplyTransaction(
+				evm.ChainConfig(), nil, &coinbase, &gp, sdb,
+				&types.Header{
+					BaseFee: headerBaseFee,
+					// Required but irrelevant fields
+					Number:     big.NewInt(0),
+					Difficulty: big.NewInt(0),
+				},
+				tx, &gasUsed, vm.Config{Tracer: tracer},
+			)
+			require.NoError(t, err, "core.ApplyTransaction(...)")
+			require.Equalf(t, types.ReceiptStatusSuccessful, receipt.Status, "%T.Status", receipt)
+
+			wantFee := receipt.GasUsed * tt.wantFeePerGas
+			assert.Equal(t, wantFee, sdb.GetBalance(coinbase).Uint64(), "balance of coinbase")
+
+			traced, err := tracer.GetResult()
+			require.NoError(t, err, "tracer.GetResult()")
+			var diff struct { // from [native.PrestateTracer.GetResult]
+				Post map[common.Address]*native.Account `json:"post"`
+			}
+			require.NoError(t, json.Unmarshal(traced, &diff), "json.Unmarshal(tracer.GetResult(), ...)")
+
+			require.Containsf(t, diff.Post, coinbase, "coinbase in post-state diff of native prestate tracer")
+			assert.Equal(t, new(big.Int).SetUint64(wantFee), diff.Post[coinbase].Balance, "balance of coinbase in post-state diff of native prestate tracer")
+		})
+	}
+}
+
+func TestGasRefunds(t *testing.T) {
+	const refund = 100
+
+	tests := []struct {
+		shouldRefund bool
+		want         uint64
+	}{
+		{
+			shouldRefund: true,
+			want:         params.TxGas - refund,
+		},
+		{
+			shouldRefund: false,
+			want:         params.TxGas,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("should_refund_%t", tt.shouldRefund), func(t *testing.T) {
+			refunder := common.Address{'r', 'e'}
+			hooks := &hookstest.Stub{
+				DisableGasRefunds: !tt.shouldRefund,
+				PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+					refunder: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, _ []byte) ([]byte, error) {
+						env.StateDB().AddRefund(refund)
+						return nil, nil
+					}),
+				},
+			}
+			hooks.Register(t)
+
+			sdb, evm := ethtest.NewZeroEVM(t)
+
+			key, err := crypto.GenerateKey()
+			require.NoError(t, err, "crypto.GenerateKey()")
+			sdb.SetBalance(crypto.PubkeyToAddress(key.PublicKey), new(uint256.Int).SetAllOne())
+
+			tx := types.MustSignNewTx(
+				key,
+				types.LatestSigner(evm.ChainConfig()),
+				&types.LegacyTx{
+					To:       &refunder,
+					Gas:      1e6,
+					GasPrice: big.NewInt(1),
+				},
+			)
+
+			gp := core.GasPool(math.MaxUint64)
+			var got uint64
+			receipt, err := core.ApplyTransaction(
+				evm.ChainConfig(), nil, &common.Address{}, &gp, sdb,
+				&types.Header{
+					Number:     big.NewInt(0),
+					Difficulty: big.NewInt(0),
+				},
+				tx, &got, vm.Config{},
+			)
+			require.NoError(t, err, "core.ApplyTransaction(...)")
+			require.Equalf(t, types.ReceiptStatusSuccessful, receipt.Status, "%T.Status", receipt)
+
+			assert.Equal(t, tt.want, got, "core.ApplyTransaction(..., gasUsed *uint64, ...)")
+			assert.Equalf(t, tt.want, receipt.GasUsed, "%T.GasUsed", receipt)
 		})
 	}
 }

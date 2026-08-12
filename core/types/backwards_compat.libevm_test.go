@@ -200,6 +200,7 @@ func TestBlockRLPBackwardsCompatibility(t *testing.T) {
 type cChainBodyExtras struct {
 	Version uint32
 	ExtData *[]byte
+	NOOPBlockBodyHooks
 }
 
 var _ BlockBodyHooks = (*cChainBodyExtras)(nil)
@@ -236,14 +237,6 @@ func (e *cChainBodyExtras) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields 
 // See [cChainBodyExtras] intent.
 
 func (e *cChainBodyExtras) Copy() *cChainBodyExtras {
-	panic("unimplemented")
-}
-
-func (e *cChainBodyExtras) BlockRLPFieldsForEncoding(b *BlockRLPProxy) *rlp.Fields {
-	panic("unimplemented")
-}
-
-func (e *cChainBodyExtras) BlockRLPFieldPointersForDecoding(b *BlockRLPProxy) *rlp.Fields {
 	panic("unimplemented")
 }
 

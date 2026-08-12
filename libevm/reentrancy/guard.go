@@ -33,11 +33,16 @@ var slotPreimagePrefix = []byte("libevm-reentrancy-guard-")
 
 // Guard returns [vm.ErrExecutionReverted] i.f.f. it has already been called
 // with the same `key`, by the same contract, in the same transaction. It
-// otherwise returns nil. The `key` MAY be nil.
+// otherwise returns nil unless in a read-only context, in which case it always
+// returns [vm.ErrWriteProtection]. The `key` MAY be nil.
 //
 // Contract equality is defined as the [libevm.AddressContext] "self" address
 // being the same under EVM semantics.
 func Guard(env vm.PrecompileEnvironment, key []byte) error {
+	if env.ReadOnly() {
+		return vm.ErrWriteProtection
+	}
+
 	self := env.Addresses().EVMSemantic.Self
 	slot := crypto.Keccak256Hash(slotPreimagePrefix, key)
 

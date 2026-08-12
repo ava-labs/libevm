@@ -47,9 +47,12 @@ type Stub struct {
 	DescriptionSuffix       string
 	PrecompileOverrides     map[common.Address]libevm.PrecompiledContract
 	ActivePrecompilesFn     func([]common.Address) []common.Address
+	AccessListGasFn         func(libevm.AccessList) (uint64, bool, error)
 	CanExecuteTransactionFn func(common.Address, *common.Address, libevm.StateReader) error
 	CanCreateContractFn     func(*libevm.AddressContext, uint64, libevm.StateReader) (uint64, error)
 	MinimumGasConsumptionFn func(txGasLimit uint64) uint64
+	DisableGasRefunds       bool
+	CreditBaseFeeToCoinbase bool
 }
 
 // Register is a convenience wrapper for registering s as both the
@@ -89,6 +92,15 @@ func (s Stub) ActivePrecompiles(active []common.Address) []common.Address {
 		return f(active)
 	}
 	return active
+}
+
+// AccessListGas proxies arguments to the s.AccessListGasFn function if non-nil,
+// otherwise it returns override=false to signal using the default calculation.
+func (s Stub) AccessListGas(accessList libevm.AccessList) (uint64, bool, error) {
+	if f := s.AccessListGasFn; f != nil {
+		return f(accessList)
+	}
+	return 0, false, nil
 }
 
 // CheckConfigForkOrder proxies arguments to the s.CheckConfigForkOrderFn
@@ -132,6 +144,17 @@ func (s Stub) CanCreateContract(cc *libevm.AddressContext, gas uint64, sr libevm
 	return gas, nil
 }
 
+// ShouldRefundGas returns the negation of [Stub.DisableGasRefund].
+//
+// Although the double-negation of the boolean isn't ideal for readability, this
+// allows the zero [Stub] to mirror default behaviour, while keeping the
+// production hook name as a [positive boolean].
+//
+// [positive boolean]: https://testing.googleblog.com/2023/10/improve-readability-with-positive.html
+func (s Stub) ShouldRefundGas() bool {
+	return !s.DisableGasRefunds
+}
+
 // MinimumGasConsumption proxies arguments to the s.MinimumGasConsumptionFn
 // function if non-nil, otherwise it acts as a noop.
 func (s Stub) MinimumGasConsumption(limit uint64) uint64 {
@@ -139,6 +162,11 @@ func (s Stub) MinimumGasConsumption(limit uint64) uint64 {
 		return f(limit)
 	}
 	return 0
+}
+
+// ShouldCreditBaseFeeToCoinbase returns the value of [Stub.CreditBaseFeeToCoinbase].
+func (s Stub) ShouldCreditBaseFeeToCoinbase() bool {
+	return s.CreditBaseFeeToCoinbase
 }
 
 var _ interface {
