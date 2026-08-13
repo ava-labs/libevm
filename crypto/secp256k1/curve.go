@@ -274,6 +274,14 @@ func (BitCurve *BitCurve) Unmarshal(data []byte) (x, y *big.Int) {
 	}
 	x = new(big.Int).SetBytes(data[1 : 1+byteLen])
 	y = new(big.Int).SetBytes(data[1+byteLen:])
+
+	//Check that the point is on the curve and in the correct range. If not, return nil.
+	if x.Cmp(BitCurve.P) >= 0 || y.Cmp(BitCurve.P) >= 0 {
+		return nil, nil
+	}
+	if !BitCurve.IsOnCurve(x, y) {
+		return nil, nil
+	}
 	return
 }
 
