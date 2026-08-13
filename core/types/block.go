@@ -432,7 +432,10 @@ func (b *Block) Size() uint64 {
 // SanityCheck can be used to prevent that unbounded fields are
 // stuffed with junk data to add processing overhead
 func (b *Block) SanityCheck() error {
-	return b.header.SanityCheck()
+	if err := b.header.SanityCheck(); err != nil {
+		return err
+	}
+	return b.BodySanityCheck()
 }
 
 type writeCounter uint64

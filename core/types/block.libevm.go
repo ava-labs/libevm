@@ -122,12 +122,48 @@ func (b *extblock) DecodeRLP(s *rlp.Stream) error {
 
 // BlockBodyHooks are required for all types registered with [RegisterExtras]
 // for [Block] and [Body] payloads.
+//
+// Implementations carrying unbounded fields (byte slices, maps, slices) SHOULD
+// also implement [BlockBodySanitizer]. Body payloads are decoded straight from
+// peer-supplied RLP and, unlike Header.Extra — which [Header.SanityCheck] caps
+// at 100KB — libevm can't bound an arbitrary registered type on the
+// implementation's behalf. Without [BlockBodySanitizer] there is NO size limit
+// beyond the p2p message cap.
 type BlockBodyHooks interface {
 	BlockRLPFieldsForEncoding(*BlockRLPProxy) *rlp.Fields
 	BlockRLPFieldPointersForDecoding(*BlockRLPProxy) *rlp.Fields
 	BodyRLPFieldsForEncoding(*Body) *rlp.Fields
 	BodyRLPFieldPointersForDecoding(*Body) *rlp.Fields
 	PostRPCMarshal(b *Block, marshalled map[string]any)
+}
+
+// BlockBodySanitizer is an optional interface for [BlockBodyHooks]
+// implementations to bound their body extras, mirroring the role that
+// [Header.SanityCheck] plays for Header.Extra. It is the only mechanism by which
+// a body payload is size-limited; see [BlockBodyHooks].
+//
+// Implementations MUST NOT assume the block is otherwise valid: BodySanityCheck
+// runs on peer-supplied data before signature, root-hash or consensus checks.
+// They SHOULD be cheap, as they run on every propagated block, and MUST NOT
+// depend on chain state.
+//
+// It is reached from both attacker-controlled ingress paths:
+//   - [Block.SanityCheck], via the eth protocol's NewBlock handler, immediately
+//     after the block is decoded.
+//   - `core.BlockValidator.ValidateBody`, via InsertChain, before the block is
+//     validated or persisted.
+type BlockBodySanitizer interface {
+	BodySanityCheck(*Block) error
+}
+
+// BodySanityCheck calls [BlockBodySanitizer.BodySanityCheck] on the block's
+// registered hooks if they implement [BlockBodySanitizer]. It returns nil
+// otherwise, so a registered payload that doesn't opt in is unbounded.
+func (b *Block) BodySanityCheck() error {
+	if s, ok := b.hooks().(BlockBodySanitizer); ok {
+		return s.BodySanityCheck(b)
+	}
+	return nil
 }
 
 // NOOPBlockBodyHooks implements [BlockBodyHooks] such that they are equivalent
