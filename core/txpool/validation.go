@@ -19,6 +19,7 @@ package txpool
 import (
 	"crypto/sha256"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ava-labs/libevm/common"
@@ -80,6 +81,12 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	// transactions but may occur for transactions created using the RPC.
 	if tx.Value().Sign() < 0 {
 		return ErrNegativeValue
+	}
+	// EIP-2681 caps account nonces at 2^64-1, so a transaction with the maximum
+	// nonce can never be executed. Rejecting it here keeps it from occupying pool
+	// space and creating a permanent nonce gap for the sender.
+	if tx.Nonce() == math.MaxUint64 {
+		return fmt.Errorf("%w: nonce %d", core.ErrNonceMax, tx.Nonce())
 	}
 	// Ensure the transaction doesn't exceed the current block limit gas
 	if head.GasLimit < tx.Gas() {
