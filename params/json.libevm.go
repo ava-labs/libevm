@@ -83,7 +83,12 @@ func (c *ChainConfig) MarshalJSON() ([]byte, error) {
 		return json.Marshal((*chainConfigWithoutMethods)(c))
 	}
 	ec := registeredExtras.Get()
-	return MarshalChainConfigJSON(*c, c.extra, ec.reuseJSONRoot)
+	// Check for null extra payloads.
+	extra := c.extra
+	if extra == nil {
+		extra = ec.newChainConfig()
+	}
+	return MarshalChainConfigJSON(*c, extra, ec.reuseJSONRoot)
 }
 
 // MarshalChainConfigJSON is equivalent to [ChainConfig.MarshalJSON]
