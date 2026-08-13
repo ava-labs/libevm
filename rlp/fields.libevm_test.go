@@ -166,6 +166,12 @@ func TestNillable(t *testing.T) {
 	for _, a := range []*uint64{
 		nil,
 		common.PointerTo[uint64](0),
+		// Values in [0x01,0x7f] are their own RLP encoding, reported as [Byte]
+		// kind with a zero size. They MUST NOT be confused for empty items.
+		common.PointerTo[uint64](1),
+		common.PointerTo[uint64](0x7f),
+		common.PointerTo[uint64](0x80),
+		common.PointerTo[uint64](256),
 	} {
 		tests = append(tests, outer{a, nil, nil})
 	}

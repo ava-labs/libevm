@@ -126,14 +126,15 @@ func Nillable[T any](field **T) Decoder {
 type nillable[T any] struct{ v **T }
 
 func (n *nillable[T]) DecodeRLP(s *Stream) error {
-	_, size, err := s.Kind()
+	kind, size, err := s.Kind()
 	if err != nil {
 		return err
 	}
-	if size > 0 {
-		return s.Decode(n.v)
+	// Check for a zero-sized RLP item.
+	if kind != Byte && size == 0 {
+		*n.v = nil
+		_, err = s.Raw() // consume the item
+		return err
 	}
-	*n.v = nil
-	_, err = s.Raw() // consume the item
-	return err
+	return s.Decode(n.v)
 }
