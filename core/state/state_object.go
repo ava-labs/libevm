@@ -444,7 +444,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 		address:  s.address,
 		addrHash: s.addrHash,
 		origin:   s.origin,
-		data:     s.data,
+		data:     *s.data.Copy(),
 	}
 	if s.trie != nil {
 		obj.trie = db.db.CopyTrie(s.trie)
