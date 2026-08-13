@@ -42,6 +42,9 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	}
 
 	x, y := elliptic.Unmarshal(S256(), s)
+	if x == nil {
+		return nil, errInvalidPubkey
+	}
 	return &ecdsa.PublicKey{Curve: S256(), X: x, Y: y}, nil
 }
 
