@@ -62,7 +62,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, err
 	}
 
-	snap := st.state.Snapshot()   // computationally cheap operation
+	snap := st.state.Snapshot() // computationally cheap operation
+	// Save and restore the gas pool in case of execution invalidation.
+	gasPool := *st.gp
 	res, err := st.transitionDb() // original geth implementation
 
 	// [NOTE]: At the time of implementation of this libevm override, non-nil
@@ -72,6 +74,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	if invalid := st.evm.ExecutionInvalidated(); invalid != nil {
 		st.state.RevertToSnapshot(snap)
+		*st.gp = gasPool
 		err = fmt.Errorf("execution invalidated: %w", invalid)
 	}
 
