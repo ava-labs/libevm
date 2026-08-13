@@ -189,7 +189,7 @@ func (api *adminAPI) StartHTTP(host *string, port *int, cors *string, apis *stri
 	}
 	if vhosts != nil {
 		config.Vhosts = nil
-		for _, vhost := range strings.Split(*host, ",") {
+		for _, vhost := range strings.Split(*vhosts, ",") {
 			config.Vhosts = append(config.Vhosts, strings.TrimSpace(vhost))
 		}
 	}
@@ -203,7 +203,9 @@ func (api *adminAPI) StartHTTP(host *string, port *int, cors *string, apis *stri
 	if err := api.node.http.setListenAddr(*host, *port); err != nil {
 		return false, err
 	}
-	if err := api.node.http.enableRPC(api.node.rpcAPIs, config); err != nil {
+	// Get the endpoints
+	openAPIs, _ := api.node.getAPIs()
+	if err := api.node.http.enableRPC(openAPIs, config); err != nil {
 		return false, err
 	}
 	if err := api.node.http.start(); err != nil {
