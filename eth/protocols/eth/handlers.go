@@ -19,6 +19,7 @@ package eth
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core"
@@ -149,6 +150,10 @@ func serviceContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBlockHe
 		// accommodate for that.
 		from := query.Origin.Number
 		if !query.Reverse {
+			// Check for overflow
+			if count == 0 || from > math.MaxUint64-(count-1) {
+				return nil
+			}
 			from = from + count - 1
 		}
 		headers := chain.GetHeadersFrom(from, count)
