@@ -492,7 +492,8 @@ func (c *Clique) verifySeal(snap *Snapshot, header *types.Header, parents []*typ
 	for seen, recent := range snap.Recents {
 		if recent == signer {
 			// Signer is among recents, only fail if the current block doesn't shift it out
-			if limit := uint64(len(snap.Signers)/2 + 1); seen > number-limit {
+			// Check for underflow and overflow
+			if limit := uint64(len(snap.Signers)/2 + 1); number < limit || seen > number-limit {
 				return errRecentlySigned
 			}
 		}
