@@ -26,6 +26,7 @@ import (
 
 	"github.com/ava-labs/libevm/eth/filters"
 	"github.com/ava-labs/libevm/internal/ethapi"
+	"github.com/ava-labs/libevm/libevm/httplimit"
 	"github.com/ava-labs/libevm/node"
 	"github.com/ava-labs/libevm/rpc"
 	"github.com/graph-gophers/graphql-go"
@@ -41,6 +42,10 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Query         string                 `json:"query"`
 		OperationName string                 `json:"operationName"`
 		Variables     map[string]interface{} `json:"variables"`
+	}
+	// Check HTTP limit
+	if !httplimit.LimitBody(w, r) {
+		return
 	}
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

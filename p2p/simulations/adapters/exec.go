@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/libevm/internal/reexec"
+	"github.com/ava-labs/libevm/libevm/httplimit"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/node"
 	"github.com/ava-labs/libevm/p2p"
@@ -252,7 +253,10 @@ func (n *ExecNode) waitForStartupJSON(ctx context.Context) (string, chan nodeSta
 	}
 	srv.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var status nodeStartupJSON
-		if err := json.NewDecoder(r.Body).Decode(&status); err != nil {
+		// Restrict the size of the incoming request body
+		if !httplimit.LimitBody(w, r) {
+			status.Err = "startup report too large"
+		} else if err := json.NewDecoder(r.Body).Decode(&status); err != nil {
 			status.Err = fmt.Sprintf("can't decode startup report: %v", err)
 		}
 		quit(status)

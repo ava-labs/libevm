@@ -31,6 +31,7 @@ import (
 	"sync"
 
 	"github.com/ava-labs/libevm/event"
+	"github.com/ava-labs/libevm/libevm/httplimit"
 	"github.com/ava-labs/libevm/p2p"
 	"github.com/ava-labs/libevm/p2p/enode"
 	"github.com/ava-labs/libevm/p2p/simulations/adapters"
@@ -559,6 +560,11 @@ func (s *Server) LoadSnapshot(w http.ResponseWriter, req *http.Request) {
 func (s *Server) CreateNode(w http.ResponseWriter, req *http.Request) {
 	config := &adapters.NodeConfig{}
 
+	// Restrict the request body size. Note that LoadSnapshot deliberately has no
+	// such limit: a network snapshot is legitimately unbounded in size.
+	if !httplimit.LimitBody(w, req) {
+		return
+	}
 	err := json.NewDecoder(req.Body).Decode(config)
 	if err != nil && !errors.Is(err, io.EOF) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
