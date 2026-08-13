@@ -19,6 +19,7 @@ package types
 import (
 	"fmt"
 	"io"
+	"reflect"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/internal/libevm/pseudo"
@@ -38,6 +39,11 @@ import (
 // RLP encoding and decoding. RLP handling is plumbed through to the `SA` via
 // the [StateAccountExtra] that holds it such that it acts as if there were a
 // field of type `SA` in all StateAccount and SlimAccount structs.
+//
+// An `SA` carrying reference types (pointers, slices, maps, ...) MUST implement
+// [StateAccountExtraCopier], otherwise it can't be deep-copied and every
+// [state.StateDB] copy will share the referenced data. Unlike `BPtr`, this is
+// not enforced by the type system.
 //
 // The payloads can be accessed via the [pseudo.Accessor] methods of the
 // [ExtraPayloads] returned by RegisterExtras. The default `SA` value accessed
@@ -259,10 +265,55 @@ func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromHeader(h *Header) HeaderHooks  {
 func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromBody(b *Body) BlockBodyHooks   { return e.Body.Get(b) }
 func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromBlock(b *Block) BlockBodyHooks { return e.Block.Get(b) }
 
+// StateAccountExtraCopier is an optional interface for the `SA` type registered
+// with [RegisterExtras]. If `SA` implements it then [StateAccount.Copy] uses it
+// to copy the payload, and it MUST return a value that shares no mutable state
+// with its receiver.
+//
+// Implementing it is REQUIRED for any `SA` carrying reference types (pointers,
+// slices, maps, ...), including an `SA` that is itself a pointer. Without it the
+// payload can only be copied by assignment, which is shallow: every
+// [state.StateDB.Copy], and every account committed to the trie, would share the
+// referenced data, so mutating it through one [state.StateDB] silently corrupts
+// the others and diverges state roots. Note that `SA` types are *not* required
+// to implement this — in contrast to [BlockBodyPayload], whose `Copy` is
+// mandatory — so a payload that needs it and doesn't have it fails silently.
+//
+// The method MUST be in `SA`'s own method set: if `SA` is not a pointer type then
+// a `Copy` declared on a pointer receiver does NOT satisfy this interface and is
+// silently ignored.
+//
+// It is never called on a nil `SA`; such a payload is copied as nil.
+type StateAccountExtraCopier[SA any] interface {
+	Copy() SA
+}
+
 func (ExtraPayloads[HPtr, BPtr, SA]) cloneStateAccount(s *StateAccountExtra) *StateAccountExtra {
 	v := pseudo.MustNewValue[SA](s.t)
+	val := v.Get()
+	// Without a [StateAccountExtraCopier] all we can do is copy `val` by
+	// assignment, which only copies the top level of any reference type it
+	// holds.
+	if c, ok := any(val).(StateAccountExtraCopier[SA]); ok && !isNilRef(val) {
+		val = c.Copy()
+	}
 	return &StateAccountExtra{
-		t: pseudo.From(v.Get()).Type,
+		t: pseudo.From(val).Type,
+	}
+}
+
+// isNilRef reports whether `v` is a nil reference type. Calling a method on a
+// nil pointer is legal Go but a [StateAccountExtraCopier] implementation is
+// unlikely to expect a nil receiver, so such values are copied as-is.
+func isNilRef(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch rv := reflect.ValueOf(v); rv.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return rv.IsNil()
+	default:
+		return false
 	}
 }
 
