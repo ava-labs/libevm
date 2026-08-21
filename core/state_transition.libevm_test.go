@@ -304,6 +304,58 @@ func TestMinimumGasConsumption(t *testing.T) {
 	}
 }
 
+func TestMinimumGasConsumptionSimulation(t *testing.T) {
+	const gasLimit = 1_000_000
+	tests := []struct {
+		name      string
+		noBaseFee bool
+		want      uint64
+	}{
+		{
+			name: "skip account checks only",
+			want: gasLimit / 2,
+		},
+		{
+			name:      "RPC simulation",
+			noBaseFee: true,
+			want:      params.TxGas,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hooks := &hookstest.Stub{
+				MinimumGasConsumptionFn: func(limit uint64) uint64 {
+					require.Equal(t, uint64(gasLimit), limit, "MinimumGasConsumption() argument")
+					return limit / 2
+				},
+			}
+			hooks.Register(t)
+
+			stateDB, evm := ethtest.NewZeroEVM(t)
+			evm.Config.NoBaseFee = tt.noBaseFee
+			from := common.Address{0x01}
+			to := common.Address{0x02}
+			stateDB.SetBalance(from, uint256.NewInt(params.Ether))
+			msg := &core.Message{
+				From:              from,
+				To:                &to,
+				GasLimit:          gasLimit,
+				GasPrice:          new(big.Int),
+				GasFeeCap:         new(big.Int),
+				GasTipCap:         new(big.Int),
+				Value:             new(big.Int),
+				SkipAccountChecks: true,
+			}
+			gasPool := core.GasPool(gasLimit)
+
+			result, err := core.ApplyMessage(evm, msg, &gasPool)
+			require.NoError(t, err, "core.ApplyMessage()")
+			require.Equal(t, tt.want, result.UsedGas, "core.ApplyMessage() gas used")
+		})
+	}
+}
+
 // TestCreditBaseFeeToCoinbase tests that the coinbase is credited with the
 // base fee if enabled in the hooks and post-London. Additionally, these state
 // changes should be conveyed to the tracer.

@@ -105,6 +105,12 @@ func (st *StateTransition) afterGasRefund(refunded uint64) {
 	if !st.rulesHooks().ShouldRefundGas() {
 		st.gasRemaining -= refunded
 	}
+	// Simulated calls do not incur transaction charges. Applying a
+	// gas-limit-derived charge would also make gas estimation depend on the
+	// upper bound being tested rather than the gas required for execution.
+	if st.msg.SkipAccountChecks && st.evm.Config.NoBaseFee {
+		return
+	}
 
 	limit := st.msg.GasLimit
 	minConsume := min(
