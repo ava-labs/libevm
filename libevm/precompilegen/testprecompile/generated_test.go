@@ -235,7 +235,7 @@ func (contract) RevertWith(env vm.PrecompileEnvironment, x []byte) error {
 }
 
 func (contract) Self(env vm.PrecompileEnvironment) (common.Address, error) {
-	return env.Addresses().Self, nil
+	return env.Addresses().EVMSemantic.Self, nil
 }
 
 func canReadState(env vm.PrecompileEnvironment) bool {

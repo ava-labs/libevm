@@ -39,7 +39,7 @@ var slotPreimagePrefix = []byte("libevm-reentrancy-guard-")
 // Contract equality is defined as the [libevm.AddressContext] "self" address
 // being the same under EVM semantics.
 func Guard(env vm.PrecompileEnvironment, key []byte) error {
-	if env.ReadOnly() {
+	if env.StateMutability() != vm.MutableState {
 		return vm.ErrWriteProtection
 	}
 

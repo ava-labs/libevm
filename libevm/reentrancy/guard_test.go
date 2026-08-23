@@ -97,8 +97,8 @@ func (s *envStub) Addresses() *libevm.AddressContext {
 	}
 }
 
-func (*envStub) ReadOnly() bool {
-	return false
+func (*envStub) StateMutability() vm.StateMutability {
+	return vm.MutableState
 }
 
 func (s *envStub) StateDB() vm.StateDB {
