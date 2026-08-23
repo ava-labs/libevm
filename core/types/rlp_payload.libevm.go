@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -20,16 +20,19 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/ava-labs/libevm/libevm/pseudo"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/internal/libevm/pseudo"
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/libevm/testonly"
+	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
 )
 
 // RegisterExtras registers the type `HPtr` to be carried as an extra payload in
-// [Header] structs and the type `SA` in [StateAccount] and [SlimAccount]
-// structs. It is expected to be called in an `init()` function and MUST NOT be
-// called more than once.
+// [Header] structs, the type `BPtr` in [Block] and [Body] structs, and the type
+// `SA` in [StateAccount] and [SlimAccount] structs. It is expected to be called
+// in an `init()` function and MUST NOT be called more than once.
 //
 // The `SA` payload will be treated as an extra struct field for the purposes of
 // RLP encoding and decoding. RLP handling is plumbed through to the `SA` via
@@ -39,39 +42,108 @@ import (
 // The payloads can be accessed via the [pseudo.Accessor] methods of the
 // [ExtraPayloads] returned by RegisterExtras. The default `SA` value accessed
 // in this manner will be a zero-value `SA` while the default value from a
-// [Header] is a non-nil `HPtr`. The latter guarantee ensures that hooks won't
-// be called on nil-pointer receivers.
+// [Header] or [Block] / [Body] is a non-nil `HPtr` or `BPtr` respectively. The
+// latter guarantee ensures that hooks won't be called on nil-pointer receivers.
 func RegisterExtras[
-	H any, HPtr interface {
-		HeaderHooks
-		*H
-	},
+	H any, HPtr HeaderHooksPointer[H],
+	B any, BPtr BlockBodyHooksPointer[B, BPtr],
 	SA any,
-]() ExtraPayloads[HPtr, SA] {
-	extra := ExtraPayloads[HPtr, SA]{
+]() ExtraPayloads[HPtr, BPtr, SA] {
+	payloads, ctors := payloadsAndConstructors[H, HPtr, B, BPtr, SA]()
+	registeredExtras.MustRegister(ctors)
+	log.Info(
+		"Registered core/types extras",
+		"Header", log.TypeOf(pseudo.Zero[HPtr]().Value.Get()),
+		"Block/Body", log.TypeOf(pseudo.Zero[BPtr]().Value.Get()),
+		"StateAccount", log.TypeOf(pseudo.Zero[SA]().Value.Get()),
+	)
+	return payloads
+}
+
+func payloadsAndConstructors[
+	H any, HPtr HeaderHooksPointer[H],
+	B any, BPtr BlockBodyHooksPointer[B, BPtr],
+	SA any,
+]() (ExtraPayloads[HPtr, BPtr, SA], *extraConstructors) {
+	payloads := ExtraPayloads[HPtr, BPtr, SA]{
 		Header: pseudo.NewAccessor[*Header, HPtr](
 			(*Header).extraPayload,
 			func(h *Header, t *pseudo.Type) { h.extra = t },
+		),
+		Body: pseudo.NewAccessor[*Body, BPtr](
+			(*Body).extraPayload,
+			func(b *Body, t *pseudo.Type) { b.extra = t },
+		),
+		Block: pseudo.NewAccessor[*Block, BPtr](
+			(*Block).extraPayload,
+			func(b *Block, t *pseudo.Type) { b.extra = t },
 		),
 		StateAccount: pseudo.NewAccessor[StateOrSlimAccount, SA](
 			func(a StateOrSlimAccount) *pseudo.Type { return a.extra().payload() },
 			func(a StateOrSlimAccount, t *pseudo.Type) { a.extra().t = t },
 		),
 	}
-	registeredExtras.MustRegister(&extraConstructors{
+	ctors := &extraConstructors{
 		stateAccountType: func() string {
 			var x SA
 			return fmt.Sprintf("%T", x)
 		}(),
-		// The [ExtraPayloads] that we returns is based on [HPtr,SA], not [H,SA]
-		// so our constructors MUST match that. This guarantees that calls to
-		// the [HeaderHooks] methods will never be performed on a nil pointer.
-		newHeader:         pseudo.NewConstructor[H]().NewPointer, // i.e. non-nil HPtr
-		newStateAccount:   pseudo.NewConstructor[SA]().Zero,
-		cloneStateAccount: extra.cloneStateAccount,
-		hooks:             extra,
-	})
-	return extra
+		// The [ExtraPayloads] that we returns is based on [HPtr,BPtr,SA], not
+		// [H,B,SA] so our constructors MUST match that. This guarantees that
+		// calls to the [HeaderHooks] and [BlockBodyHooks] methods will never be
+		// performed on a nil pointer.
+		newHeader:       pseudo.NewConstructor[H]().NewPointer, // i.e. non-nil HPtr
+		newBlockOrBody:  pseudo.NewConstructor[B]().NewPointer, // i.e. non-nil BPtr
+		newStateAccount: pseudo.NewConstructor[SA]().Zero,
+		hooks:           payloads,
+	}
+	return payloads, ctors
+}
+
+// WithTempRegisteredExtras temporarily registers `HPtr`, `BPtr`, and `SA` as if
+// calling [RegisterExtras] the same type parameters. The [ExtraPayloads] are
+// passed to `fn` instead of being returned; the argument MUST NOT be persisted
+// beyond the life of `fn`. After `fn` returns, the registration is returned to
+// its former state, be that none or the types originally passed to
+// [RegisterExtras].
+//
+// This MUST NOT be used on a live chain. It is solely intended for off-chain
+// consumers that require access to extras. Said consumers SHOULD NOT, however
+// call this function directly. Use the [libevm.WithTemporaryExtrasLock]
+// function instead in combination with all other registrations to ensure
+// that temporary registrations are atomically applied.
+func WithTempRegisteredExtras[
+	H, B, SA any,
+	HPtr HeaderHooksPointer[H],
+	BPtr BlockBodyHooksPointer[B, BPtr],
+](lock libevm.ExtrasLock, fn func(ExtraPayloads[HPtr, BPtr, SA]) error) error {
+	if err := lock.Verify(); err != nil {
+		return err
+	}
+	payloads, ctors := payloadsAndConstructors[H, HPtr, B, BPtr, SA]()
+	return registeredExtras.TempOverride(ctors, func() error { return fn(payloads) })
+}
+
+// A HeaderHooksPointer is a type constraint for an implementation of
+// [HeaderHooks] with a pointer receiver.
+type HeaderHooksPointer[H any] interface {
+	HeaderHooks
+	*H
+}
+
+// A BlockBodyHooksPointer is a type constraint for an implementation of
+// [BlockBodyPayload] with a pointer receiver.
+type BlockBodyHooksPointer[B any, Self any] interface {
+	BlockBodyPayload[Self]
+	*B
+}
+
+// A BlockBodyPayload is an implementation of [BlockBodyHooks] that is also able
+// to clone itself. Both [Block.Body] and [Block.WithBody] require this
+// functionality to copy the payload between the types.
+type BlockBodyPayload[Self any] interface {
+	BlockBodyHooks
+	Copy() Self
 }
 
 // TestOnlyClearRegisteredExtras clears the [Extras] previously passed to
@@ -87,12 +159,81 @@ func TestOnlyClearRegisteredExtras() {
 var registeredExtras register.AtMostOnce[*extraConstructors]
 
 type extraConstructors struct {
-	stateAccountType           string
-	newHeader, newStateAccount func() *pseudo.Type
-	cloneStateAccount          func(*StateAccountExtra) *StateAccountExtra
-	hooks                      interface {
+	stateAccountType string
+	newHeader        func() *pseudo.Type
+	newBlockOrBody   func() *pseudo.Type
+	newStateAccount  func() *pseudo.Type
+	hooks            interface {
 		hooksFromHeader(*Header) HeaderHooks
+		hooksFromBody(*Body) BlockBodyHooks
+		hooksFromBlock(*Block) BlockBodyHooks
+		cloneBlockPayload(*Block) *pseudo.Type
+		cloneBodyPayload(*Body) *pseudo.Type
+		cloneStateAccount(*StateAccountExtra) *StateAccountExtra
 	}
+}
+
+func extraPayloadOrSetDefault(field **pseudo.Type, construct func(*extraConstructors) *pseudo.Type) *pseudo.Type {
+	r := registeredExtras
+	if !r.Registered() {
+		// See params.ChainConfig.extraPayload() for panic rationale.
+		panic("<T>.extraPayload() called before RegisterExtras()")
+	}
+	if *field == nil {
+		*field = construct(r.Get())
+	}
+	return *field
+}
+
+func (h *Header) extraPayload() *pseudo.Type {
+	return extraPayloadOrSetDefault(&h.extra, func(c *extraConstructors) *pseudo.Type {
+		return c.newHeader()
+	})
+}
+
+func (b *Body) extraPayload() *pseudo.Type {
+	return extraPayloadOrSetDefault(&b.extra, func(c *extraConstructors) *pseudo.Type {
+		return c.newBlockOrBody()
+	})
+}
+
+func (b *Block) extraPayload() *pseudo.Type {
+	return extraPayloadOrSetDefault(&b.extra, func(c *extraConstructors) *pseudo.Type {
+		return c.newBlockOrBody()
+	})
+}
+
+func (h *Header) hooks() HeaderHooks {
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.hooksFromHeader(h)
+	}
+	return new(NOOPHeaderHooks)
+}
+
+// PostRPCMarshal propagates `h` and `m` to the respective method on the
+// registered [HeaderHooks], if any, and is otherwise a noop.
+func (h *Header) PostRPCMarshal(m map[string]any) {
+	h.hooks().PostRPCMarshal(h, m)
+}
+
+func (b *Body) hooks() BlockBodyHooks {
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.hooksFromBody(b)
+	}
+	return NOOPBlockBodyHooks{}
+}
+
+func (b *Block) hooks() BlockBodyHooks {
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.hooksFromBlock(b)
+	}
+	return NOOPBlockBodyHooks{}
+}
+
+// PostRPCMarshal propagates `b` and `m` to the respective method on the
+// registered [BlockBodyHooks], if any, and is otherwise a noop.
+func (b *Block) PostRPCMarshal(m map[string]any) {
+	b.hooks().PostRPCMarshal(b, m)
 }
 
 func (e *StateAccountExtra) clone() *StateAccountExtra {
@@ -100,23 +241,73 @@ func (e *StateAccountExtra) clone() *StateAccountExtra {
 	case !r.Registered(), e == nil:
 		return nil
 	default:
-		return r.Get().cloneStateAccount(e)
+		return r.Get().hooks.cloneStateAccount(e)
 	}
 }
 
 // ExtraPayloads provides strongly typed access to the extra payload carried by
-// [Header], [StateAccount], and [SlimAccount] structs. The only valid way to
+// [Header], [Body], [StateAccount], and [SlimAccount] structs. The only valid way to
 // construct an instance is by a call to [RegisterExtras].
-type ExtraPayloads[HPtr HeaderHooks, SA any] struct {
+type ExtraPayloads[HPtr HeaderHooks, BPtr BlockBodyPayload[BPtr], SA any] struct {
 	Header       pseudo.Accessor[*Header, HPtr]
+	Block        pseudo.Accessor[*Block, BPtr]
+	Body         pseudo.Accessor[*Body, BPtr]
 	StateAccount pseudo.Accessor[StateOrSlimAccount, SA] // Also provides [SlimAccount] access.
 }
 
-func (ExtraPayloads[HPtr, SA]) cloneStateAccount(s *StateAccountExtra) *StateAccountExtra {
+func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromHeader(h *Header) HeaderHooks  { return e.Header.Get(h) }
+func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromBody(b *Body) BlockBodyHooks   { return e.Body.Get(b) }
+func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromBlock(b *Block) BlockBodyHooks { return e.Block.Get(b) }
+
+func (ExtraPayloads[HPtr, BPtr, SA]) cloneStateAccount(s *StateAccountExtra) *StateAccountExtra {
 	v := pseudo.MustNewValue[SA](s.t)
 	return &StateAccountExtra{
 		t: pseudo.From(v.Get()).Type,
 	}
+}
+
+// blockOrBody is an interface for use as a method argument as they can't
+// introduce new generic type parameters.
+type blockOrBody interface {
+	isBlockOrBody() // noop to restrict type as [Header.extraPayload] otherwise matches
+	extraPayload() *pseudo.Type
+}
+
+func (*Block) isBlockOrBody() {}
+func (*Body) isBlockOrBody()  {}
+
+func (e ExtraPayloads[HPtr, BPtr, SA]) cloneBodyPayload(b *Body) *pseudo.Type {
+	return e.cloneBlockOrBodyPayload(b)
+}
+
+func (e ExtraPayloads[HPtr, BPtr, SA]) cloneBlockPayload(b *Block) *pseudo.Type {
+	return e.cloneBlockOrBodyPayload(b)
+}
+
+func (ExtraPayloads[HPtr, BPtr, SA]) cloneBlockOrBodyPayload(b blockOrBody) *pseudo.Type {
+	v := pseudo.MustNewValue[BPtr](b.extraPayload())
+	return pseudo.From(v.Get().Copy()).Type
+}
+
+func (b *Body) cloneExtra() *pseudo.Type {
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.cloneBodyPayload(b)
+	}
+	return nil
+}
+
+func (b *Block) cloneExtra() *pseudo.Type {
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.cloneBlockPayload(b)
+	}
+	return nil
+}
+
+func (b *Block) extraOrNil() *pseudo.Type {
+	if registeredExtras.Registered() {
+		return b.extraPayload()
+	}
+	return nil
 }
 
 // StateOrSlimAccount is implemented by both [StateAccount] and [SlimAccount],
@@ -236,4 +427,9 @@ func (e *StateAccountExtra) Format(s fmt.State, verb rune) {
 		return
 	}
 	_, _ = s.Write([]byte(out))
+}
+
+// RLPHash returns the hash of the RLP encoding of `x`.
+func RLPHash(x any) common.Hash {
+	return rlpHash(x)
 }

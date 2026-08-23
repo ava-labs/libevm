@@ -28,7 +28,7 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
-	"github.com/ava-labs/libevm/libevm/pseudo"
+	"github.com/ava-labs/libevm/internal/libevm/pseudo"
 	"github.com/ava-labs/libevm/rlp"
 )
 
@@ -60,6 +60,7 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 }
 
 //go:generate go run github.com/fjl/gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
+//go:generate go run ../../libevm/cmd/internalise -file gen_header_json.go Header.MarshalJSON Header.UnmarshalJSON
 //go:generate go run ../../rlp/rlpgen -type Header -out gen_header_rlp.go
 //go:generate go run ../../libevm/cmd/internalise -file gen_header_rlp.go Header.EncodeRLP
 
@@ -175,6 +176,8 @@ type Body struct {
 	Transactions []*Transaction
 	Uncles       []*Header
 	Withdrawals  []*Withdrawal `rlp:"optional"`
+
+	extra *pseudo.Type // See [RegisterExtras]
 }
 
 // Block represents an Ethereum block.
@@ -208,6 +211,8 @@ type Block struct {
 	// inter-peer block relay.
 	ReceivedAt   time.Time
 	ReceivedFrom interface{}
+
+	extra *pseudo.Type // See [RegisterExtras]
 }
 
 // "external" block encoding. used for eth protocol, etc.
@@ -216,6 +221,8 @@ type extblock struct {
 	Txs         []*Transaction
 	Uncles      []*Header
 	Withdrawals []*Withdrawal `rlp:"optional"`
+
+	extra *pseudo.Type // libevm: MUST be unexported + populated from [Block.extraOrNil]
 }
 
 // NewBlock creates a new block. The input data is copied, changes to header and to the
@@ -308,12 +315,14 @@ func CopyHeader(h *Header) *Header {
 		cpy.ParentBeaconRoot = new(common.Hash)
 		*cpy.ParentBeaconRoot = *h.ParentBeaconRoot
 	}
+	h.hooks().PostCopy(&cpy)
 	return &cpy
 }
 
 // DecodeRLP decodes a block from RLP.
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	var eb extblock
+	eb.extra = b.extraOrNil()
 	_, size, _ := s.Kind()
 	if err := s.Decode(&eb); err != nil {
 		return err
@@ -330,13 +339,14 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 		Txs:         b.transactions,
 		Uncles:      b.uncles,
 		Withdrawals: b.withdrawals,
+		extra:       b.extraOrNil(),
 	})
 }
 
 // Body returns the non-header content of the block.
 // Note the returned data is not an independent copy.
 func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.withdrawals}
+	return &Body{b.transactions, b.uncles, b.withdrawals, b.cloneExtra()}
 }
 
 // Accessors for body data. These do not return a copy because the content
@@ -454,20 +464,22 @@ func (b *Block) WithSeal(header *Header) *Block {
 		transactions: b.transactions,
 		uncles:       b.uncles,
 		withdrawals:  b.withdrawals,
+		extra:        b.cloneExtra(),
 	}
 }
 
 // WithBody returns a copy of the block with the given transaction and uncle contents.
-func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
+func (b *Block) WithBody(body Body) *Block {
 	block := &Block{
 		header:       b.header,
-		transactions: make([]*Transaction, len(transactions)),
-		uncles:       make([]*Header, len(uncles)),
+		transactions: make([]*Transaction, len(body.Transactions)),
+		uncles:       make([]*Header, len(body.Uncles)),
 		withdrawals:  b.withdrawals,
+		extra:        body.cloneExtra(),
 	}
-	copy(block.transactions, transactions)
-	for i := range uncles {
-		block.uncles[i] = CopyHeader(uncles[i])
+	copy(block.transactions, body.Transactions)
+	for i := range body.Uncles {
+		block.uncles[i] = CopyHeader(body.Uncles[i])
 	}
 	return block
 }
@@ -478,6 +490,7 @@ func (b *Block) WithWithdrawals(withdrawals []*Withdrawal) *Block {
 		header:       b.header,
 		transactions: b.transactions,
 		uncles:       b.uncles,
+		extra:        b.cloneExtra(),
 	}
 	if withdrawals != nil {
 		block.withdrawals = make([]*Withdrawal, len(withdrawals))

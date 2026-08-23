@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -46,21 +46,33 @@ func TestStateObjectEmpty(t *testing.T) {
 		{
 			name: "explicit false bool",
 			registerAndSet: func(acc *types.StateAccount) {
-				types.RegisterExtras[types.NOOPHeaderHooks, *types.NOOPHeaderHooks, bool]().StateAccount.Set(acc, false)
+				types.RegisterExtras[
+					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
+					types.NOOPBlockBodyHooks, *types.NOOPBlockBodyHooks,
+					bool,
+				]().StateAccount.Set(acc, false)
 			},
 			wantEmpty: true,
 		},
 		{
 			name: "implicit false bool",
 			registerAndSet: func(*types.StateAccount) {
-				types.RegisterExtras[types.NOOPHeaderHooks, *types.NOOPHeaderHooks, bool]()
+				types.RegisterExtras[
+					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
+					types.NOOPBlockBodyHooks, *types.NOOPBlockBodyHooks,
+					bool,
+				]()
 			},
 			wantEmpty: true,
 		},
 		{
 			name: "true bool",
 			registerAndSet: func(acc *types.StateAccount) {
-				types.RegisterExtras[types.NOOPHeaderHooks, *types.NOOPHeaderHooks, bool]().StateAccount.Set(acc, true)
+				types.RegisterExtras[
+					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
+					types.NOOPBlockBodyHooks, *types.NOOPBlockBodyHooks,
+					bool,
+				]().StateAccount.Set(acc, true)
 			},
 			wantEmpty: false,
 		},

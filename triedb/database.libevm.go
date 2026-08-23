@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -42,13 +42,18 @@ type ReaderProvider interface {
 }
 
 // A DBConstructor constructs alternative backend-database implementations.
-type DBConstructor func(ethdb.Database, *Config) DBOverride
+type DBConstructor func(ethdb.Database) DBOverride
 
 // A DBOverride is an arbitrary implementation of a [Database] backend. It MUST
 // be either a [HashDB] or a [PathDB].
 type DBOverride interface {
 	BackendDB
 	ReaderProvider
+}
+
+// Backend returns the underlying backend of the trie database.
+func (db *Database) Backend() BackendDB {
+	return db.backend
 }
 
 func (db *Database) overrideBackend(diskdb ethdb.Database, config *Config) bool {
@@ -59,7 +64,7 @@ func (db *Database) overrideBackend(diskdb ethdb.Database, config *Config) bool 
 		log.Crit("Database override provided when 'hash' or 'path' mode are configured")
 	}
 
-	db.backend = config.DBOverride(diskdb, config)
+	db.backend = config.DBOverride(diskdb)
 	switch db.backend.(type) {
 	case HashDB:
 	case PathDB:

@@ -34,16 +34,24 @@ import (
 var _ PrecompileEnvironment = (*environment)(nil)
 
 type environment struct {
-	evm        *EVM
-	self       *Contract
-	callType   CallType
-	view, pure bool
+	evm      *EVM
+	self     *Contract
+	callType CallType
+
+	rawSelf, rawCaller common.Address
+	view, pure         bool
 }
 
 func (e *environment) copy() *environment {
-	// This deliberately does not use field names so that a change in the fields
-	// will break this code and force it to be reviewed.
-	return &environment{e.evm, e.self, e.callType, e.view, e.pure}
+	return &environment{
+		evm:       e.evm,
+		self:      e.self,
+		callType:  e.callType,
+		rawSelf:   e.rawSelf,
+		rawCaller: e.rawCaller,
+		view:      e.view,
+		pure:      e.pure,
+	}
 }
 
 func (e *environment) Gas() uint64            { return e.self.Gas }
@@ -55,6 +63,8 @@ func (e *environment) Rules() params.Rules              { return e.evm.chainRule
 func (e *environment) IncomingCallType() CallType       { return e.callType }
 func (e *environment) BlockNumber() *big.Int            { return new(big.Int).Set(e.evm.Context.BlockNumber) }
 func (e *environment) BlockTime() uint64                { return e.evm.Context.Time }
+
+func (e *environment) InvalidateExecution(err error) { e.evm.InvalidateExecution(err) }
 
 func (e *environment) refundGas(add uint64) error {
 	gas, overflow := math.SafeAdd(e.self.Gas, add)
@@ -78,20 +88,11 @@ func (e *environment) AsPure() PrecompileEnvironment {
 }
 
 func (e *environment) StateMutability() StateMutability {
-	// A switch statement provides clearer code coverage for difficult-to-test
-	// cases.
 	switch {
 	// cases MUST be ordered from most to least restrictive
 	case e.pure:
 		return Pure
-	case e.callType == StaticCall:
-		// evm.interpreter.readOnly is only set to true via a call to
-		// EVMInterpreter.Run() so, if a precompile is called directly with
-		// StaticCall(), then readOnly might not be set yet.
-		return ReadOnlyState
-	case e.evm.interpreter.readOnly:
-		return ReadOnlyState
-	case e.view:
+	case e.view || e.evm.interpreter.readOnly:
 		return ReadOnlyState
 	default:
 		return MutableState
@@ -115,8 +116,14 @@ func (e *environment) StateDB() StateDB {
 func (e *environment) Addresses() *libevm.AddressContext {
 	return &libevm.AddressContext{
 		Origin: e.evm.Origin,
-		Caller: e.self.CallerAddress,
-		Self:   e.self.Address(),
+		EVMSemantic: libevm.CallerAndSelf{
+			Caller: e.self.CallerAddress,
+			Self:   e.self.Address(),
+		},
+		Raw: &libevm.CallerAndSelf{
+			Caller: e.rawCaller,
+			Self:   e.rawSelf,
+		},
 	}
 }
 
@@ -138,22 +145,9 @@ func (e *environment) Call(addr common.Address, input []byte, gas uint64, value 
 
 var errPureFunctionMakeCall = errors.New("contract call from pure function")
 
-func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) (retData []byte, retErr error) {
+func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {
 	if e.StateMutability() == Pure {
 		return nil, errPureFunctionMakeCall
-	}
-
-	// Depth and read-only setting are handled by [EVMInterpreter.Run], which
-	// isn't used for precompiles, so we need to do it ourselves to maintain the
-	// expected invariants.
-	in := e.evm.interpreter
-
-	in.evm.depth++
-	defer func() { in.evm.depth-- }()
-
-	if e.StateMutability() != MutableState && !in.readOnly { // i.e. the precompile was StaticCall()ed
-		in.readOnly = true
-		defer func() { in.readOnly = false }()
 	}
 
 	var caller ContractRef = e.self
@@ -168,24 +162,11 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 		}
 	}
 
-	if in.readOnly && value != nil && !value.IsZero() {
+	if e.StateMutability() != MutableState && value != nil && !value.IsZero() {
 		return nil, ErrWriteProtection
 	}
 	if !e.UseGas(gas) {
 		return nil, ErrOutOfGas
-	}
-
-	if t := e.evm.Config.Tracer; t != nil {
-		var bigVal *big.Int
-		if value != nil {
-			bigVal = value.ToBig()
-		}
-		t.CaptureEnter(typ.OpCode(), caller.Address(), addr, input, gas, bigVal)
-
-		startGas := gas
-		defer func() {
-			t.CaptureEnd(retData, startGas-e.Gas(), retErr)
-		}()
 	}
 
 	switch typ {
@@ -200,7 +181,8 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 		// early abstraction, to signal to future maintainers. If implementing
 		// them, there's likely no need to honour the
 		// [callOptUNSAFECallerAddressProxy] because it's purely for backwards
-		// compatibility.
+		// compatibility, however the "callTracer" test MUST be extended to
+		// demonstrate the correct type.
 		fallthrough
 	default:
 		return nil, fmt.Errorf("unimplemented precompile call type %v", typ)

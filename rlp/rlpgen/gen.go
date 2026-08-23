@@ -673,7 +673,7 @@ func (op sliceOp) genDecode(ctx *genContext) (string, string) {
 }
 
 func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstruct.Tags) (op, error) {
-	switch typ := typ.(type) {
+	switch typ := types.Unalias(typ).(type) {
 	case *types.Named:
 		if isBigInt(typ) {
 			return bigIntOp{}, nil
@@ -686,6 +686,12 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 		}
 		if bctx.isDecoder(typ) {
 			return nil, fmt.Errorf("type %v implements rlp.Decoder with non-pointer receiver", typ)
+		}
+		if hasBasicUnderlying(typ) {
+			// libevm: named types are reduced to their underlying basic type in this loop.
+			// We're handling named types here by passing the named type as the main type.
+			// See [named.libevm.go] for more details.
+			return bctx.makeNamedBasicOp(typ)
 		}
 		// TODO: same check for encoder?
 		return bctx.makeOp(typ, typ.Underlying(), tags)

@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -16,15 +16,13 @@
 
 package params
 
-import "fmt"
-
 const (
 	LibEVMVersionMajor = 0
-	LibEVMVersionMinor = 1
+	LibEVMVersionMinor = 4
 	LibEVMVersionPatch = 0
 
-	libEVMReleaseType      releaseType = betaRelease
-	libEVMReleaseCandidate uint        = 0 // ignored unless [libEVMReleaseType] == [releaseCandidate]
+	LibEVMReleaseType      ReleaseType = BetaRelease
+	libEVMReleaseCandidate uint        = 0 // ignored unless [LibEVMReleaseType] == [ReleaseCandidate]
 )
 
 // LibEVMVersion holds the textual version string of `libevm` modifications.
@@ -50,44 +48,23 @@ const (
 // triplet.
 //
 // [semver v2]: https://semver.org/
-var LibEVMVersion = func() string {
-	v := libEVMSemver{
-		geth:   semverTriplet{VersionMajor, VersionMinor, VersionPatch},
-		libEVM: semverTriplet{LibEVMVersionMajor, LibEVMVersionMinor, LibEVMVersionPatch},
-		typ:    libEVMReleaseType,
-		rc:     libEVMReleaseCandidate,
-	}
-	return v.String()
-}()
+const LibEVMVersion = "1.13.14-0.4.0.beta"
 
-type semverTriplet struct {
-	major, minor, patch uint
-}
-
-func (t semverTriplet) String() string {
-	return fmt.Sprintf("%d.%d.%d", t.major, t.minor, t.patch)
-}
-
-type releaseType string
+// A ReleaseType is a suffix for [LibEVMVersion].
+type ReleaseType string
 
 const (
-	// betaRelease MUST be used on `main` branch
-	betaRelease = releaseType("beta")
-	// Reserved for `release/*` branches
-	releaseCandidate  = releaseType("rc")
-	productionRelease = releaseType("release")
+	// BetaRelease MUST be used on `main` branch.
+	BetaRelease = ReleaseType("beta")
+	// Reserved for `release/*` branches.
+	ReleaseCandidate  = ReleaseType("rc")
+	ProductionRelease = ReleaseType("release")
 )
 
-type libEVMSemver struct {
-	geth, libEVM semverTriplet
-	typ          releaseType
-	rc           uint
-}
-
-func (v libEVMSemver) String() string {
-	suffix := v.typ
-	if suffix == releaseCandidate {
-		suffix = releaseType(fmt.Sprintf("%s.%d", suffix, v.rc))
-	}
-	return fmt.Sprintf("%s-%s.%s", v.geth, v.libEVM, suffix)
+// ForReleaseBranch returns true i.f.f. `t` is suitable for use on a release
+// branch. The sets of [ReleaseType] values suitable for release vs default
+// branches is disjoint so the negation of the return value is equivalent to
+// "ForDefaultBranch".
+func (t ReleaseType) ForReleaseBranch() bool {
+	return t == ReleaseCandidate || t == ProductionRelease
 }

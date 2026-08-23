@@ -18,12 +18,15 @@ package vm_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -107,7 +110,7 @@ type statefulPrecompileOutput struct {
 	ChainID                 *big.Int
 	Addresses               *libevm.AddressContext
 	StateValue              common.Hash
-	ValueReceived           *uint256.Int
+	CallValue               *uint256.Int
 	Mutability              vm.StateMutability
 	BlockNumber, Difficulty *big.Int
 	BlockTime               uint64
@@ -118,6 +121,7 @@ type statefulPrecompileOutput struct {
 func (o statefulPrecompileOutput) String() string {
 	var lines []string
 	out := reflect.ValueOf(o)
+FieldLoop:
 	for i, n := 0, out.NumField(); i < n; i++ {
 		name := out.Type().Field(i).Name
 		fld := out.Field(i).Interface()
@@ -127,7 +131,12 @@ func (o statefulPrecompileOutput) String() string {
 		case []byte:
 			verb = "%#x"
 		case *libevm.AddressContext:
-			verb = "%+v"
+			lines = append(
+				lines,
+				fmt.Sprintf("EVMSemantic addresses: %+v", o.Addresses.EVMSemantic),
+				fmt.Sprintf("Raw addresses: %+v", o.Addresses.Raw),
+			)
+			continue FieldLoop
 		case vm.CallType:
 			verb = "%d (%[2]q)"
 		}
@@ -158,7 +167,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			ChainID:          env.ChainConfig().ChainID,
 			Addresses:        env.Addresses(),
 			StateValue:       env.ReadOnlyState().GetState(precompile, slot),
-			ValueReceived:    env.Value(),
+			CallValue:        env.Value(),
 			Mutability:       env.StateMutability(),
 			BlockNumber:      env.BlockNumber(),
 			BlockTime:        env.BlockTime(),
@@ -186,12 +195,13 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	}
 	input := rng.Bytes(8)
 	stateValue := rng.Hash()
-	transferValue := rng.Uint256()
+	callCallerValue := rng.Uint256()
+	callPrecompileValue := rng.Uint256()
 	chainID := rng.BigUint64()
 
 	caller := common.HexToAddress("CA11E12") // caller of the precompile
 	eoa := common.HexToAddress("E0A")        // caller of the precompile-caller
-	callerContract := vm.NewContract(vm.AccountRef(eoa), vm.AccountRef(caller), uint256.NewInt(0), 1e6)
+	callerContract := vm.NewContract(vm.AccountRef(eoa), vm.AccountRef(caller), callCallerValue, 1e6)
 
 	state, evm := ethtest.NewZeroEVM(
 		t,
@@ -206,11 +216,18 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	state.SetBalance(caller, new(uint256.Int).Not(uint256.NewInt(0)))
 	evm.Origin = eoa
 
+	// By definition, the raw caller and self are the same for every test case,
+	// regardless of the incoming call type.
+	rawAddresses := libevm.CallerAndSelf{
+		Caller: caller,
+		Self:   precompile,
+	}
+
 	tests := []struct {
-		name              string
-		call              func() ([]byte, uint64, error)
-		wantAddresses     *libevm.AddressContext
-		wantTransferValue *uint256.Int
+		name          string
+		call          func() ([]byte, uint64, error)
+		wantAddresses *libevm.AddressContext
+		wantCallValue *uint256.Int
 		// Note that this only covers evm.readOnly being true because of the
 		// precompile's call. See TestInheritReadOnly for alternate case.
 		wantMutability vm.StateMutability
@@ -219,30 +236,33 @@ func TestNewStatefulPrecompile(t *testing.T) {
 		{
 			name: "EVM.Call()",
 			call: func() ([]byte, uint64, error) {
-				return evm.Call(callerContract, precompile, input, gasLimit, transferValue)
+				return evm.Call(callerContract, precompile, input, gasLimit, callPrecompileValue)
 			},
 			wantAddresses: &libevm.AddressContext{
-				Origin: eoa,
-				Caller: caller,
-				Self:   precompile,
+				Origin:      eoa,
+				EVMSemantic: rawAddresses,
+				Raw:         &rawAddresses,
 			},
-			wantMutability:    vm.MutableState,
-			wantTransferValue: transferValue,
-			wantCallType:      vm.Call,
+			wantMutability: vm.MutableState,
+			wantCallValue:  callPrecompileValue,
+			wantCallType:   vm.Call,
 		},
 		{
 			name: "EVM.CallCode()",
 			call: func() ([]byte, uint64, error) {
-				return evm.CallCode(callerContract, precompile, input, gasLimit, transferValue)
+				return evm.CallCode(callerContract, precompile, input, gasLimit, callPrecompileValue)
 			},
 			wantAddresses: &libevm.AddressContext{
 				Origin: eoa,
-				Caller: caller,
-				Self:   caller,
+				EVMSemantic: libevm.CallerAndSelf{
+					Caller: caller,
+					Self:   caller,
+				},
+				Raw: &rawAddresses,
 			},
-			wantMutability:    vm.MutableState,
-			wantTransferValue: transferValue,
-			wantCallType:      vm.CallCode,
+			wantMutability: vm.MutableState,
+			wantCallValue:  callPrecompileValue,
+			wantCallType:   vm.CallCode,
 		},
 		{
 			name: "EVM.DelegateCall()",
@@ -251,12 +271,15 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			},
 			wantAddresses: &libevm.AddressContext{
 				Origin: eoa,
-				Caller: eoa, // inherited from caller
-				Self:   caller,
+				EVMSemantic: libevm.CallerAndSelf{
+					Caller: eoa, // inherited from caller
+					Self:   caller,
+				},
+				Raw: &rawAddresses,
 			},
-			wantMutability:    vm.MutableState,
-			wantTransferValue: uint256.NewInt(0),
-			wantCallType:      vm.DelegateCall,
+			wantMutability: vm.MutableState,
+			wantCallValue:  callCallerValue, // Important difference from [vm.EVM.Call]
+			wantCallType:   vm.DelegateCall,
 		},
 		{
 			name: "EVM.StaticCall()",
@@ -264,13 +287,13 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				return evm.StaticCall(callerContract, precompile, input, gasLimit)
 			},
 			wantAddresses: &libevm.AddressContext{
-				Origin: eoa,
-				Caller: caller,
-				Self:   precompile,
+				Origin:      eoa,
+				EVMSemantic: rawAddresses,
+				Raw:         &rawAddresses,
 			},
-			wantMutability:    vm.ReadOnlyState,
-			wantTransferValue: uint256.NewInt(0),
-			wantCallType:      vm.StaticCall,
+			wantMutability: vm.ReadOnlyState,
+			wantCallValue:  uint256.NewInt(0),
+			wantCallType:   vm.StaticCall,
 		},
 	}
 
@@ -280,7 +303,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				ChainID:          chainID,
 				Addresses:        tt.wantAddresses,
 				StateValue:       stateValue,
-				ValueReceived:    tt.wantTransferValue,
+				CallValue:        tt.wantCallValue,
 				Mutability:       tt.wantMutability,
 				BlockNumber:      header.Number,
 				BlockTime:        header.Time,
@@ -295,6 +318,79 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, wantOutput.String(), string(gotReturnData))
 			assert.Equal(t, wantGasLeft, gotGasLeft)
+		})
+	}
+}
+
+func TestPrecompileInvalidatesExecution(t *testing.T) {
+	errIfInvalidated := errors.New("execution invalidated")
+	inputToInvalidate := []byte("invalidate")
+	run := func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
+		if bytes.Equal(input, inputToInvalidate) {
+			env.InvalidateExecution(errIfInvalidated)
+		}
+		return []byte{}, nil
+	}
+
+	precompile := common.HexToAddress("60C0DE") // GO CODE
+	hooks := &hookstest.Stub{
+		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+			precompile: vm.NewStatefulPrecompile(run),
+		},
+	}
+	hooks.Register(t)
+
+	// The EVM instance MUST be reused across all tests to ensure that
+	// [vm.EVM.Reset] undoes any invalidation.
+	stateDB, evm := ethtest.NewZeroEVM(t)
+
+	tests := []struct {
+		name    string
+		nonce   uint64
+		input   []byte
+		wantErr error
+	}{
+		{
+			name:    "not_invalidating",
+			input:   []byte{},
+			nonce:   0,
+			wantErr: nil,
+		},
+		{
+			name:    "invalidating",
+			nonce:   1,
+			input:   inputToInvalidate,
+			wantErr: errIfInvalidated,
+		},
+		{
+			// Tests that:
+			// (a) [vm.EVM.Reset] undoes the previous invalidation; and
+			// (b) Invalidation reverted state changes, as seen by the nonce.
+			name:    "evm_reset_not_invalidating_after_invalid",
+			input:   []byte{},
+			nonce:   1, // unchanged because the last was invalidated
+			wantErr: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &core.Message{
+				Nonce: tt.nonce,
+				Data:  tt.input,
+
+				// Common across all txs
+				To:       &precompile,
+				GasLimit: 1e6, // arbitrary but sufficiently high
+				GasPrice: big.NewInt(0),
+				Value:    big.NewInt(0),
+			}
+
+			evm.Reset(core.NewEVMTxContext(msg), stateDB)
+
+			gas := core.GasPool(math.MaxUint64)
+			_, err := core.ApplyMessage(evm, msg, &gas)
+			require.ErrorIs(t, err, tt.wantErr, "core.ApplyMessage()")
 		})
 	}
 }
@@ -449,7 +545,7 @@ func TestCanCreateContract(t *testing.T) {
 	gasUsage := rng.Uint64n(gasLimit)
 
 	makeErr := func(cc *libevm.AddressContext, stateVal common.Hash) error {
-		return fmt.Errorf("Origin: %v Caller: %v Contract: %v State: %v", cc.Origin, cc.Caller, cc.Self, stateVal)
+		return fmt.Errorf("Origin: %v Caller: %v Contract: %v State: %v", cc.Origin, cc.EVMSemantic.Caller, cc.EVMSemantic.Self, stateVal)
 	}
 	hooks := &hookstest.Stub{
 		CanCreateContractFn: func(cc *libevm.AddressContext, gas uint64, s libevm.StateReader) (uint64, error) {
@@ -477,14 +573,34 @@ func TestCanCreateContract(t *testing.T) {
 			create: func(evm *vm.EVM) ([]byte, common.Address, uint64, error) {
 				return evm.Create(vm.AccountRef(caller), code, gasLimit, uint256.NewInt(0))
 			},
-			wantErr: makeErr(&libevm.AddressContext{Origin: origin, Caller: caller, Self: create}, value),
+			wantErr: makeErr(
+				&libevm.AddressContext{
+					Origin: origin,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller,
+						Self:   create,
+					},
+					// `Raw` is documented as always being nil.
+				},
+				value,
+			),
 		},
 		{
 			name: "Create2",
 			create: func(evm *vm.EVM) ([]byte, common.Address, uint64, error) {
 				return evm.Create2(vm.AccountRef(caller), code, gasLimit, uint256.NewInt(0), new(uint256.Int).SetBytes(salt[:]))
 			},
-			wantErr: makeErr(&libevm.AddressContext{Origin: origin, Caller: caller, Self: create2}, value),
+			wantErr: makeErr(
+				&libevm.AddressContext{
+					Origin: origin,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller,
+						Self:   create2,
+					},
+					// As above re `Raw` always being nil.
+				},
+				value,
+			),
 		},
 	}
 
@@ -552,7 +668,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 				if bytes.Equal(input, unsafeCallerProxyOptSentinel) {
 					opts = append(opts, vm.WithUNSAFECallerAddressProxying())
 				}
-				// We are ultimately testing env.Call(), hence why this is the SUT.
+				// We are ultimately testing env.Call(), hence why this is the
+				// SUT. If this is ever extended to include DELEGATECALL or
+				// CALLCODE then the expected [libevm.AddressContext.Raw] values
+				// of the tests cases also need to change.
 				return env.Call(dest, precompileCallData, env.Gas(), uint256.NewInt(0), opts...)
 			}),
 			dest: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
@@ -585,8 +704,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: sut,
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: sut,
+						Self:   dest,
+					},
 				},
 				Input:      precompileCallData,
 				Mutability: vm.MutableState,
@@ -598,8 +719,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: caller, // overridden by CallOption
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller, // overridden by CallOption
+						Self:   dest,
+					},
 				},
 				Input:      precompileCallData,
 				Mutability: vm.MutableState,
@@ -610,8 +733,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: caller, // SUT runs as its own caller because of CALLCODE
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller, // SUT runs as its own caller because of CALLCODE
+						Self:   dest,
+					},
 				},
 				Input:      precompileCallData,
 				Mutability: vm.MutableState,
@@ -623,8 +748,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: caller, // CallOption is a NOOP
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller, // CallOption is a NOOP
+						Self:   dest,
+					},
 				},
 				Input:      precompileCallData,
 				Mutability: vm.MutableState,
@@ -635,8 +762,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: caller, // as with CALLCODE
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller, // as with CALLCODE
+						Self:   dest,
+					},
 				},
 				Input:      precompileCallData,
 				Mutability: vm.MutableState,
@@ -648,8 +777,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: caller, // CallOption is a NOOP
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller, // CallOption is a NOOP
+						Self:   dest,
+					},
 				},
 				Input:      precompileCallData,
 				Mutability: vm.MutableState,
@@ -660,8 +791,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: sut,
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: sut,
+						Self:   dest,
+					},
 				},
 				Input: precompileCallData,
 				// This demonstrates that even though the precompile makes a
@@ -677,8 +810,10 @@ func TestPrecompileMakeCall(t *testing.T) {
 			want: statefulPrecompileOutput{
 				Addresses: &libevm.AddressContext{
 					Origin: eoa,
-					Caller: caller, // overridden by CallOption
-					Self:   dest,
+					EVMSemantic: libevm.CallerAndSelf{
+						Caller: caller, // overridden by CallOption
+						Self:   dest,
+					},
 				},
 				Input:      precompileCallData,
 				Mutability: vm.ReadOnlyState,
@@ -688,6 +823,9 @@ func TestPrecompileMakeCall(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.incomingCallType.String(), func(t *testing.T) {
+			// From the perspective of `dest` after a CALL from `sut`.
+			tt.want.Addresses.Raw = &tt.want.Addresses.EVMSemantic
+
 			t.Logf("calldata = %q", tt.eoaTxCallData)
 			state, evm := ethtest.NewZeroEVM(t)
 			evm.Origin = eoa
@@ -702,7 +840,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 	}
 }
 
-func TestPrecompileCallWithTracer(t *testing.T) {
+func TestPrecompileCallWithPrestateTracer(t *testing.T) {
 	// The native pre-state tracer, when logging storage, assumes an invariant
 	// that is broken by a precompile calling another contract. This is a test
 	// of the fix, ensuring that an SLOADed value is properly handled by the
@@ -745,27 +883,55 @@ func TestPrecompileCallWithTracer(t *testing.T) {
 	require.Equal(t, value, got[contract].Storage[zeroHash], "value loaded with SLOAD")
 }
 
-//nolint:testableexamples // Including output would only make the example more complicated and hide the true intent
-func ExamplePrecompileEnvironment() {
-	// To determine the actual caller of a precompile, as against the effective
-	// caller (under EVM rules, as exposed by `Addresses().Caller`):
-	actualCaller := func(env vm.PrecompileEnvironment) common.Address {
-		if env.IncomingCallType() == vm.DelegateCall {
-			// DelegateCall acts as if it were its own caller.
-			return env.Addresses().Self
-		}
-		// CallCode could return either `Self` or `Caller` as it acts as its
-		// caller but doesn't inherit the caller's caller as DelegateCall does.
-		// Having it handled here is arbitrary from a behavioural perspective
-		// and is done only to simplify the code.
-		//
-		// Call and StaticCall don't affect self/caller semantics in any way.
-		return env.Addresses().Caller
-	}
+func TestPrecompileCallWithCallTracer(t *testing.T) {
+	rng := ethtest.NewPseudoRand(42 * 142857)
+	precompile := rng.Address()
+	contract := rng.Address()
+	caller := rng.Address()
 
-	// actualCaller would typically be a top-level function. It's only a
-	// variable to include it in this example function.
-	_ = actualCaller
+	hooks := &hookstest.Stub{
+		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+			precompile: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
+				return env.Call(contract, nil, env.Gas(), uint256.NewInt(0))
+			}),
+		},
+	}
+	hooks.Register(t)
+
+	const tracerName = "callTracer"
+	tracer, err := tracers.DefaultDirectory.New(tracerName, nil, nil)
+	require.NoErrorf(t, err, "tracers.DefaultDirectory.New(%q)", tracerName)
+
+	_, evm := ethtest.NewZeroEVM(t)
+	evm.Config.Tracer = tracer
+	_, _, err = evm.Call(vm.AccountRef(caller), precompile, nil, 1e6, uint256.NewInt(0))
+	require.NoError(t, err, "evm.Call([precompile that calls regular contract])")
+
+	gotJSON, err := tracer.GetResult()
+	require.NoErrorf(t, err, "%T.GetResult()", tracer)
+
+	type call struct {
+		From  common.Address `json:"from"`
+		To    common.Address `json:"to"`
+		Type  string         `json:"type"`
+		Calls []call         `json:"calls"`
+	}
+	var got call
+	require.NoErrorf(t, json.Unmarshal(gotJSON, &got), "json.Unmarshal(%T.GetResult(), %T)", tracer, &got)
+
+	want := call{
+		From: caller,
+		To:   precompile,
+		Type: "CALL",
+		Calls: []call{{
+			From: precompile,
+			To:   contract,
+			Type: "CALL",
+		}},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("%q tracer diff (-want +got):\n%s", tracerName, diff)
+	}
 }
 
 func TestStateMutability(t *testing.T) {
@@ -816,7 +982,7 @@ func TestStateMutability(t *testing.T) {
 					// copy of the environment propagates everything but
 					// mutability.
 					assert.Equal(t, chainID, env.ChainConfig().ChainID, "Chain ID preserved")
-					assert.Equalf(t, precompileAddr, env.Addresses().Self, "%T preserved", env.Addresses())
+					assert.Equalf(t, precompileAddr, env.Addresses().EVMSemantic.Self, "%T preserved", env.Addresses())
 					assert.Equalf(t, vm.Call, env.IncomingCallType(), "%T preserved", env.IncomingCallType())
 				})
 			})

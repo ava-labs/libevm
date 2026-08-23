@@ -21,8 +21,15 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/state/snapshot"
+	"github.com/ava-labs/libevm/libevm"
+	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/libevm/stateconf"
 )
+
+// TxHash returns the current transaction hash set by [StateDB.SetTxContext].
+func (s *StateDB) TxHash() common.Hash {
+	return s.thash
+}
 
 // SnapshotTree mirrors the functionality of a [snapshot.Tree], allowing for
 // drop-in replacements. This is intended as a temporary feature as a workaround
@@ -51,4 +58,64 @@ func clearTypedNilPointer(snaps SnapshotTree) SnapshotTree {
 		return nil
 	}
 	return snaps
+}
+
+// StateDBHooks modify the behaviour of [StateDB] instances.
+type StateDBHooks interface {
+	// TransformStateKey receives the arguments passed to [StateDB.GetState],
+	// [StateDB.GetCommittedState] or [StateDB.SetState], and returns the key
+	// that each of those methods will use for accessing state. This method will
+	// not, however, be called if any of the aforementioned [StateDB] methods
+	// receives a [stateconf.SkipStateKeyTransformation] option.
+	//
+	// This method SHOULD NOT be used for anything other than achieving
+	// backwards compatibility with an existing chain. In the event that other
+	// methods are added to the [StateDBHooks] interface and no key
+	// transformation is required, it is acceptable for this method to echo the
+	// [common.Hash], unchanged.
+	TransformStateKey(_ common.Address, key common.Hash) (newKey common.Hash)
+}
+
+// RegisterExtras registers the [StateDBHooks] such that they modify the
+// behaviour of all [StateDB] instances. It is expected to be called in an
+// `init()` function and MUST NOT be called more than once.
+func RegisterExtras(s StateDBHooks) {
+	registeredExtras.MustRegister(s)
+}
+
+// WithTempRegisteredExtras temporarily registers `s` as if calling
+// [RegisterExtras] the same type parameter. After `fn` returns, the
+// registration is returned to its former state, be that none or the types
+// originally passed to [RegisterExtras].
+//
+// This MUST NOT be used on a live chain. It is solely intended for off-chain
+// consumers that require access to extras. Said consumers SHOULD NOT, however
+// call this function directly. Use the [libevm.WithTemporaryExtrasLock]
+// function instead in combination with all other registrations to ensure
+// that temporary registrations are atomically applied.
+func WithTempRegisteredExtras(lock libevm.ExtrasLock, s StateDBHooks, fn func() error) error {
+	if err := lock.Verify(); err != nil {
+		return err
+	}
+	return registeredExtras.TempOverride(s, fn)
+}
+
+// TestOnlyClearRegisteredExtras clears the arguments previously passed to
+// [RegisterExtras]. It panics if called from a non-testing call stack.
+//
+// In tests it SHOULD be called before every call to [RegisterExtras] and then
+// defer-called afterwards, either directly or via testing.TB.Cleanup(). This is
+// a workaround for the single-call limitation on [RegisterExtras].
+func TestOnlyClearRegisteredExtras() {
+	registeredExtras.TestOnlyClear()
+}
+
+var registeredExtras register.AtMostOnce[StateDBHooks]
+
+func transformStateKey(addr common.Address, key common.Hash, opts ...stateconf.StateDBStateOption) common.Hash {
+	r := &registeredExtras
+	if !r.Registered() || !stateconf.ShouldTransformStateKey(opts...) {
+		return key
+	}
+	return r.Get().TransformStateKey(addr, key)
 }

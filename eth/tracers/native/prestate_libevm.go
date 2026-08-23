@@ -35,3 +35,7 @@ func (t *prestateTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 	// idempotent.
 	t.lookupAccount(to)
 }
+
+// Account exports the [account] type, used for JSON-marshalling the results
+// of the prestateTracer.
+type Account = account

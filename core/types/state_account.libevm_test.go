@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/libevm/pseudo"
+	"github.com/ava-labs/libevm/internal/libevm/pseudo"
 	"github.com/ava-labs/libevm/rlp"
 )
 
@@ -46,7 +46,11 @@ func TestStateAccountRLP(t *testing.T) {
 	explicitFalseBoolean := test{
 		name: "explicit false-boolean extra",
 		register: func() {
-			RegisterExtras[NOOPHeaderHooks, *NOOPHeaderHooks, bool]()
+			RegisterExtras[
+				NOOPHeaderHooks, *NOOPHeaderHooks,
+				NOOPBlockBodyHooks, *NOOPBlockBodyHooks,
+				bool,
+			]()
 		},
 		acc: &StateAccount{
 			Nonce:    0x444444,
@@ -76,7 +80,11 @@ func TestStateAccountRLP(t *testing.T) {
 		{
 			name: "true-boolean extra",
 			register: func() {
-				RegisterExtras[NOOPHeaderHooks, *NOOPHeaderHooks, bool]()
+				RegisterExtras[
+					NOOPHeaderHooks, *NOOPHeaderHooks,
+					NOOPBlockBodyHooks, *NOOPBlockBodyHooks,
+					bool,
+				]()
 			},
 			acc: &StateAccount{
 				Nonce:    0x444444,

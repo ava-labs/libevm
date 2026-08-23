@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -28,7 +28,7 @@ import (
 
 func TestDBOverride(t *testing.T) {
 	config := &Config{
-		DBOverride: func(d ethdb.Database, c *Config) DBOverride {
+		DBOverride: func(d ethdb.Database) DBOverride {
 			return override{}
 		},
 	}

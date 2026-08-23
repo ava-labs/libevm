@@ -23,7 +23,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
-	"github.com/ava-labs/libevm/libevm"
+	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 )
@@ -40,6 +40,7 @@ type (
 
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	if p, override := evm.chainRules.Hooks().PrecompileOverride(addr); override {
+		log.Debug("Overriding precompile", "address", addr, "implementation", log.TypeOf(p))
 		return p, p != nil
 	}
 	var precompiles map[common.Address]PrecompiledContract
@@ -127,6 +128,9 @@ type EVM struct {
 	// available gas is calculated in gasCall* according to the 63/64 rule and later
 	// applied in opCall*.
 	callGasTemp uint64
+
+	// libevm
+	executionInvalidated error // see [EVM.InvalidateExecution]
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
@@ -159,6 +163,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 // Reset resets the EVM with a new transaction context.Reset
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
+	evm.executionInvalidated = nil // see [EVM.InvalidateExecution]
 	evm.TxContext, evm.StateDB = evm.overrideEVMResetArgs(txCtx, statedb)
 }
 
@@ -182,7 +187,7 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
-func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -428,8 +433,8 @@ func (c *codeAndHash) Hash() common.Hash {
 	return c.hash
 }
 
-// create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
+// createCommon creates a new contract using code as deployment code.
+func (evm *EVM) createCommon(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
@@ -459,8 +464,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// This check MUST be placed after the caller's nonce is incremented but
 	// before all other state-modifying behaviour, even if changes may be
 	// reverted to the snapshot.
-	addrs := &libevm.AddressContext{Origin: evm.Origin, Caller: caller.Address(), Self: address}
-	gas, err := evm.chainRules.Hooks().CanCreateContract(addrs, gas, evm.StateDB)
+	gas, err := evm.canCreateContract(caller, address, gas)
 	if err != nil {
 		return nil, common.Address{}, gas, err
 	}

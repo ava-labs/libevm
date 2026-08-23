@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -45,7 +45,11 @@ func TestGetSetExtra(t *testing.T) {
 	t.Cleanup(types.TestOnlyClearRegisteredExtras)
 	// Just as its Data field is a pointer, the registered type is a pointer to
 	// test deep copying.
-	payloads := types.RegisterExtras[types.NOOPHeaderHooks, *types.NOOPHeaderHooks, *accountExtra]().StateAccount
+	payloads := types.RegisterExtras[
+		types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
+		types.NOOPBlockBodyHooks, *types.NOOPBlockBodyHooks,
+		*accountExtra,
+	]().StateAccount
 
 	rng := ethtest.NewPseudoRand(42)
 	addr := rng.Address()

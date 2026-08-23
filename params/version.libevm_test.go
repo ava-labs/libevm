@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -17,60 +17,85 @@
 package params
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/mod/semver"
 )
 
-func TestLibEVMVersioning(t *testing.T) {
-	// We have an unusual version structure as defined by [LibEVMVersion] that
-	// is easy to mess up, so it's easier to just automate it and test the
-	// ordering assumptions.
+// libEVMServer automates the version rules described by the [LibEVMVersion]
+// documentation.
+type libEVMSemver struct {
+	geth, libEVM semverTriplet
+	typ          ReleaseType
+	rc           uint
+}
 
-	// This is a deliberate change-detector test to provide us with a copyable
-	// string of the current version, useful for git tagging.
-	const curr = "1.13.14-0.1.0.beta"
-	if got, want := LibEVMVersion, curr; got != want {
-		t.Errorf("got LibEVMVersion %q; want %q", got, want)
+func (v libEVMSemver) String() string {
+	suffix := v.typ
+	if suffix == ReleaseCandidate {
+		suffix = ReleaseType(fmt.Sprintf("%s.%d", suffix, v.rc))
 	}
+	return fmt.Sprintf("%s-%s.%s", v.geth, v.libEVM, suffix)
+}
+
+type semverTriplet struct {
+	major, minor, patch uint
+}
+
+func (t semverTriplet) String() string {
+	return fmt.Sprintf("%d.%d.%d", t.major, t.minor, t.patch)
+}
+
+func TestLibEVMVersioning(t *testing.T) {
+	t.Run("current", func(t *testing.T) {
+		want := libEVMSemver{
+			geth:   semverTriplet{VersionMajor, VersionMinor, VersionPatch},
+			libEVM: semverTriplet{LibEVMVersionMajor, LibEVMVersionMinor, LibEVMVersionPatch},
+			typ:    LibEVMReleaseType,
+			rc:     libEVMReleaseCandidate,
+		}.String()
+		assert.Equal(t, want, LibEVMVersion, "LibEVMVersion")
+	})
 
 	ordered := []libEVMSemver{
 		{
 			semverTriplet{1, 13, 14},
 			semverTriplet{0, 1, 0},
-			betaRelease,
+			BetaRelease,
 			0, // ignored
 		},
 		{
 			semverTriplet{1, 13, 14},
 			semverTriplet{0, 1, 0},
-			releaseCandidate, 1,
+			ReleaseCandidate, 1,
 		},
 		{
 			semverTriplet{1, 13, 14},
 			semverTriplet{0, 1, 0},
-			releaseCandidate, 2,
+			ReleaseCandidate, 2,
 		},
 		{
 			semverTriplet{1, 13, 14},
 			semverTriplet{0, 1, 0},
-			productionRelease,
+			ProductionRelease,
 			0, // ignored,
 		},
 		{
 			semverTriplet{1, 13, 14},
 			semverTriplet{0, 1, 1}, // bump takes precedence
-			betaRelease, 0,
+			BetaRelease, 0,
 		},
 		{
 			semverTriplet{1, 13, 14},
 			semverTriplet{0, 1, 1},
-			productionRelease, 0,
+			ProductionRelease, 0,
 		},
 		{
 			semverTriplet{1, 13, 15}, // bump takes precedence
 			semverTriplet{0, 1, 1},
-			betaRelease, 0,
+			BetaRelease, 0,
 		},
 	}
 

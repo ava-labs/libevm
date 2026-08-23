@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -21,8 +21,10 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/ava-labs/libevm/libevm/pseudo"
+	"github.com/ava-labs/libevm/internal/libevm/pseudo"
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/register"
+	"github.com/ava-labs/libevm/log"
 )
 
 // Extras are arbitrary payloads to be added as extra fields in [ChainConfig]
@@ -71,15 +73,50 @@ func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPaylo
 	mustBeStructOrPointerToOne[C]()
 	mustBeStructOrPointerToOne[R]()
 
+	payloads, ctors := payloadsAndConstructors(e)
+	registeredExtras.MustRegister(ctors)
+	log.Info(
+		"Registered params extras",
+		"ChainConfig", log.TypeOf(pseudo.Zero[C]().Value.Get()),
+		"Rules", log.TypeOf(pseudo.Zero[R]().Value.Get()),
+		"ReuseJSONRoot", e.ReuseJSONRoot,
+	)
+	return payloads
+}
+
+func payloadsAndConstructors[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) (ExtraPayloads[C, R], *extraConstructors) {
 	payloads := e.payloads()
-	registeredExtras.MustRegister(&extraConstructors{
+	return payloads, &extraConstructors{
 		newChainConfig: pseudo.NewConstructor[C]().Zero,
 		newRules:       pseudo.NewConstructor[R]().Zero,
 		reuseJSONRoot:  e.ReuseJSONRoot,
 		newForRules:    e.newForRules,
 		payloads:       payloads,
-	})
-	return payloads
+	}
+}
+
+// WithTempRegisteredExtras temporarily registers `HPtr`, `BPtr`, and `SA` as if
+// calling [RegisterExtras] the same type parameters. The [ExtraPayloads] are
+// passed to `fn` instead of being returned; the argument MUST NOT be persisted
+// beyond the life of `fn`. After `fn` returns, the registration is returned to
+// its former state, be that none or the types originally passed to
+// [RegisterExtras].
+//
+// This MUST NOT be used on a live chain. It is solely intended for off-chain
+// consumers that require access to extras. Said consumers SHOULD NOT, however
+// call this function directly. Use the [libevm.WithTemporaryExtrasLock]
+// function instead in combination with all other registrations to ensure
+// that temporary registrations are atomically applied.
+func WithTempRegisteredExtras[C ChainConfigHooks, R RulesHooks](
+	lock libevm.ExtrasLock,
+	e Extras[C, R],
+	fn func(ExtraPayloads[C, R]) error,
+) error {
+	if err := lock.Verify(); err != nil {
+		return err
+	}
+	payloads, ctors := payloadsAndConstructors(e)
+	return registeredExtras.TempOverride(ctors, func() error { return fn(payloads) })
 }
 
 // TestOnlyClearRegisteredExtras clears the [Extras] previously passed to
@@ -208,4 +245,11 @@ func (r *Rules) extraPayload() *pseudo.Type {
 		r.extra = registeredExtras.Get().newRules()
 	}
 	return r.extra
+}
+
+// NewTimestampCompatError returns a new config-compatibility error indicating an incompatible timestamp.
+func NewTimestampCompatError(what string, storedTime, newTime *uint64) *ConfigCompatError {
+	// If this breaks when merging a new version of `geth`, the wrapping function's signature MUST be
+	// changed to match as it exists only to export the function.
+	return newTimestampCompatError(what, storedTime, newTime)
 }
