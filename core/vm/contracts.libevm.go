@@ -330,8 +330,7 @@ func (e RevertError) Error() string { return ErrExecutionReverted.Error() }
 // Bytes returns the return buffer with which an EVM context reverted.
 func (e RevertError) Bytes() []byte { return []byte(e) }
 
-// Is returns true if `err` is directly == to `e` or if `err` is
-// [ErrExecutionReverted].
-func (e RevertError) Is(err error) bool {
-	return error(e) == err || err == ErrExecutionReverted
+// Unwrap returns [ErrExecutionReverted].
+func (e RevertError) Unwrap() error {
+	return ErrExecutionReverted
 }
