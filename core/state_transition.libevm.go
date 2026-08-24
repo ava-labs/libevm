@@ -25,6 +25,7 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
+	"github.com/ava-labs/libevm/libevm/options"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/params"
 )
@@ -43,6 +44,21 @@ func (st *StateTransition) rulesHooks() params.RulesHooks {
 // Keeps the vm package imported by this specific file so VS Code can support
 // comments like [vm.EVM].
 var _ = (*vm.EVM)(nil)
+
+type stateTransitionConfig struct {
+	disableMinimumGasConsumption bool
+}
+
+// StateTransitionOption configures a [StateTransition].
+type StateTransitionOption = options.Option[stateTransitionConfig]
+
+// WithoutMinimumGasConsumption disables the
+// [params.RulesHooks.MinimumGasConsumption] hook for a state transition.
+func WithoutMinimumGasConsumption() StateTransitionOption {
+	return options.Func[stateTransitionConfig](func(c *stateTransitionConfig) {
+		c.disableMinimumGasConsumption = true
+	})
+}
 
 // TransitionDb will transition the state by applying the current message and
 // returning the evm execution result with following fields.
@@ -104,6 +120,11 @@ func (st *StateTransition) canExecuteTransaction() error {
 func (st *StateTransition) afterGasRefund(refunded uint64) {
 	if !st.rulesHooks().ShouldRefundGas() {
 		st.gasRemaining -= refunded
+	}
+
+	c := options.As[stateTransitionConfig](st.opts...)
+	if c.disableMinimumGasConsumption {
+		return
 	}
 
 	limit := st.msg.GasLimit

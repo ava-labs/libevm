@@ -28,10 +28,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/consensus"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/eth/gasestimator"
 	"github.com/ava-labs/libevm/eth/tracers"
 	"github.com/ava-labs/libevm/eth/tracers/native"
 	"github.com/ava-labs/libevm/libevm"
@@ -302,6 +304,59 @@ func TestMinimumGasConsumption(t *testing.T) {
 			}
 		})
 	}
+}
+
+type stubChainContext struct {
+	core.ChainContext
+}
+
+func (stubChainContext) Engine() consensus.Engine { return stubEngine{} }
+
+type stubEngine struct {
+	consensus.Engine
+}
+
+func (stubEngine) Author(h *types.Header) (common.Address, error) {
+	return h.Coinbase, nil
+}
+
+func TestGasEstimationIgnoresMinConsumption(t *testing.T) {
+	const limit = 1e8
+	from := common.Address{'m', 'e'}
+	hooks := &hookstest.Stub{
+		MinimumGasConsumptionFn: func(gasLimit uint64) uint64 {
+			return gasLimit / 2
+		},
+	}
+	hooks.Register(t)
+
+	_, _, sdb := ethtest.NewEmptyStateDB(t)
+	sdb.SetBalance(from, new(uint256.Int).SetAllOne())
+
+	opts := &gasestimator.Options{
+		Config: params.MergedTestChainConfig,
+		Chain:  stubChainContext{},
+		Header: &types.Header{
+			Number:     big.NewInt(1),
+			BaseFee:    big.NewInt(1),
+			GasLimit:   limit,
+			Coinbase:   common.Address{1},
+			Difficulty: big.NewInt(1),
+		},
+		State: sdb,
+	}
+	msg := &core.Message{
+		From:      from,
+		GasPrice:  big.NewInt(1),
+		GasFeeCap: big.NewInt(1),
+		GasTipCap: big.NewInt(0),
+		GasLimit:  limit,
+		Value:     big.NewInt(0),
+	}
+
+	got, _, err := gasestimator.Estimate(t.Context(), msg, opts, limit)
+	require.NoError(t, err, "gasestimator.Estimate(...)")
+	require.Equal(t, params.TxGasContractCreation, got, "gasestimator.Estimate(...)")
 }
 
 // TestCreditBaseFeeToCoinbase tests that the coinbase is credited with the
