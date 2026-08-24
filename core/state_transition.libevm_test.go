@@ -28,10 +28,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/consensus"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/eth/gasestimator"
 	"github.com/ava-labs/libevm/eth/tracers"
 	"github.com/ava-labs/libevm/eth/tracers/native"
 	"github.com/ava-labs/libevm/libevm"
@@ -304,56 +306,51 @@ func TestMinimumGasConsumption(t *testing.T) {
 	}
 }
 
-func TestMinimumGasConsumptionSimulation(t *testing.T) {
-	const gasLimit = 1_000_000
-	tests := []struct {
-		name      string
-		noBaseFee bool
-		want      uint64
-	}{
-		{
-			name: "skip account checks only",
-			want: gasLimit / 2,
+type stubChainContext struct {
+	core.ChainContext
+}
+
+func (stubChainContext) Engine() consensus.Engine { return stubEngine{} }
+
+type stubEngine struct {
+	consensus.Engine
+}
+
+func (stubEngine) Author(h *types.Header) (common.Address, error) {
+	return h.Coinbase, nil
+}
+
+func TestGasEstimationIgnoresMinConsumption(t *testing.T) {
+	const limit = 1e8
+	from := common.Address{'m', 'e'}
+
+	_, _, sdb := ethtest.NewEmptyStateDB(t)
+	sdb.SetBalance(from, new(uint256.Int).SetAllOne())
+
+	opts := &gasestimator.Options{
+		Config: params.MergedTestChainConfig,
+		Chain:  stubChainContext{},
+		Header: &types.Header{
+			Number:     big.NewInt(1),
+			BaseFee:    big.NewInt(1),
+			GasLimit:   limit,
+			Coinbase:   common.Address{1},
+			Difficulty: big.NewInt(1),
 		},
-		{
-			name:      "RPC simulation",
-			noBaseFee: true,
-			want:      params.TxGas,
-		},
+		State: sdb,
+	}
+	msg := &core.Message{
+		From:      from,
+		GasPrice:  big.NewInt(1),
+		GasFeeCap: big.NewInt(1),
+		GasTipCap: big.NewInt(0),
+		GasLimit:  limit,
+		Value:     big.NewInt(0),
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			hooks := &hookstest.Stub{
-				MinimumGasConsumptionFn: func(limit uint64) uint64 {
-					require.Equal(t, uint64(gasLimit), limit, "MinimumGasConsumption() argument")
-					return limit / 2
-				},
-			}
-			hooks.Register(t)
-
-			stateDB, evm := ethtest.NewZeroEVM(t)
-			evm.Config.NoBaseFee = tt.noBaseFee
-			from := common.Address{0x01}
-			to := common.Address{0x02}
-			stateDB.SetBalance(from, uint256.NewInt(params.Ether))
-			msg := &core.Message{
-				From:              from,
-				To:                &to,
-				GasLimit:          gasLimit,
-				GasPrice:          new(big.Int),
-				GasFeeCap:         new(big.Int),
-				GasTipCap:         new(big.Int),
-				Value:             new(big.Int),
-				SkipAccountChecks: true,
-			}
-			gasPool := core.GasPool(gasLimit)
-
-			result, err := core.ApplyMessage(evm, msg, &gasPool)
-			require.NoError(t, err, "core.ApplyMessage()")
-			require.Equal(t, tt.want, result.UsedGas, "core.ApplyMessage() gas used")
-		})
-	}
+	got, _, err := gasestimator.Estimate(t.Context(), msg, opts, limit)
+	require.NoError(t, err)
+	t.Error(got) // DO NOT MERGE: for inspection of result to ensure that the bug has been reproduced
 }
 
 // TestCreditBaseFeeToCoinbase tests that the coinbase is credited with the
