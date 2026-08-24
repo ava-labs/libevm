@@ -25,6 +25,7 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
+	"github.com/ava-labs/libevm/libevm/options"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/params"
 )
@@ -43,6 +44,18 @@ func (st *StateTransition) rulesHooks() params.RulesHooks {
 // Keeps the vm package imported by this specific file so VS Code can support
 // comments like [vm.EVM].
 var _ = (*vm.EVM)(nil)
+
+type stateTransitionConfig struct {
+	disableMinimumGasConsumption bool
+}
+
+type StateTransitionOption = options.Option[stateTransitionConfig]
+
+func WithoutMinimumGasConsumption() StateTransitionOption {
+	return options.Func[stateTransitionConfig](func(c *stateTransitionConfig) {
+		c.disableMinimumGasConsumption = true
+	})
+}
 
 // TransitionDb will transition the state by applying the current message and
 // returning the evm execution result with following fields.
@@ -105,10 +118,9 @@ func (st *StateTransition) afterGasRefund(refunded uint64) {
 	if !st.rulesHooks().ShouldRefundGas() {
 		st.gasRemaining -= refunded
 	}
-	// Simulated calls do not incur transaction charges. Applying a
-	// gas-limit-derived charge would also make gas estimation depend on the
-	// upper bound being tested rather than the gas required for execution.
-	if st.msg.SkipAccountChecks && st.evm.Config.NoBaseFee {
+
+	c := options.As[stateTransitionConfig](st.opts...)
+	if c.disableMinimumGasConsumption {
 		return
 	}
 
