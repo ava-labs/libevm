@@ -323,6 +323,12 @@ func (stubEngine) Author(h *types.Header) (common.Address, error) {
 func TestGasEstimationIgnoresMinConsumption(t *testing.T) {
 	const limit = 1e8
 	from := common.Address{'m', 'e'}
+	hooks := &hookstest.Stub{
+		MinimumGasConsumptionFn: func(gasLimit uint64) uint64 {
+			return gasLimit / 2
+		},
+	}
+	hooks.Register(t)
 
 	_, _, sdb := ethtest.NewEmptyStateDB(t)
 	sdb.SetBalance(from, new(uint256.Int).SetAllOne())
@@ -350,7 +356,7 @@ func TestGasEstimationIgnoresMinConsumption(t *testing.T) {
 
 	got, _, err := gasestimator.Estimate(t.Context(), msg, opts, limit)
 	require.NoError(t, err)
-	t.Error(got) // DO NOT MERGE: for inspection of result to ensure that the bug has been reproduced
+	require.Equal(t, params.TxGasContractCreation, got)
 }
 
 // TestCreditBaseFeeToCoinbase tests that the coinbase is credited with the

@@ -69,8 +69,8 @@ type RulesHooks interface {
 	// minimum quantity of gas units to be charged for said transaction. If the
 	// returned value is greater than the transaction's limit, the minimum spend
 	// will be capped at the limit. The minimum spend will be applied _after_
-	// refunds, if any. It is not applied to simulated calls that skip account
-	// checks and disable base-fee checks.
+	// refunds, if any. A state transition can explicitly disable the minimum,
+	// such as when estimating the gas required for execution.
 	MinimumGasConsumption(txGasLimit uint64) (gas uint64)
 	// ShouldCreditBaseFeeToCoinbase returns whether or not to credit the
 	// block's base fee to the coinbase address. By default, it will NOT be
