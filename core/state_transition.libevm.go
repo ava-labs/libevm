@@ -49,11 +49,11 @@ type stateTransitionConfig struct {
 	disableMinimumGasConsumption bool
 }
 
-// StateTransitionOption configures a state transition.
+// StateTransitionOption configures a [StateTransition].
 type StateTransitionOption = options.Option[stateTransitionConfig]
 
-// WithoutMinimumGasConsumption disables the minimum gas consumption hook for
-// a state transition.
+// WithoutMinimumGasConsumption disables the
+// [params.RulesHooks.MinimumGasConsumption] hook for a state transition.
 func WithoutMinimumGasConsumption() StateTransitionOption {
 	return options.Func[stateTransitionConfig](func(c *stateTransitionConfig) {
 		c.disableMinimumGasConsumption = true

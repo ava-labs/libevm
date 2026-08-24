@@ -355,8 +355,8 @@ func TestGasEstimationIgnoresMinConsumption(t *testing.T) {
 	}
 
 	got, _, err := gasestimator.Estimate(t.Context(), msg, opts, limit)
-	require.NoError(t, err)
-	require.Equal(t, params.TxGasContractCreation, got)
+	require.NoError(t, err, "gasestimator.Estimate(...)")
+	require.Equal(t, params.TxGasContractCreation, got, "gasestimator.Estimate(...)")
 }
 
 // TestCreditBaseFeeToCoinbase tests that the coinbase is credited with the
