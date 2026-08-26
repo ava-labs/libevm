@@ -1,0 +1,23 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "pruner",
+    srcs = [
+        "bloom.go",
+        "pruner.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/core/state/pruner",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//core/rawdb",
+        "//core/state/snapshot",
+        "//core/types",
+        "//ethdb",
+        "//log",
+        "//rlp",
+        "//trie",
+        "//triedb",
+        "@com_github_holiman_bloomfilter_v2//:bloomfilter",
+    ],
+)

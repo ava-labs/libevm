@@ -1,0 +1,37 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "gethclient",
+    srcs = ["gethclient.go"],
+    importpath = "github.com/ava-labs/libevm/ethclient/gethclient",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//:libevm",
+        "//common",
+        "//common/hexutil",
+        "//core/types",
+        "//p2p",
+        "//rpc",
+    ],
+)
+
+go_test(
+    name = "gethclient_test",
+    srcs = ["gethclient_test.go"],
+    embed = [":gethclient"],
+    deps = [
+        "//:libevm",
+        "//common",
+        "//consensus/ethash",
+        "//core",
+        "//core/types",
+        "//crypto",
+        "//eth",
+        "//eth/ethconfig",
+        "//eth/filters",
+        "//ethclient",
+        "//node",
+        "//params",
+        "//rpc",
+    ],
+)

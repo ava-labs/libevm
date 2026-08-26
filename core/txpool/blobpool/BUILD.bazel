@@ -1,0 +1,62 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "blobpool",
+    srcs = [
+        "blobpool.go",
+        "config.go",
+        "evictheap.go",
+        "interface.go",
+        "limbo.go",
+        "metrics.go",
+        "priority.go",
+        "slotter.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/core/txpool/blobpool",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//consensus/misc/eip1559",
+        "//consensus/misc/eip4844",
+        "//core",
+        "//core/state",
+        "//core/txpool",
+        "//core/types",
+        "//event",
+        "//log",
+        "//metrics",
+        "//params",
+        "//rlp",
+        "@com_github_holiman_billy//:billy",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)
+
+go_test(
+    name = "blobpool_test",
+    srcs = [
+        "blobpool_test.go",
+        "evictheap_test.go",
+        "priority_test.go",
+        "slotter_test.go",
+    ],
+    embed = [":blobpool"],
+    deps = [
+        "//common",
+        "//consensus/misc/eip1559",
+        "//consensus/misc/eip4844",
+        "//core",
+        "//core/rawdb",
+        "//core/state",
+        "//core/txpool",
+        "//core/types",
+        "//crypto",
+        "//crypto/kzg4844",
+        "//ethdb/memorydb",
+        "//log",
+        "//params",
+        "//rlp",
+        "@com_github_holiman_billy//:billy",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)

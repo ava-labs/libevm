@@ -1,0 +1,41 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "v5wire",
+    srcs = [
+        "crypto.go",
+        "encoding.go",
+        "msg.go",
+        "session.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/p2p/discover/v5wire",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common/hexutil",
+        "//common/lru",
+        "//common/math",
+        "//common/mclock",
+        "//crypto",
+        "//p2p/enode",
+        "//p2p/enr",
+        "//rlp",
+        "@org_golang_x_crypto//hkdf",
+    ],
+)
+
+go_test(
+    name = "v5wire_test",
+    srcs = [
+        "crypto_test.go",
+        "encoding_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":v5wire"],
+    deps = [
+        "//common/hexutil",
+        "//common/mclock",
+        "//crypto",
+        "//p2p/enode",
+        "@com_github_davecgh_go_spew//spew",
+    ],
+)

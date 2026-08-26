@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "ecies",
+    srcs = [
+        "ecies.go",
+        "params.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/crypto/ecies",
+    visibility = ["//visibility:public"],
+    deps = ["//crypto"],
+)
+
+go_test(
+    name = "ecies_test",
+    srcs = ["ecies_test.go"],
+    embed = [":ecies"],
+    deps = ["//crypto"],
+)

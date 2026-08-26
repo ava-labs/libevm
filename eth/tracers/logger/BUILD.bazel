@@ -1,0 +1,35 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "logger",
+    srcs = [
+        "access_list_tracer.go",
+        "gen_structlog.go",
+        "logger.go",
+        "logger_json.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/eth/tracers/logger",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//common/hexutil",
+        "//common/math",
+        "//core/types",
+        "//core/vm",
+        "//params",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)
+
+go_test(
+    name = "logger_test",
+    srcs = ["logger_test.go"],
+    embed = [":logger"],
+    deps = [
+        "//common",
+        "//core/state",
+        "//core/vm",
+        "//params",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)

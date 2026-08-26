@@ -1,0 +1,34 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "log",
+    srcs = [
+        "format.go",
+        "handler.go",
+        "handler_glog.go",
+        "logger.go",
+        "root.go",
+        "value.libevm.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/log",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_holiman_uint256//:uint256",
+        "@org_golang_x_exp//slog",
+    ],
+)
+
+go_test(
+    name = "log_test",
+    srcs = [
+        "format_test.go",
+        "logger_test.go",
+        "value.libevm_test.go",
+    ],
+    embed = [":log"],
+    deps = [
+        "@com_github_holiman_uint256//:uint256",
+        "@com_github_stretchr_testify//assert",
+        "@org_golang_x_exp//slog",
+    ],
+)

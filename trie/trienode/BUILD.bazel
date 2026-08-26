@@ -1,0 +1,17 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "trienode",
+    srcs = [
+        "node.go",
+        "proof.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/trie/trienode",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//crypto",
+        "//ethdb",
+        "//rlp",
+    ],
+)
