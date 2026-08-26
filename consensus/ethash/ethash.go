@@ -40,7 +40,7 @@ func NewFaker() *Ethash {
 	return new(Ethash)
 }
 
-// NewFakeFailer creates a ethash consensus engine with a fake PoW scheme that
+// NewFakeFailer creates an ethash consensus engine with a fake PoW scheme that
 // accepts all blocks as valid apart from the single one specified, though they
 // still have to conform to the Ethereum consensus rules.
 func NewFakeFailer(fail uint64) *Ethash {
@@ -49,7 +49,7 @@ func NewFakeFailer(fail uint64) *Ethash {
 	}
 }
 
-// NewFakeDelayer creates a ethash consensus engine with a fake PoW scheme that
+// NewFakeDelayer creates an ethash consensus engine with a fake PoW scheme that
 // accepts all blocks as valid, but delays verifications by some time, though
 // they still have to conform to the Ethereum consensus rules.
 func NewFakeDelayer(delay time.Duration) *Ethash {

@@ -442,7 +442,7 @@ func (w *wallet) selfDerive() {
 
 // Contains implements accounts.Wallet, returning whether a particular account is
 // or is not pinned into this wallet instance. Although we could attempt to resolve
-// unpinned accounts, that would be an non-negligible hardware operation.
+// unpinned accounts, that would be a non-negligible hardware operation.
 func (w *wallet) Contains(account accounts.Account) bool {
 	w.stateLock.RLock()
 	defer w.stateLock.RUnlock()

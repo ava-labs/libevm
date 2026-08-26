@@ -286,7 +286,7 @@ func verifyFetchingEvent(t *testing.T, fetching chan []common.Hash, arrive bool)
 	}
 }
 
-// verifyCompletingEvent verifies that one single event arrive on an completing channel.
+// verifyCompletingEvent verifies that one single event arrive on a completing channel.
 func verifyCompletingEvent(t *testing.T, completing chan []common.Hash, arrive bool) {
 	t.Helper()
 
