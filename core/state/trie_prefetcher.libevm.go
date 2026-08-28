@@ -95,8 +95,8 @@ func (sf *subfetcher) initPool(opts ...subfetcherPoolOption) {
 
 // releaseWorkerPool calls Done() on the shared [WorkerPool] if one was
 // provided with [WithWorkerPool]. This MUST only be called after
-// [subfetcher.abort] returns on ALL fetchers as the pool is shared between
-// them.
+// [subfetcher.abort] returns on ALL fetchers to guarantee that no further calls
+// will be made to Execute() after calling Done().
 func (p *triePrefetcher) releaseWorkerPool() {
 	if w := p.workers; w != nil {
 		w.Done()
