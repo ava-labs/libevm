@@ -39,9 +39,8 @@ type WorkerPool interface {
 }
 
 // WithWorkerPool configures trie prefetching to execute asynchronously. The
-// provided constructor is called exactly once per trie prefetcher (i.e.
-// typically once per block). Done() is called on the pool exactly once, when
-// the prefetcher is closed.
+// provided constructor is called once per trie prefetcher (i.e. typically once
+// per block). Done() is called on the pool once when the prefetcher is closed.
 func WithWorkerPool(ctor func() WorkerPool) PrefetcherOption {
 	return options.Func[prefetcherConfig](func(c *prefetcherConfig) {
 		c.newWorkerPool = ctor
