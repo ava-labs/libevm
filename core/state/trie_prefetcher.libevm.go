@@ -47,15 +47,12 @@ func WithWorkerPool(ctor func() WorkerPool) PrefetcherOption {
 	})
 }
 
-// newWorkerPool returns a new [WorkerPool] for a [triePrefetcher] if
-// [newTriePrefetcher] was provided with [WithWorkerPool], otherwise it returns
-// nil.
+// newWorkerPool returns a new [WorkerPool] if provided a [WithWorkerPool].
+// Otherwise, it returns nil.
 //
 // The pool should be shared by all of the prefetcher's subfetchers and MUST NOT
 // be propagated to copies made with [triePrefetcher.copy]. A copy MAY be closed
-// while the original is still fetching, so a propagated pool could receive a
-// premature Done(), breaking the guarantee that Execute() is never called after
-// Done().
+// while the original is still fetching.
 func newWorkerPool(opts ...PrefetcherOption) WorkerPool {
 	c := options.As(opts...)
 	if c.newWorkerPool == nil {
