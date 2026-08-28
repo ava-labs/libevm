@@ -27,7 +27,7 @@ import (
 type PrefetcherOption = options.Option[prefetcherConfig]
 
 type prefetcherConfig struct {
-	newWorkers func() WorkerPool
+	newWorkerPool func() WorkerPool
 }
 
 // A WorkerPool executes functions asynchronously. Done() is called to signal
@@ -39,12 +39,31 @@ type WorkerPool interface {
 }
 
 // WithWorkerPools configures trie prefetching to execute asynchronously. The
-// provided constructor is called once for each trie being fetched but it MAY
-// return the same pool.
+// provided constructor is called exactly once per trie prefetcher (i.e.
+// typically once per block) and MUST always return a new pool, which is
+// shared by all tries being fetched. Done() is called on the pool exactly
+// once, when the prefetcher is closed.
 func WithWorkerPools(ctor func() WorkerPool) PrefetcherOption {
 	return options.Func[prefetcherConfig](func(c *prefetcherConfig) {
-		c.newWorkers = ctor
+		c.newWorkerPool = ctor
 	})
+}
+
+// newWorkerPool returns a new [WorkerPool] for a [triePrefetcher] if
+// [newTriePrefetcher] was provided with [WithWorkerPools], otherwise it returns
+// nil.
+//
+// The pool should be shared by all of the prefetcher's subfetchers and MUST NOT
+// be propagated to copies made with [triePrefetcher.copy]. A copy MAY be closed
+// while the original is still fetching, so a propagated pool could receive a
+// premature Done(), breaking the guarantee that Execute() is never called after
+// Done().
+func newWorkerPool(opts ...PrefetcherOption) WorkerPool {
+	c := options.As(opts...)
+	if c.newWorkerPool == nil {
+		return nil
+	}
+	return c.newWorkerPool()
 }
 
 type subfetcherPool struct {
@@ -53,32 +72,39 @@ type subfetcherPool struct {
 	wg      sync.WaitGroup
 }
 
-// applyTo configures the [subfetcher] to use a [WorkerPool] if one was provided
-// with a [PrefetcherOption].
-func (c *prefetcherConfig) applyTo(sf *subfetcher) {
+// A subfetcherPoolOption configures a [subfetcherPool].
+type subfetcherPoolOption = options.Option[subfetcherPool]
+
+// withWorkerPool configures a [subfetcherPool] to execute functions on the
+// provided [WorkerPool], which MAY be nil, in which case they are executed
+// synchronously.
+func withWorkerPool(workers WorkerPool) subfetcherPoolOption {
+	return options.Func[subfetcherPool](func(c *subfetcherPool) {
+		c.workers = workers
+	})
+}
+
+// initPool initialises the [subfetcher]'s pool, applying the provided options.
+func (sf *subfetcher) initPool(opts ...subfetcherPoolOption) {
 	sf.pool = &subfetcherPool{
 		tries: sync.Pool[Trie]{
-			// Although the workers may be shared between all subfetchers, each
+			// Although the workers are shared between all subfetchers, each
 			// MUST have its own Trie pool.
 			New: func() Trie {
 				return sf.db.CopyTrie(sf.trie)
 			},
 		},
 	}
-	if c.newWorkers != nil {
-		sf.pool.workers = c.newWorkers()
-	}
+	options.ApplyTo(sf.pool, opts...)
 }
 
-// releaseWorkerPools calls Done() on all [WorkerPool]s. This MUST only be
-// called after [subfetcher.abort] returns on ALL fetchers as a pool is allowed
-// to be shared between them. This is because we guarantee in the public API
-// that no further calls will be made to Execute() after a call to Done().
-func (p *triePrefetcher) releaseWorkerPools() {
-	for _, f := range p.fetchers {
-		if w := f.pool.workers; w != nil {
-			w.Done()
-		}
+// releaseWorkerPool calls Done() on the shared [WorkerPool] if one was
+// provided with [WithWorkerPools]. This MUST only be called after
+// [subfetcher.abort] returns on ALL fetchers as the pool is shared between
+// them.
+func (p *triePrefetcher) releaseWorkerPool() {
+	if w := p.workers; w != nil {
+		w.Done()
 	}
 }
 
