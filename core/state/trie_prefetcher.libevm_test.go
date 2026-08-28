@@ -64,7 +64,7 @@ func TestStopPrefetcherWaitsOnWorkers(t *testing.T) {
 			executed: make(chan struct{}),
 			unblock:  make(chan struct{}),
 		}
-		opt := WithWorkerPools(func() WorkerPool { return pool })
+		opt := WithWorkerPool(func() WorkerPool { return pool })
 
 		db := filledStateDB()
 		db.prefetcher = newTriePrefetcher(db.db, db.originalRoot, "", opt)
@@ -115,7 +115,7 @@ func TestWorkerPoolSharedAcrossTries(t *testing.T) {
 				ctorCalls int
 				pool      = &countingWorkerPool{}
 			)
-			opt := WithWorkerPools(func() WorkerPool {
+			opt := WithWorkerPool(func() WorkerPool {
 				ctorCalls++
 				return pool
 			})

@@ -38,19 +38,18 @@ type WorkerPool interface {
 	Done()
 }
 
-// WithWorkerPools configures trie prefetching to execute asynchronously. The
+// WithWorkerPool configures trie prefetching to execute asynchronously. The
 // provided constructor is called exactly once per trie prefetcher (i.e.
-// typically once per block) and MUST always return a new pool, which is
-// shared by all tries being fetched. Done() is called on the pool exactly
-// once, when the prefetcher is closed.
-func WithWorkerPools(ctor func() WorkerPool) PrefetcherOption {
+// typically once per block). Done() is called on the pool exactly once, when
+// the prefetcher is closed.
+func WithWorkerPool(ctor func() WorkerPool) PrefetcherOption {
 	return options.Func[prefetcherConfig](func(c *prefetcherConfig) {
 		c.newWorkerPool = ctor
 	})
 }
 
 // newWorkerPool returns a new [WorkerPool] for a [triePrefetcher] if
-// [newTriePrefetcher] was provided with [WithWorkerPools], otherwise it returns
+// [newTriePrefetcher] was provided with [WithWorkerPool], otherwise it returns
 // nil.
 //
 // The pool should be shared by all of the prefetcher's subfetchers and MUST NOT
@@ -99,7 +98,7 @@ func (sf *subfetcher) initPool(opts ...subfetcherPoolOption) {
 }
 
 // releaseWorkerPool calls Done() on the shared [WorkerPool] if one was
-// provided with [WithWorkerPools]. This MUST only be called after
+// provided with [WithWorkerPool]. This MUST only be called after
 // [subfetcher.abort] returns on ALL fetchers as the pool is shared between
 // them.
 func (p *triePrefetcher) releaseWorkerPool() {
