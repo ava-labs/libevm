@@ -58,7 +58,7 @@ func (p *synchronisingWorkerPool) Done() {
 // waits for all in-progress [WorkerPool.Execute] calls to return before it
 // calls [WorkerPool.Done] and returns.
 func TestStopPrefetcherWaitsOnWorkers(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) { //nolint:thelper // False positive, fixed in thelper v0.7.1.
 		pool := &synchronisingWorkerPool{
 			t:        t,
 			executed: make(chan struct{}),
