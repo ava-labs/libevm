@@ -185,8 +185,8 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, error) {
-	return NewStateTransition(evm, msg, gp).TransitionDb()
+func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool, opts ...StateTransitionOption) (*ExecutionResult, error) {
+	return NewStateTransition(evm, msg, gp, opts...).TransitionDb()
 }
 
 // StateTransition represents a state transition.
@@ -218,15 +218,18 @@ type StateTransition struct {
 	initialGas   uint64
 	state        vm.StateDB
 	evm          *vm.EVM
+
+	opts []StateTransitionOption //libevm
 }
 
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, msg *Message, gp *GasPool) *StateTransition {
+func NewStateTransition(evm *vm.EVM, msg *Message, gp *GasPool, opts ...StateTransitionOption) *StateTransition {
 	return &StateTransition{
 		gp:    gp,
 		evm:   evm,
 		msg:   msg,
 		state: evm.StateDB,
+		opts:  opts,
 	}
 }
 

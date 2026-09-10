@@ -20,7 +20,6 @@ import (
 	"sync"
 
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/libevm/options"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
 )
@@ -51,7 +50,7 @@ type triePrefetcher struct {
 	storageSkipMeter  metrics.Meter
 	storageWasteMeter metrics.Meter
 
-	options []PrefetcherOption
+	workers WorkerPool // libevm: see [newWorkerPool]
 }
 
 func newTriePrefetcher(db Database, root common.Hash, namespace string, opts ...PrefetcherOption) *triePrefetcher {
@@ -71,7 +70,7 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string, opts ...
 		storageSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/storage/skip", nil),
 		storageWasteMeter: metrics.GetOrRegisterMeter(prefix+"/storage/waste", nil),
 
-		options: opts,
+		workers: newWorkerPool(opts...),
 	}
 	return p
 }
@@ -104,7 +103,7 @@ func (p *triePrefetcher) close() {
 			}
 		}
 	}
-	p.releaseWorkerPools()
+	p.releaseWorkerPool()
 	// Clear out all fetchers (will crash on a second call, deliberate)
 	p.fetchers = nil
 }
@@ -128,8 +127,6 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 		storageDupMeter:   p.storageDupMeter,
 		storageSkipMeter:  p.storageSkipMeter,
 		storageWasteMeter: p.storageWasteMeter,
-
-		options: p.options,
 	}
 	// If the prefetcher is already a copy, duplicate the data
 	if p.fetches != nil {
@@ -158,7 +155,7 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 	id := p.trieID(owner, root)
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
-		fetcher = newSubfetcher(p.db, p.root, owner, root, addr, p.options...)
+		fetcher = newSubfetcher(p.db, p.root, owner, root, addr, withWorkerPool(p.workers))
 		p.fetchers[id] = fetcher
 	}
 	fetcher.schedule(keys)
@@ -240,7 +237,7 @@ type subfetcher struct {
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
 // particular root hash.
-func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash, addr common.Address, opts ...PrefetcherOption) *subfetcher {
+func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash, addr common.Address, opts ...subfetcherPoolOption) *subfetcher {
 	sf := &subfetcher{
 		db:    db,
 		state: state,
@@ -253,7 +250,7 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 		copy:  make(chan chan Trie),
 		seen:  make(map[string]struct{}),
 	}
-	options.As[prefetcherConfig](opts...).applyTo(sf)
+	sf.initPool(opts...)
 	go sf.loop()
 	return sf
 }
