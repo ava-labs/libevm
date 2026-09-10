@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install solc
-        uses: arr4n/setup-solc@v0.2.0
+        uses: arr4n/setup-solc@v0.3.0
         with:
           version: 0.8.28
 
