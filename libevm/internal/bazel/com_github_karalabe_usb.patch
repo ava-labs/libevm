@@ -1,0 +1,122 @@
+--- BUILD.bazel
++++ BUILD.bazel
+@@ -14,6 +14,12 @@
+         "usb_enabled.go",
+         "wchar.go",
+     ],
+     cgo = True,
++    cdeps = [
++        "//hidapi/hidapi",
++        "//hidapi/libusb",
++        "//hidapi/mac",
++        "//libusb/libusb",
++    ],
+     clinkopts = select({
+         "@io_bazel_rules_go//go/platform:darwin": [
+@@ -35,36 +41,37 @@
+             "-DDEFAULT_VISIBILITY=",
+             "-DOS_LINUX -D_GNU_SOURCE -DHAVE_SYS_TIME_H",
+             "-DPOLL_NFDS_TYPE=int",
+-            "-Ihidapi/hidapi",
+-            "-Ilibusb/libusb",
++            "-Iexternal/gazelle++go_deps+com_github_karalabe_usb/hidapi/hidapi",
++            "-Iexternal/gazelle++go_deps+com_github_karalabe_usb/libusb/libusb",
+         ],
+         "@io_bazel_rules_go//go/platform:darwin": [
+             "-DDEFAULT_VISIBILITY=",
+             "-DOS_DARWIN -DHAVE_SYS_TIME_H",
+             "-DPOLL_NFDS_TYPE=int",
+-            "-Ihidapi/hidapi",
+-            "-Ilibusb/libusb",
++            "-Iexternal/gazelle++go_deps+com_github_karalabe_usb/hidapi/hidapi",
++            "-Iexternal/gazelle++go_deps+com_github_karalabe_usb/hidapi/mac",
++            "-Iexternal/gazelle++go_deps+com_github_karalabe_usb/libusb/libusb",
+         ],
+         "@io_bazel_rules_go//go/platform:freebsd": [
+             "-DDEFAULT_VISIBILITY=",
+             "-DOS_FREEBSD",
+             "-DPOLL_NFDS_TYPE=int",
+-            "-Ihidapi/hidapi",
+-            "-Ilibusb/libusb",
++            "-Iexternal/gazelle++go_deps+com_github_karalabe_usb/hidapi/hidapi",
++            "-Iexternal/gazelle++go_deps+com_github_karalabe_usb/libusb/libusb",
+         ],
+         "@io_bazel_rules_go//go/platform:linux": [
+             "-DDEFAULT_VISIBILITY=",
+             "-DOS_LINUX -D_GNU_SOURCE -DHAVE_SYS_TIME_H",
+             "-DPOLL_NFDS_TYPE=int",
+-            "-Ihidapi/hidapi",
+-            "-Ilibusb/libusb",
++            "-Iexternal/gazelle++go_deps+com_github_karalabe_usb/hidapi/hidapi",
++            "-Iexternal/gazelle++go_deps+com_github_karalabe_usb/libusb/libusb",
+         ],
+         "@io_bazel_rules_go//go/platform:windows": [
+             "-DDEFAULT_VISIBILITY=",
+             "-DOS_WINDOWS",
+             "-DPOLL_NFDS_TYPE=int",
+-            "-Ihidapi/hidapi",
+-            "-Ilibusb/libusb",
++            "-Iexternal/gazelle++go_deps+com_github_karalabe_usb/hidapi/hidapi",
++            "-Iexternal/gazelle++go_deps+com_github_karalabe_usb/libusb/libusb",
+         ],
+         "//conditions:default": [],
+     }),
+
+
+--- hidapi/BUILD.bazel
++++ hidapi/BUILD.bazel
+@@ -0,0 +1,1 @@
++
+
+--- hidapi/hidapi/BUILD.bazel
++++ hidapi/hidapi/BUILD.bazel
+@@ -0,0 +1,8 @@
++cc_library(
++    name = "hidapi",
++    hdrs = glob([
++        "**/*.c",
++        "**/*.h",
++    ], allow_empty=True),
++    visibility = ["//:__subpackages__"],
++)
+
+--- hidapi/libusb/BUILD.bazel
++++ hidapi/libusb/BUILD.bazel
+@@ -0,0 +1,8 @@
++cc_library(
++    name = "libusb",
++    hdrs = glob([
++        "**/*.c",
++        "**/*.h",
++    ], allow_empty=True),
++    visibility = ["//:__subpackages__"],
++)
+
+--- hidapi/mac/BUILD.bazel
++++ hidapi/mac/BUILD.bazel
+@@ -0,0 +1,8 @@
++cc_library(
++    name = "mac",
++    hdrs = glob([
++        "**/*.c",
++        "**/*.h",
++    ], allow_empty=True),
++    visibility = ["//:__subpackages__"],
++)
+
+--- libusb/BUILD.bazel
++++ libusb/BUILD.bazel
+@@ -0,0 +1,1 @@
++
+
+--- libusb/libusb/BUILD.bazel
++++ libusb/libusb/BUILD.bazel
+@@ -0,0 +1,8 @@
++cc_library(
++    name = "libusb",
++    hdrs = glob([
++        "**/*.c",
++        "**/*.h",
++    ], allow_empty=True),
++    visibility = ["//:__subpackages__"],
++)

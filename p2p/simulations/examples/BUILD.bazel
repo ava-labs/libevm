@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "examples_lib",
+    srcs = ["ping-pong.go"],
+    importpath = "github.com/ava-labs/libevm/p2p/simulations/examples",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//log",
+        "//node",
+        "//p2p",
+        "//p2p/enode",
+        "//p2p/simulations",
+        "//p2p/simulations/adapters",
+    ],
+)
+
+go_binary(
+    name = "examples",
+    embed = [":examples_lib"],
+    visibility = ["//visibility:public"],
+)

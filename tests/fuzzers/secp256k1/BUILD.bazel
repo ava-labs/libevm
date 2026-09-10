@@ -1,0 +1,10 @@
+load("@rules_go//go:def.bzl", "go_test")
+
+go_test(
+    name = "secp256k1_test",
+    srcs = ["secp_test.go"],
+    deps = [
+        "//crypto/secp256k1",
+        "@com_github_btcsuite_btcd_btcec_v2//:btcec",
+    ],
+)

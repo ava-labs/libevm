@@ -1,0 +1,13 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "testutil",
+    srcs = ["utils.go"],
+    importpath = "github.com/ava-labs/libevm/trie/testutil",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//crypto",
+        "//trie/trienode",
+    ],
+)

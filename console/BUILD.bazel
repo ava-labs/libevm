@@ -1,0 +1,46 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "console",
+    srcs = [
+        "bridge.go",
+        "console.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/console",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//accounts/scwallet",
+        "//accounts/usbwallet",
+        "//common/hexutil",
+        "//console/prompt",
+        "//internal/jsre",
+        "//internal/jsre/deps",
+        "//internal/web3ext",
+        "//log",
+        "//rpc",
+        "@com_github_dop251_goja//:goja",
+        "@com_github_mattn_go_colorable//:go-colorable",
+        "@com_github_peterh_liner//:liner",
+    ],
+)
+
+go_test(
+    name = "console_test",
+    srcs = [
+        "bridge_test.go",
+        "console_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":console"],
+    deps = [
+        "//common",
+        "//console/prompt",
+        "//core",
+        "//eth",
+        "//eth/ethconfig",
+        "//internal/jsre",
+        "//miner",
+        "//node",
+        "@com_github_dop251_goja//:goja",
+    ],
+)

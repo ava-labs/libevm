@@ -1,0 +1,16 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "internal",
+    srcs = ["sampledata.go"],
+    importpath = "github.com/ava-labs/libevm/metrics/internal",
+    visibility = ["//metrics:__subpackages__"],
+    deps = ["//metrics"],
+)
+
+go_test(
+    name = "internal_test",
+    srcs = ["sampledata_test.go"],
+    embed = [":internal"],
+    deps = ["//metrics"],
+)

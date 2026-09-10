@@ -1,0 +1,66 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "devp2p_lib",
+    srcs = [
+        "crawl.go",
+        "discv4cmd.go",
+        "discv5cmd.go",
+        "dns_cloudflare.go",
+        "dns_route53.go",
+        "dnscmd.go",
+        "enrcmd.go",
+        "keycmd.go",
+        "main.go",
+        "nodeset.go",
+        "nodesetcmd.go",
+        "rlpxcmd.go",
+        "runtest.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/cmd/devp2p",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//accounts/keystore",
+        "//cmd/devp2p/internal/ethtest",
+        "//cmd/devp2p/internal/v4test",
+        "//cmd/devp2p/internal/v5test",
+        "//common",
+        "//console/prompt",
+        "//core",
+        "//core/forkid",
+        "//crypto",
+        "//internal/debug",
+        "//internal/flags",
+        "//internal/utesting",
+        "//log",
+        "//p2p",
+        "//p2p/discover",
+        "//p2p/dnsdisc",
+        "//p2p/enode",
+        "//p2p/enr",
+        "//p2p/rlpx",
+        "//params",
+        "//rlp",
+        "@com_github_aws_aws_sdk_go_v2//aws",
+        "@com_github_aws_aws_sdk_go_v2_config//:config",
+        "@com_github_aws_aws_sdk_go_v2_credentials//:credentials",
+        "@com_github_aws_aws_sdk_go_v2_service_route53//:route53",
+        "@com_github_aws_aws_sdk_go_v2_service_route53//types",
+        "@com_github_cloudflare_cloudflare_go//:cloudflare-go",
+        "@com_github_urfave_cli_v2//:cli",
+        "@org_golang_x_exp//slices",
+    ],
+)
+
+go_binary(
+    name = "devp2p",
+    embed = [":devp2p_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "devp2p_test",
+    srcs = ["dns_route53_test.go"],
+    embed = [":devp2p_lib"],
+    deps = ["@com_github_aws_aws_sdk_go_v2_service_route53//types"],
+)

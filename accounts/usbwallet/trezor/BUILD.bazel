@@ -1,0 +1,18 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "trezor",
+    srcs = [
+        "messages.pb.go",
+        "messages-common.pb.go",
+        "messages-ethereum.pb.go",
+        "messages-management.pb.go",
+        "trezor.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/accounts/usbwallet/trezor",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_golang_protobuf//proto",
+        "@com_github_golang_protobuf//protoc-gen-go/descriptor",
+    ],
+)

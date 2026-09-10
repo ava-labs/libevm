@@ -1,0 +1,9 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "cmdtest",
+    srcs = ["test_cmd.go"],
+    importpath = "github.com/ava-labs/libevm/internal/cmdtest",
+    visibility = ["//:__subpackages__"],
+    deps = ["//internal/reexec"],
+)

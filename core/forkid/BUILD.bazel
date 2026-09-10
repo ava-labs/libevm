@@ -1,0 +1,27 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "forkid",
+    srcs = ["forkid.go"],
+    importpath = "github.com/ava-labs/libevm/core/forkid",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core/types",
+        "//log",
+        "//params",
+        "@org_golang_x_exp//slices",
+    ],
+)
+
+go_test(
+    name = "forkid_test",
+    srcs = ["forkid_test.go"],
+    embed = [":forkid"],
+    deps = [
+        "//common",
+        "//core",
+        "//core/types",
+        "//params",
+        "//rlp",
+    ],
+)

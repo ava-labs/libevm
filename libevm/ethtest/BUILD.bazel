@@ -1,0 +1,23 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "ethtest",
+    srcs = [
+        "evm.go",
+        "rand.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/libevm/ethtest",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//core",
+        "//core/rawdb",
+        "//core/state",
+        "//core/types",
+        "//core/vm",
+        "//params",
+        "@com_github_holiman_uint256//:uint256",
+        "@com_github_stretchr_testify//require",
+        "@org_golang_x_exp//rand",
+    ],
+)

@@ -1,0 +1,32 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "rules",
+    srcs = ["rules.go"],
+    importpath = "github.com/ava-labs/libevm/signer/rules",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//internal/ethapi",
+        "//internal/jsre/deps",
+        "//log",
+        "//signer/core",
+        "//signer/storage",
+        "@com_github_dop251_goja//:goja",
+    ],
+)
+
+go_test(
+    name = "rules_test",
+    srcs = ["rules_test.go"],
+    embed = [":rules"],
+    deps = [
+        "//accounts",
+        "//common",
+        "//common/hexutil",
+        "//core/types",
+        "//internal/ethapi",
+        "//signer/core",
+        "//signer/core/apitypes",
+        "//signer/storage",
+    ],
+)

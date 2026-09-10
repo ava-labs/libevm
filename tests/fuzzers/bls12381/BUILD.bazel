@@ -1,0 +1,28 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "bls12381",
+    srcs = [
+        "bls12381_fuzz.go",
+        "precompile_fuzzer.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/tests/fuzzers/bls12381",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//core/vm",
+        "//crypto/bls12381",
+        "@com_github_consensys_gnark_crypto//ecc",
+        "@com_github_consensys_gnark_crypto//ecc/bls12-381",
+        "@com_github_consensys_gnark_crypto//ecc/bls12-381/fp",
+        "@com_github_consensys_gnark_crypto//ecc/bls12-381/fr",
+        "@com_github_supranational_blst//bindings/go",
+    ],
+)
+
+go_test(
+    name = "bls12381_test",
+    srcs = ["bls12381_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":bls12381"],
+)

@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "dbtest",
+    srcs = ["testsuite.go"],
+    importpath = "github.com/ava-labs/libevm/ethdb/dbtest",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//ethdb",
+        "@org_golang_x_exp//slices",
+    ],
+)
