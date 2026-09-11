@@ -18,6 +18,7 @@ package testprecompile
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -231,7 +232,8 @@ func (contract) HashPacked(env vm.PrecompileEnvironment, x *big.Int, y [2]byte, 
 }
 
 func (contract) RevertWith(env vm.PrecompileEnvironment, x []byte) error {
-	return vm.RevertError(x)
+	// Wrapping ensures that the implementation doesn't use type switching.
+	return fmt.Errorf("%w", vm.RevertError(x))
 }
 
 func (contract) Self(env vm.PrecompileEnvironment) (common.Address, error) {
