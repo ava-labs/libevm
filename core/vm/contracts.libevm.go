@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -182,6 +183,9 @@ func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, e
 
 	ret, err = sp(env, slices.Clone(input))
 	args.gasRemaining = env.Gas()
+	if r := new(RevertError); errors.As(err, r) {
+		return r.Bytes(), r.Unwrap()
+	}
 	return ret, err
 }
 
@@ -332,10 +336,19 @@ var (
 	}
 )
 
-// A RevertError is an error that couples [ErrExecutionReverted] with the EVM
-// return buffer. Although not used in vanilla geth, it can be returned by a
-// libevm `precompilegen` method implementation to circumvent regular argument
-// packing.
+// A RevertError couples [ErrExecutionReverted] with the EVM return buffer; it
+// is not used by vanilla geth.
+//
+// It exists for a libevm `precompilegen` method, whose return value is the
+// typed, ABI-packed output and thus has no channel for a raw revert buffer.
+// Returning a RevertError lets the method revert with raw bytes, bypassing the
+// regular argument packing.
+//
+// Although any [PrecompiledStatefulContract] MAY return a RevertError, it
+// already returns a ([]byte, error) pair so using a RevertError is both
+// redundant and ambiguous: the returned []byte is discarded and replaced by
+// [RevertError.Bytes]. Such contracts SHOULD instead return the raw buffer with
+// a plain [ErrExecutionReverted].
 type RevertError []byte
 
 // Error is equivalent to the respective method on [ErrExecutionReverted].
