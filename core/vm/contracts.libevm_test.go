@@ -946,31 +946,49 @@ func TestStateMutability(t *testing.T) {
 
 	const precompileReturn = "precompile executed"
 	precompile := vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
-		tests := []struct {
+		type test struct {
 			name string
 			env  vm.PrecompileEnvironment
 			want vm.StateMutability
-		}{
-			{
-				name: "incoming argument",
-				env:  env,
-				want: vm.MutableState,
-			},
-			{
-				name: "AsReadOnly()",
-				env:  env.AsReadOnly(),
-				want: vm.ReadOnlyState,
-			},
-			{
-				name: "AsPure()",
-				env:  env.AsPure(),
-				want: vm.Pure,
-			},
-			{
-				name: "AsPure().AsReadOnly() is still pure",
-				env:  env.AsPure().AsReadOnly(),
-				want: vm.Pure,
-			},
+		}
+		var tests []test
+
+		incomingCallType := env.IncomingCallType()
+
+		switch incomingCallType {
+		case vm.Call:
+			tests = []test{
+				{
+					name: "incoming argument",
+					env:  env,
+					want: vm.MutableState,
+				},
+				{
+					name: "AsReadOnly()",
+					env:  env.AsReadOnly(),
+					want: vm.ReadOnlyState,
+				},
+				{
+					name: "AsPure()",
+					env:  env.AsPure(),
+					want: vm.Pure,
+				},
+				{
+					name: "AsPure().AsReadOnly() is still pure",
+					env:  env.AsPure().AsReadOnly(),
+					want: vm.Pure,
+				},
+			}
+		case vm.StaticCall:
+			tests = []test{
+				{
+					name: "incoming argument",
+					env:  env,
+					want: vm.ReadOnlyState,
+				},
+			}
+		default:
+			return nil, fmt.Errorf("BAD TEST SETUP: no cases for precompile %T == %[1]v", incomingCallType)
 		}
 
 		for _, tt := range tests {
@@ -998,7 +1016,7 @@ func TestStateMutability(t *testing.T) {
 					// mutability.
 					assert.Equal(t, chainID, env.ChainConfig().ChainID, "Chain ID preserved")
 					assert.Equalf(t, precompileAddr, env.Addresses().EVMSemantic.Self, "%T preserved", env.Addresses())
-					assert.Equalf(t, vm.Call, env.IncomingCallType(), "%T preserved", env.IncomingCallType())
+					assert.Equalf(t, incomingCallType, env.IncomingCallType(), "%T preserved", env.IncomingCallType())
 				})
 			})
 		}
@@ -1016,8 +1034,20 @@ func TestStateMutability(t *testing.T) {
 	_, evm := ethtest.NewZeroEVM(t, ethtest.WithChainConfig(&params.ChainConfig{
 		ChainID: chainID,
 	}))
-	got, _, err := evm.Call(vm.AccountRef{}, precompileAddr, nil, 0, uint256.NewInt(0))
-	if got, want := string(got), precompileReturn; err != nil || got != want {
-		t.Errorf("%T.Call([precompile]) got {%q, %v}; want {%q, nil}", evm, got, err, want)
+	tests := map[string]func() ([]byte, error){
+		"Call": func() (ret []byte, err error) {
+			ret, _, err = evm.Call(vm.AccountRef{}, precompileAddr, nil, 0, uint256.NewInt(0))
+			return
+		},
+		"StaticCall": func() (ret []byte, err error) {
+			ret, _, err = evm.StaticCall(vm.AccountRef{}, precompileAddr, nil, 0)
+			return
+		},
+	}
+	for typ, fn := range tests {
+		got, err := fn()
+		if got, want := string(got), precompileReturn; err != nil || got != want {
+			t.Errorf("%T.%s([precompile]) got {%q, %v}; want {%q, nil}", evm, typ, got, err, want)
+		}
 	}
 }
