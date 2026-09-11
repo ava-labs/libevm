@@ -143,11 +143,24 @@ func (e *environment) Call(addr common.Address, input []byte, gas uint64, value 
 	return e.callContract(Call, addr, input, gas, value, opts...)
 }
 
-var errPureFunctionMakeCall = errors.New("contract call from pure function")
+var (
+	errPureFunctionMakeCall          = errors.New("contract call from pure function")
+	errViewFunctionMakeNonStaticCall = errors.New("non-static contract call from view function")
+)
 
 func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {
-	if e.StateMutability() == Pure {
+	switch {
+	case e.pure:
 		return nil, errPureFunctionMakeCall
+	case e.view && typ != StaticCall:
+		// We condition this on [environment.view] instead of
+		// [environment.StateMutability] being [ReadOnlyState] because the
+		// latter would be too restrictive. The `view` and `pure` flags are
+		// analogous to the equivalent Solidity concepts, while
+		// [StateMutability] also considers [EVMInterpreter.readOnly], which
+		// [opCall] allows when there is zero value transfer. The same rationale
+		// holds for the custom error instead of [ErrWriteProtection].
+		return nil, errViewFunctionMakeNonStaticCall
 	}
 
 	var caller ContractRef = e.self
