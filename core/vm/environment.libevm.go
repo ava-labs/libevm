@@ -99,18 +99,18 @@ func (e *environment) StateMutability() StateMutability {
 	}
 }
 
-func (e *environment) ReadOnlyState() libevm.StateReader {
+func (e *environment) ReadOnlyState() (libevm.StateReader, bool) {
 	if e.pure {
-		return nil
+		return nil, false
 	}
-	return e.evm.StateDB
+	return e.evm.StateDB, true
 }
 
-func (e *environment) StateDB() StateDB {
+func (e *environment) StateDB() (StateDB, error) {
 	if e.StateMutability() != MutableState {
-		return nil
+		return nil, ErrWriteProtection
 	}
-	return e.evm.StateDB
+	return e.evm.StateDB, nil
 }
 
 func (e *environment) Addresses() *libevm.AddressContext {

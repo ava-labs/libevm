@@ -191,6 +191,16 @@ func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, e
 // Instead of receiving and returning gas arguments, stateful precompiles use
 // the respective methods on [PrecompileEnvironment]. If a call to UseGas()
 // returns false, a stateful precompile SHOULD return [ErrOutOfGas].
+//
+// Failures that are expected to occur in production SHOULD return a raw,
+// non-wrapped [ErrExecutionReverted], while failures that need to be detected in
+// development MAY return an arbitrary error. The former will bubble up through
+// execution contexts as a revert while the latter will consume all gas. This
+// usage mirrors Solidity's `require` and `assert` respectively; see [Solidity
+// docs] for more information.
+//
+// [Solidity docs]:
+// https://docs.soliditylang.org/en/v0.8.37/control-structures.html#panic-via-assert-and-error-via-require
 type PrecompiledStatefulContract func(env PrecompileEnvironment, input []byte) (ret []byte, err error)
 
 // NewStatefulPrecompile constructs a new PrecompiledContract that can be used
@@ -224,11 +234,15 @@ func (p statefulPrecompile) Run([]byte) ([]byte, error) {
 type PrecompileEnvironment interface {
 	ChainConfig() *params.ChainConfig
 	Rules() params.Rules
-	// StateDB will be non-nil i.f.f StateMutability() returns [MutableState].
-	StateDB() StateDB
-	// ReadOnlyState will be non-nil i.f.f. StateMutability() does not return
-	// [Pure].
-	ReadOnlyState() libevm.StateReader
+	// StateDB returns a non-nil [StateDB] i.f.f StateMutability() returns
+	// [MutableState], otherwise it returns [ErrWriteProtection].
+	StateDB() (StateDB, error)
+	// ReadOnlyState returns a non-nil [libevm.StateReader] i.f.f.
+	// StateMutability() does not return [Pure]. The boolean indicates whether
+	// the reader is non-nil and acts only to nudge the call site against
+	// nil-pointer usage.
+
+	ReadOnlyState() (libevm.StateReader, bool)
 
 	// StateMutability can infer [MutableState] vs [ReadOnlyState] based on EVM
 	// context, but [Pure] is a Solidity concept that is enforced by user code.

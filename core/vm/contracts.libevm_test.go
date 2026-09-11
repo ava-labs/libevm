@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/arr4n/shed/testerr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
@@ -163,10 +164,14 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			return nil, 0, err
 		}
 
+		sdb, ok := env.ReadOnlyState()
+		if !ok {
+			return nil, 0, fmt.Errorf("%T.ReadOnlyState() returned false", env)
+		}
 		out := &statefulPrecompileOutput{
 			ChainID:          env.ChainConfig().ChainID,
 			Addresses:        env.Addresses(),
-			StateValue:       env.ReadOnlyState().GetState(precompile, slot),
+			StateValue:       sdb.GetState(precompile, slot),
 			CallValue:        env.Value(),
 			Mutability:       env.StateMutability(),
 			BlockNumber:      env.BlockNumber(),
@@ -972,9 +977,19 @@ func TestStateMutability(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				env := tt.env // deliberately shadow the incoming arg
 				t.Run("mutability_and_access", func(t *testing.T) {
-					assert.Equal(t, tt.want, env.StateMutability(), "env.StateMutability()")
-					assert.Equal(t, env.StateDB() != nil, tt.want == vm.MutableState, "env.StateDB() != nil i.f.f. MutableState")
-					assert.Equal(t, env.ReadOnlyState() != nil, tt.want != vm.Pure, "env.ReadOnlyState() != nil i.f.f !Pure")
+					require.Equal(t, tt.want, env.StateMutability(), "env.StateMutability()")
+
+					_, err := env.StateDB()
+					var want testerr.Want
+					if tt.want != vm.MutableState {
+						want = testerr.Equals(vm.ErrWriteProtection)
+					}
+					if diff := testerr.Diff(err, want); diff != "" {
+						t.Errorf("env.StateDB() %s", diff)
+					}
+
+					_, ok := env.ReadOnlyState()
+					assert.Equal(t, ok, tt.want != vm.Pure, "env.ReadOnlyState() ok i.f.f !Pure (%v)", tt.want)
 				})
 
 				t.Run("environment_unmodified", func(t *testing.T) {

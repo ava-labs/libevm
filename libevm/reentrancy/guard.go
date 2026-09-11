@@ -46,7 +46,10 @@ func Guard(env vm.PrecompileEnvironment, key []byte) error {
 	self := env.Addresses().EVMSemantic.Self
 	slot := crypto.Keccak256Hash(slotPreimagePrefix, key)
 
-	sdb := env.StateDB()
+	sdb, err := env.StateDB()
+	if err != nil {
+		return err
+	}
 	if sdb.GetTransientState(self, slot) != (common.Hash{}) {
 		return vm.ErrExecutionReverted
 	}

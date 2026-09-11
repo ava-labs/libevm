@@ -101,8 +101,8 @@ func (*envStub) StateMutability() vm.StateMutability {
 	return vm.MutableState
 }
 
-func (s *envStub) StateDB() vm.StateDB {
-	return s.db
+func (s *envStub) StateDB() (vm.StateDB, error) {
+	return s.db, nil
 }
 
 func TestGuard(t *testing.T) {

@@ -241,11 +241,13 @@ func (contract) Self(env vm.PrecompileEnvironment) (common.Address, error) {
 }
 
 func canReadState(env vm.PrecompileEnvironment) bool {
-	return env.ReadOnlyState() != nil
+	_, ok := env.ReadOnlyState()
+	return ok
 }
 
 func canWriteState(env vm.PrecompileEnvironment) bool {
-	return env.StateDB() != nil
+	_, err := env.StateDB()
+	return err == nil
 }
 
 func (contract) View(env vm.PrecompileEnvironment) (bool, bool, error) {
