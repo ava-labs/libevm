@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/arr4n/shed/testerr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
@@ -111,7 +112,7 @@ type statefulPrecompileOutput struct {
 	Addresses               *libevm.AddressContext
 	StateValue              common.Hash
 	CallValue               *uint256.Int
-	ReadOnly                bool
+	Mutability              vm.StateMutability
 	BlockNumber, Difficulty *big.Int
 	BlockTime               uint64
 	Input                   []byte
@@ -158,20 +159,21 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	gasCost := rng.Uint64n(gasLimit)
 
 	run := func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) ([]byte, uint64, error) {
-		if got, want := env.StateDB() != nil, !env.ReadOnly(); got != want {
-			return nil, 0, fmt.Errorf("PrecompileEnvironment().StateDB() must be non-nil i.f.f. not read-only; got non-nil? %t; want %t", got, want)
-		}
 		hdr, err := env.BlockHeader()
 		if err != nil {
 			return nil, 0, err
 		}
 
+		sdb, ok := env.ReadOnlyState()
+		if !ok {
+			return nil, 0, fmt.Errorf("%T.ReadOnlyState() returned false", env)
+		}
 		out := &statefulPrecompileOutput{
 			ChainID:          env.ChainConfig().ChainID,
 			Addresses:        env.Addresses(),
-			StateValue:       env.ReadOnlyState().GetState(precompile, slot),
+			StateValue:       sdb.GetState(precompile, slot),
 			CallValue:        env.Value(),
-			ReadOnly:         env.ReadOnly(),
+			Mutability:       env.StateMutability(),
 			BlockNumber:      env.BlockNumber(),
 			BlockTime:        env.BlockTime(),
 			Difficulty:       hdr.Difficulty,
@@ -233,8 +235,8 @@ func TestNewStatefulPrecompile(t *testing.T) {
 		wantCallValue *uint256.Int
 		// Note that this only covers evm.readOnly being true because of the
 		// precompile's call. See TestInheritReadOnly for alternate case.
-		wantReadOnly bool
-		wantCallType vm.CallType
+		wantMutability vm.StateMutability
+		wantCallType   vm.CallType
 	}{
 		{
 			name: "EVM.Call()",
@@ -246,9 +248,9 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				EVMSemantic: rawAddresses,
 				Raw:         &rawAddresses,
 			},
-			wantReadOnly:  false,
-			wantCallValue: callPrecompileValue,
-			wantCallType:  vm.Call,
+			wantMutability: vm.MutableState,
+			wantCallValue:  callPrecompileValue,
+			wantCallType:   vm.Call,
 		},
 		{
 			name: "EVM.CallCode()",
@@ -263,9 +265,9 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				},
 				Raw: &rawAddresses,
 			},
-			wantReadOnly:  false,
-			wantCallValue: callPrecompileValue,
-			wantCallType:  vm.CallCode,
+			wantMutability: vm.MutableState,
+			wantCallValue:  callPrecompileValue,
+			wantCallType:   vm.CallCode,
 		},
 		{
 			name: "EVM.DelegateCall()",
@@ -280,9 +282,9 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				},
 				Raw: &rawAddresses,
 			},
-			wantReadOnly:  false,
-			wantCallValue: callCallerValue, // Important difference from [vm.EVM.Call]
-			wantCallType:  vm.DelegateCall,
+			wantMutability: vm.MutableState,
+			wantCallValue:  callCallerValue, // Important difference from [vm.EVM.Call]
+			wantCallType:   vm.DelegateCall,
 		},
 		{
 			name: "EVM.StaticCall()",
@@ -294,9 +296,9 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				EVMSemantic: rawAddresses,
 				Raw:         &rawAddresses,
 			},
-			wantReadOnly:  true,
-			wantCallValue: uint256.NewInt(0),
-			wantCallType:  vm.StaticCall,
+			wantMutability: vm.ReadOnlyState,
+			wantCallValue:  uint256.NewInt(0),
+			wantCallType:   vm.StaticCall,
 		},
 	}
 
@@ -307,7 +309,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				Addresses:        tt.wantAddresses,
 				StateValue:       stateValue,
 				CallValue:        tt.wantCallValue,
-				ReadOnly:         tt.wantReadOnly,
+				Mutability:       tt.wantMutability,
 				BlockNumber:      header.Number,
 				BlockTime:        header.Time,
 				Difficulty:       header.Difficulty,
@@ -430,7 +432,7 @@ func TestInheritReadOnly(t *testing.T) {
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
 			precompile: vm.NewStatefulPrecompile(
 				func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
-					if env.ReadOnly() {
+					if env.StateMutability() != vm.MutableState {
 						return []byte{ifReadOnly}, nil
 					}
 					return []byte{ifNotReadOnly}, nil
@@ -679,9 +681,9 @@ func TestPrecompileMakeCall(t *testing.T) {
 			}),
 			dest: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
 				out := &statefulPrecompileOutput{
-					Addresses: env.Addresses(),
-					ReadOnly:  env.ReadOnly(),
-					Input:     input, // expected to be callData
+					Addresses:  env.Addresses(),
+					Mutability: env.StateMutability(),
+					Input:      input, // expected to be callData
 				}
 				return out.Bytes(), nil
 			}),
@@ -712,7 +714,8 @@ func TestPrecompileMakeCall(t *testing.T) {
 						Self:   dest,
 					},
 				},
-				Input: precompileCallData,
+				Input:      precompileCallData,
+				Mutability: vm.MutableState,
 			},
 		},
 		{
@@ -726,7 +729,8 @@ func TestPrecompileMakeCall(t *testing.T) {
 						Self:   dest,
 					},
 				},
-				Input: precompileCallData,
+				Input:      precompileCallData,
+				Mutability: vm.MutableState,
 			},
 		},
 		{
@@ -739,7 +743,8 @@ func TestPrecompileMakeCall(t *testing.T) {
 						Self:   dest,
 					},
 				},
-				Input: precompileCallData,
+				Input:      precompileCallData,
+				Mutability: vm.MutableState,
 			},
 		},
 		{
@@ -753,7 +758,8 @@ func TestPrecompileMakeCall(t *testing.T) {
 						Self:   dest,
 					},
 				},
-				Input: precompileCallData,
+				Input:      precompileCallData,
+				Mutability: vm.MutableState,
 			},
 		},
 		{
@@ -766,7 +772,8 @@ func TestPrecompileMakeCall(t *testing.T) {
 						Self:   dest,
 					},
 				},
-				Input: precompileCallData,
+				Input:      precompileCallData,
+				Mutability: vm.MutableState,
 			},
 		},
 		{
@@ -780,7 +787,8 @@ func TestPrecompileMakeCall(t *testing.T) {
 						Self:   dest,
 					},
 				},
-				Input: precompileCallData,
+				Input:      precompileCallData,
+				Mutability: vm.MutableState,
 			},
 		},
 		{
@@ -798,7 +806,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 				// (non-static) CALL, the read-only state is inherited. Yes,
 				// this is _another_ way to get a read-only state, different to
 				// the other tests.
-				ReadOnly: true,
+				Mutability: vm.ReadOnlyState,
 			},
 		},
 		{
@@ -812,8 +820,8 @@ func TestPrecompileMakeCall(t *testing.T) {
 						Self:   dest,
 					},
 				},
-				Input:    precompileCallData,
-				ReadOnly: true,
+				Input:      precompileCallData,
+				Mutability: vm.ReadOnlyState,
 			},
 		},
 	}
@@ -929,4 +937,123 @@ func TestPrecompileCallWithCallTracer(t *testing.T) {
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("%q tracer diff (-want +got):\n%s", tracerName, diff)
 	}
+}
+
+func TestStateMutability(t *testing.T) {
+	rng := ethtest.NewPseudoRand(0)
+	precompileAddr := rng.Address()
+	chainID := rng.BigUint64()
+
+	const precompileReturn = "precompile executed"
+	precompile := vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
+		type test struct {
+			name string
+			env  vm.PrecompileEnvironment
+			want vm.StateMutability
+		}
+		var tests []test
+
+		incomingCallType := env.IncomingCallType()
+
+		switch incomingCallType {
+		case vm.Call:
+			tests = []test{
+				{
+					name: "incoming argument",
+					env:  env,
+					want: vm.MutableState,
+				},
+				{
+					name: "AsReadOnly()",
+					env:  env.AsReadOnly(),
+					want: vm.ReadOnlyState,
+				},
+				{
+					name: "AsPure()",
+					env:  env.AsPure(),
+					want: vm.Pure,
+				},
+				{
+					name: "AsPure().AsReadOnly() is still pure",
+					env:  env.AsPure().AsReadOnly(),
+					want: vm.Pure,
+				},
+			}
+		case vm.StaticCall:
+			tests = []test{
+				{
+					name: "incoming argument",
+					env:  env,
+					want: vm.ReadOnlyState,
+				},
+			}
+		default:
+			return nil, fmt.Errorf("BAD TEST SETUP: no cases for precompile %T == %[1]v", incomingCallType)
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				env := tt.env // deliberately shadow the incoming arg
+				t.Run("mutability_and_access", func(t *testing.T) {
+					require.Equal(t, tt.want, env.StateMutability(), "env.StateMutability()")
+
+					_, err := env.StateDB()
+					var want testerr.Want
+					if tt.want != vm.MutableState {
+						want = testerr.Equals(vm.ErrWriteProtection)
+					}
+					if diff := testerr.Diff(err, want); diff != "" {
+						t.Errorf("env.StateDB() %s", diff)
+					}
+
+					_, ok := env.ReadOnlyState()
+					assert.Equal(t, ok, tt.want != vm.Pure, "env.ReadOnlyState() ok i.f.f !Pure (%v)", tt.want)
+				})
+
+				t.Run("environment_unmodified", func(t *testing.T) {
+					// Each of these demonstrate that the underlying
+					// copy of the environment propagates everything but
+					// mutability.
+					assert.Equal(t, chainID, env.ChainConfig().ChainID, "Chain ID preserved")
+					assert.Equalf(t, precompileAddr, env.Addresses().EVMSemantic.Self, "%T preserved", env.Addresses())
+					assert.Equalf(t, incomingCallType, env.IncomingCallType(), "%T preserved", env.IncomingCallType())
+				})
+			})
+		}
+
+		return []byte(precompileReturn), nil
+	})
+
+	hooks := &hookstest.Stub{
+		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+			precompileAddr: precompile,
+		},
+	}
+	hooks.Register(t)
+
+	_, evm := ethtest.NewZeroEVM(t, ethtest.WithChainConfig(&params.ChainConfig{
+		ChainID: chainID,
+	}))
+	tests := map[string]func() ([]byte, error){
+		"Call": func() (ret []byte, err error) {
+			ret, _, err = evm.Call(vm.AccountRef{}, precompileAddr, nil, 0, uint256.NewInt(0))
+			return
+		},
+		"StaticCall": func() (ret []byte, err error) {
+			ret, _, err = evm.StaticCall(vm.AccountRef{}, precompileAddr, nil, 0)
+			return
+		},
+	}
+	for typ, fn := range tests {
+		got, err := fn()
+		if got, want := string(got), precompileReturn; err != nil || got != want {
+			t.Errorf("%T.%s([precompile]) got {%q, %v}; want {%q, nil}", evm, typ, got, err, want)
+		}
+	}
+}
+
+func TestRevertErrorIs(t *testing.T) {
+	err := vm.RevertError{}
+	target := vm.ErrExecutionReverted
+	require.Truef(t, errors.Is(err, target), "errors.Is(%T, %v)", err, target)
 }

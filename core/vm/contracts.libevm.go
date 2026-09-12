@@ -17,8 +17,10 @@
 package vm
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/holiman/uint256"
 	"golang.org/x/exp/slog"
@@ -94,10 +96,10 @@ type evmCallArgs struct {
 type CallType OpCode
 
 const (
-	Call         = CallType(CALL)
-	CallCode     = CallType(CALLCODE)
-	DelegateCall = CallType(DELEGATECALL)
-	StaticCall   = CallType(STATICCALL)
+	Call         CallType = CallType(CALL)
+	CallCode     CallType = CallType(CALLCODE)
+	DelegateCall CallType = CallType(DELEGATECALL)
+	StaticCall   CallType = CallType(STATICCALL)
 )
 
 func (t CallType) isValid() bool {
@@ -131,6 +133,32 @@ func (t CallType) OpCode() OpCode {
 	return INVALID
 }
 
+// StateMutability describes the available state access.
+type StateMutability uint
+
+const (
+	// Pure is a Solidity concept disallowing all access, read or write, to
+	// state.
+	Pure StateMutability = iota + 1
+	// ReadOnlyState is equivalent to Solidity's "view".
+	ReadOnlyState
+	// MutableState can be both read from and written to.
+	MutableState
+)
+
+// String returns a human-readable representation of the StateMutability.
+func (m StateMutability) String() string {
+	switch m {
+	case MutableState:
+		return "mutable"
+	case ReadOnlyState:
+		return "read-only"
+	case Pure:
+		return "no state access"
+	}
+	return fmt.Sprintf("unknown %T(%[1]d)", m)
+}
+
 // run runs the [PrecompiledContract], differentiating between stateful and
 // regular types, updating `args.gasRemaining` in the stateful case.
 func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, err error) {
@@ -153,8 +181,11 @@ func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, e
 		defer func() { in.readOnly = false }()
 	}
 
-	ret, err = sp(env, input)
+	ret, err = sp(env, slices.Clone(input))
 	args.gasRemaining = env.Gas()
+	if r := new(RevertError); errors.As(err, r) {
+		return r.Bytes(), r.Unwrap()
+	}
 	return ret, err
 }
 
@@ -164,6 +195,16 @@ func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, e
 // Instead of receiving and returning gas arguments, stateful precompiles use
 // the respective methods on [PrecompileEnvironment]. If a call to UseGas()
 // returns false, a stateful precompile SHOULD return [ErrOutOfGas].
+//
+// Failures that are expected to occur in production SHOULD return a raw,
+// non-wrapped [ErrExecutionReverted], while failures that need to be detected in
+// development MAY return an arbitrary error. The former will bubble up through
+// execution contexts as a revert while the latter will consume all gas. This
+// usage mirrors Solidity's `require` and `assert` respectively; see [Solidity
+// docs] for more information.
+//
+// [Solidity docs]:
+// https://docs.soliditylang.org/en/v0.8.37/control-structures.html#panic-via-assert-and-error-via-require
 type PrecompiledStatefulContract func(env PrecompileEnvironment, input []byte) (ret []byte, err error)
 
 // NewStatefulPrecompile constructs a new PrecompiledContract that can be used
@@ -197,14 +238,32 @@ func (p statefulPrecompile) Run([]byte) ([]byte, error) {
 type PrecompileEnvironment interface {
 	ChainConfig() *params.ChainConfig
 	Rules() params.Rules
-	// StateDB will be non-nil i.f.f !ReadOnly().
-	StateDB() StateDB
-	// ReadOnlyState will always be non-nil.
-	ReadOnlyState() libevm.StateReader
+	// StateDB returns a non-nil [StateDB] i.f.f StateMutability() returns
+	// [MutableState], otherwise it returns [ErrWriteProtection].
+	StateDB() (StateDB, error)
+	// ReadOnlyState returns a non-nil [libevm.StateReader] i.f.f.
+	// StateMutability() does not return [Pure]. The boolean indicates whether
+	// the reader is non-nil and acts only to nudge the call site against
+	// nil-pointer usage.
+
+	ReadOnlyState() (libevm.StateReader, bool)
+
+	// StateMutability can infer [MutableState] vs [ReadOnlyState] based on EVM
+	// context, but [Pure] is a Solidity concept that is enforced by user code.
+	StateMutability() StateMutability
+	// AsReadOnly returns a copy of the current environment for which
+	// StateMutability() is at most [ReadOnlyState]; i.e. if mutability is
+	// already limited to [Pure], AsReadOnly() will not expand access. It can be
+	// used as a guard against accidental writes when a read-only function is
+	// invoked with EVM call() instead of staticcall().
+	AsReadOnly() PrecompileEnvironment
+	// AsPure returns a copy of the current environment that has no access to
+	// state; i.e. StateMutability() returns [Pure]. All calls to both StateDB()
+	// and ReadOnlyState() will return nil.
+	AsPure() PrecompileEnvironment
 
 	IncomingCallType() CallType
 	Addresses() *libevm.AddressContext
-	ReadOnly() bool
 	// Equivalent to respective methods on [Contract].
 	Gas() uint64
 	UseGas(uint64) (hasEnoughGas bool)
@@ -276,3 +335,29 @@ var (
 		(*EVM)(nil).StaticCall,
 	}
 )
+
+// A RevertError couples [ErrExecutionReverted] with the EVM return buffer; it
+// is not used by vanilla geth.
+//
+// It exists for a libevm `precompilegen` method, whose return value is the
+// typed, ABI-packed output and thus has no channel for a raw revert buffer.
+// Returning a RevertError lets the method revert with raw bytes, bypassing the
+// regular argument packing.
+//
+// Although any [PrecompiledStatefulContract] MAY return a RevertError, it
+// already returns a ([]byte, error) pair so using a RevertError is both
+// redundant and ambiguous: the returned []byte is discarded and replaced by
+// [RevertError.Bytes]. Such contracts SHOULD instead return the raw buffer with
+// a plain [ErrExecutionReverted].
+type RevertError []byte
+
+// Error is equivalent to the respective method on [ErrExecutionReverted].
+func (e RevertError) Error() string { return ErrExecutionReverted.Error() }
+
+// Bytes returns the return buffer with which an EVM context reverted.
+func (e RevertError) Bytes() []byte { return []byte(e) }
+
+// Unwrap returns [ErrExecutionReverted].
+func (e RevertError) Unwrap() error {
+	return ErrExecutionReverted
+}
