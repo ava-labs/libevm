@@ -1051,3 +1051,9 @@ func TestStateMutability(t *testing.T) {
 		}
 	}
 }
+
+func TestRevertErrorIs(t *testing.T) {
+	err := vm.RevertError{}
+	target := vm.ErrExecutionReverted
+	require.Truef(t, errors.Is(err, target), "errors.Is(%T, %v)", err, target)
+}
