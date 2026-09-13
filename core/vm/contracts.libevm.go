@@ -233,6 +233,11 @@ type PrecompileEnvironment interface {
 	// used in conjunction with `Call()`.
 	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...CallOption) (ret []byte, _ error)
 
+	// Create and Create2 are equivalent to [EVM.Create] and [EVM.Create2],
+	// respectively, except that the `caller` and `gas` arguments are determined
+	// automatically.
+	//
+	// WARNING: See [PrecompileEnvironment.Call] regarding reentrancy.
 	Create(code []byte, value *uint256.Int) ([]byte, common.Address, error)
 	Create2(code []byte, value, salt *uint256.Int) ([]byte, common.Address, error)
 }
