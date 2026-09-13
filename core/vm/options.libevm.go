@@ -20,6 +20,7 @@ import "github.com/ava-labs/libevm/libevm/options"
 
 type callConfig struct {
 	unsafeCallerAddressProxying bool
+	legacyOnlyNoEIP150Gas64th   bool
 }
 
 // A CallOption modifies the default behaviour of a contract call.
@@ -35,5 +36,13 @@ type CallOption = options.Option[callConfig]
 func WithUNSAFECallerAddressProxying() CallOption {
 	return options.Func[callConfig](func(c *callConfig) {
 		c.unsafeCallerAddressProxying = true
+	})
+}
+
+// legacyOnlyDisableEIP150Gas64th maintains backwards compatibility with an
+// erroneous implementation, and will be exported as part of its fix.
+func legacyOnlyDisableEIP150Gas64th() CallOption {
+	return options.Func[callConfig](func(c *callConfig) {
+		c.legacyOnlyNoEIP150Gas64th = true
 	})
 }

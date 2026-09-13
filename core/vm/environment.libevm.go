@@ -99,9 +99,32 @@ func (e *environment) BlockHeader() (types.Header, error) {
 	return *hdr, nil
 }
 
-func (e *environment) beforeNewCallFrame(typ CallType, gas uint64, value *uint256.Int, opts ...CallOption) (ContractRef, error) {
+func (e *environment) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {
+	// TODO(arr4n) remove this and export the function when reviewing and
+	// merging PR 277.
+	opts = append(opts, legacyOnlyDisableEIP150Gas64th())
+
+	ret, _, err := e.callOrCreateContract(Call, &addr, input, gas, value, nil /*salt*/, opts...)
+	return ret, err
+}
+
+func (e *environment) Create(code []byte, value *uint256.Int) ([]byte, common.Address, error) {
+	return e.callOrCreateContract(create, nil /*to*/, code, e.Gas(), value, nil /*salt*/)
+}
+
+func (e *environment) Create2(code []byte, value, salt *uint256.Int) ([]byte, common.Address, error) {
+	return e.callOrCreateContract(create2, nil /*to*/, code, e.Gas(), value, salt)
+}
+
+func (e *environment) callOrCreateContract(typ CallType, addr *common.Address, input []byte, gas uint64, value, salt *uint256.Int, opts ...CallOption) ([]byte, common.Address, error) {
+	conf := options.As[callConfig](opts...)
+
+	if e.Rules().IsEIP150 && !conf.legacyOnlyNoEIP150Gas64th {
+		gas = min(gas, e.Gas()-e.Gas()/64)
+	}
+
 	var caller ContractRef = e.self
-	if options.As[callConfig](opts...).unsafeCallerAddressProxying {
+	if conf.unsafeCallerAddressProxying {
 		// Note that, in addition to being unsafe, this breaks an EVM
 		// assumption that the caller ContractRef is always a *Contract.
 		caller = AccountRef(e.self.CallerAddress)
@@ -114,36 +137,28 @@ func (e *environment) beforeNewCallFrame(typ CallType, gas uint64, value *uint25
 
 	writes := (value != nil && !value.IsZero()) || typ == create || typ == create2
 	if e.ReadOnly() && writes {
-		return nil, ErrWriteProtection
+		return nil, common.Address{}, ErrWriteProtection
 	}
 	if !e.UseGas(gas) {
-		return nil, ErrOutOfGas
+		return nil, common.Address{}, ErrOutOfGas
 	}
 
-	return caller, nil
-}
-
-func (e *environment) afterNewCallFrame(returnGas uint64) error {
-	return e.refundGas(returnGas)
-}
-
-func (e *environment) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {
-	return e.callContract(Call, addr, input, gas, value, opts...)
-}
-
-func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {
-	caller, err := e.beforeNewCallFrame(typ, gas, value, opts...)
-	if err != nil {
-		return nil, err
-	}
-
+	var (
+		frameRet    []byte
+		created     common.Address
+		leftOverGas uint64
+		frameErr    error
+	)
 	switch typ {
 	case Call:
-		ret, returnGas, callErr := e.evm.Call(caller, addr, input, gas, value)
-		if err := e.afterNewCallFrame(returnGas); err != nil {
-			return nil, err
-		}
-		return ret, callErr
+		frameRet, leftOverGas, frameErr = e.evm.Call(caller, *addr, input, gas, value)
+
+	case create:
+		frameRet, created, leftOverGas, frameErr = e.evm.Create(caller, input, gas, value)
+
+	case create2:
+		frameRet, created, leftOverGas, frameErr = e.evm.Create2(caller, input, gas, value, salt)
+
 	case CallCode, DelegateCall, StaticCall:
 		// TODO(arr4n): these cases should be very similar to CALL, hence the
 		// early abstraction, to signal to future maintainers. If implementing
@@ -153,38 +168,11 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 		// demonstrate the correct type.
 		fallthrough
 	default:
-		return nil, fmt.Errorf("unimplemented precompile call type %v", typ)
-	}
-}
-
-func (e *environment) Create(code []byte, value *uint256.Int) ([]byte, common.Address, error) {
-	return e.create(create, value, func(caller ContractRef, gas uint64) ([]byte, common.Address, uint64, error) {
-		return e.evm.Create(caller, code, gas, value)
-	})
-}
-
-func (e *environment) Create2(code []byte, value, salt *uint256.Int) ([]byte, common.Address, error) {
-	return e.create(create2, value, func(caller ContractRef, gas uint64) ([]byte, common.Address, uint64, error) {
-		return e.evm.Create2(caller, code, gas, value, salt)
-	})
-}
-
-type creator func(ContractRef, uint64) ([]byte, common.Address, uint64, error)
-
-func (e *environment) create(typ CallType, value *uint256.Int, do creator) ([]byte, common.Address, error) {
-	gas := e.Gas()
-	if e.Rules().IsEIP150 {
-		gas -= gas / 64
+		return nil, common.Address{}, fmt.Errorf("unimplemented precompile call type %v", typ)
 	}
 
-	caller, err := e.beforeNewCallFrame(typ, gas, value)
-	if err != nil {
+	if err := e.refundGas(leftOverGas); err != nil {
 		return nil, common.Address{}, err
 	}
-
-	ret, contract, returnGas, err := do(caller, gas)
-	if err := e.afterNewCallFrame(returnGas); err != nil {
-		return nil, common.Address{}, err
-	}
-	return ret, contract, err
+	return frameRet, created, frameErr
 }
