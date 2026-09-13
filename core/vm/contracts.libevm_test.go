@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/arr4n/shed/testerr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
@@ -942,23 +943,26 @@ func TestPrecompileCreate(t *testing.T) {
 	salt := rng.Uint256()
 
 	tests := []struct {
-		name         string
-		deploy       func(vm.PrecompileEnvironment) ([]byte, common.Address, error)
-		wantDeployed common.Address
+		name                              string
+		deploy                            func(vm.PrecompileEnvironment) ([]byte, common.Address, error)
+		wantDeployed, wantDeployedOnRetry common.Address
+		wantErrOnRetry                    testerr.Want
 	}{
 		{
 			name: "Create",
 			deploy: func(env vm.PrecompileEnvironment) ([]byte, common.Address, error) {
 				return env.Create(returnCallerAddress, env.Value())
 			},
-			wantDeployed: crypto.CreateAddress(precompile, 0),
+			wantDeployed:        crypto.CreateAddress(precompile, 0),
+			wantDeployedOnRetry: crypto.CreateAddress(precompile, 1),
 		},
 		{
 			name: "Create2",
 			deploy: func(env vm.PrecompileEnvironment) ([]byte, common.Address, error) {
 				return env.Create2(returnCallerAddress, env.Value(), salt)
 			},
-			wantDeployed: crypto.CreateAddress2(precompile, salt.Bytes32(), crypto.Keccak256(returnCallerAddress)),
+			wantDeployed:   crypto.CreateAddress2(precompile, salt.Bytes32(), crypto.Keccak256(returnCallerAddress)),
+			wantErrOnRetry: testerr.Equals(vm.ErrContractAddressCollision),
 		},
 	}
 
@@ -1012,6 +1016,18 @@ func TestPrecompileCreate(t *testing.T) {
 				}
 				for _, tt := range tests {
 					assert.Equalf(t, tt.want, state.GetBalance(tt.addr), "balance of %s", tt.name)
+				}
+			})
+
+			t.Run("retry", func(t *testing.T) {
+				if t.Failed() {
+					t.Skip("May result in spurious failures")
+				}
+				tt.wantDeployed = tt.wantDeployedOnRetry
+
+				_, _, err := evm.Call(vm.AccountRef(eoa), precompile, nil, 1e6, uint256.NewInt(0))
+				if diff := testerr.Diff(err, tt.wantErrOnRetry); diff != "" {
+					t.Errorf("%T.Call([EOA], [precomile], ...) retry after successful deployment %s", evm, diff)
 				}
 			})
 		})
