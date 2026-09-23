@@ -25,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ava-labs/libevm/accounts"
 	"github.com/ava-labs/libevm/accounts/keystore"
 	"github.com/ava-labs/libevm/accounts/scwallet"
@@ -41,12 +40,14 @@ import (
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/eth/gasestimator"
 	"github.com/ava-labs/libevm/eth/tracers/logger"
+	"github.com/ava-labs/libevm/libevm/txobserver"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/p2p"
 	"github.com/ava-labs/libevm/params"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/rpc"
 	"github.com/ava-labs/libevm/trie"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/holiman/uint256"
 	"github.com/tyler-smith/go-bip39"
 )
@@ -1625,6 +1626,7 @@ func (s *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common.H
 	// Try to return an already finalized transaction
 	found, tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
 	if !found {
+		txobserver.Emit(txobserver.SrcReceiptMiss, hash, 0, "by_hash")
 		// No finalized transaction, try to retrieve it from the pool
 		if tx := s.b.GetPoolTransaction(hash); tx != nil {
 			return NewRPCPendingTransaction(tx, s.b.CurrentHeader(), s.b.ChainConfig()), nil
@@ -1664,8 +1666,10 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 		return nil, NewTxIndexingError() // transaction is not fully indexed
 	}
 	if !found {
+		txobserver.Emit(txobserver.SrcReceiptMiss, hash, 0, "receipt")
 		return nil, nil // transaction is not existent or reachable
 	}
+	txobserver.Emit(txobserver.SrcReceiptHit, hash, 0, "receipt")
 	header, err := s.b.HeaderByHash(ctx, blockHash)
 	if err != nil {
 		return nil, err
@@ -1831,6 +1835,10 @@ func (s *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil.B
 	if err := tx.UnmarshalBinary(input); err != nil {
 		return common.Hash{}, err
 	}
+	// Primer instante de la transaccion en este nodo. El decodificado y la
+	// recuperacion de la firma quedan por delante de esta marca y son trabajo
+	// real, pero antes de decodificar no hay hash con que identificar la fila.
+	txobserver.Emit(txobserver.SrcAPIIn, tx.Hash(), tx.Gas(), "")
 	return SubmitTransaction(ctx, s.b, tx)
 }
 

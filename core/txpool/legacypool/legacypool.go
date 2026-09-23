@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/big"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,6 +35,7 @@ import (
 	"github.com/ava-labs/libevm/core/txpool"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/event"
+	"github.com/ava-labs/libevm/libevm/txobserver"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
 	"github.com/ava-labs/libevm/params"
@@ -670,6 +672,13 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction, local bool) error {
 func (pool *LegacyPool) add(tx *types.Transaction, local bool) (replaced bool, err error) {
 	// If the transaction is already known, discard it
 	hash := tx.Hash()
+	// El veredicto se decide en muchos returns distintos; un defer los cubre
+	// todos sin tocar cada uno.
+	if txobserver.Watching() {
+		defer func() {
+			txobserver.Emit(txobserver.SrcPoolAdd, hash, tx.Gas(), veredictoTx(err, local))
+		}()
+	}
 	if pool.all.Get(hash) != nil {
 		log.Trace("Discarding already known transaction", "hash", hash)
 		knownTxMeter.Mark(1)
@@ -1092,6 +1101,13 @@ func (pool *LegacyPool) Has(hash common.Hash) bool {
 //
 // Returns the number of transactions removed from the pending queue.
 func (pool *LegacyPool) removeTx(hash common.Hash, outofbound bool, unreserve bool) int {
+	if txobserver.Watching() {
+		motivo := "included"
+		if outofbound {
+			motivo = "outofbound"
+		}
+		txobserver.Emit(txobserver.SrcPoolOut, hash, 0, motivo)
+	}
 	// Fetch the transaction we wish to delete
 	tx := pool.all.Get(hash)
 	if tx == nil {
@@ -1442,6 +1458,13 @@ func (pool *LegacyPool) reset(oldHead, newHead *types.Header) {
 func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.Transaction {
 	// Track the promoted transactions to broadcast them at once
 	var promoted []*types.Transaction
+	if txobserver.Watching() {
+		defer func() {
+			for _, tx := range promoted {
+				txobserver.Emit(txobserver.SrcPoolPromote, tx.Hash(), tx.Gas(), "")
+			}
+		}()
+	}
 
 	// Iterate over all accounts and promote any executable transactions
 	gasLimit := pool.currentHead.Load().GasLimit
@@ -1958,4 +1981,17 @@ func (t *lookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 // numSlots calculates the number of slots needed for a single transaction.
 func numSlots(tx *types.Transaction) int {
 	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
+}
+
+// veredictoTx traduce el error de add a una etiqueta corta y sin comas, apta
+// para un sumidero orientado a lineas.
+func veredictoTx(err error, local bool) string {
+	v := "ok"
+	if err != nil {
+		v = strings.ReplaceAll(err.Error(), ",", ";")
+	}
+	if local {
+		v += " local"
+	}
+	return v
 }
