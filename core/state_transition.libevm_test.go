@@ -499,7 +499,11 @@ func TestGasRefunds(t *testing.T) {
 				DisableGasRefunds: !tt.shouldRefund,
 				PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
 					refunder: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, _ []byte) ([]byte, error) {
-						env.StateDB().AddRefund(refund)
+						sdb, err := env.StateDB()
+						if err != nil {
+							return nil, err
+						}
+						sdb.AddRefund(refund)
 						return nil, nil
 					}),
 				},

@@ -119,7 +119,11 @@ var _ PrecompileResult = recorded{}
 func (r recorded) PrecompileOutput(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
 	l := r.asLog()
 	l.Address = env.Addresses().EVMSemantic.Self
-	env.StateDB().AddLog(l)
+	sdb, err := env.StateDB()
+	if err != nil {
+		return nil, err
+	}
+	sdb.AddLog(l)
 	return r.precompileReturnData(), nil
 }
 
