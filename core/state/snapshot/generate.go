@@ -707,9 +707,11 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	defer ctx.close()
 
 	if err := generateAccounts(ctx, dl, accMarker); err != nil {
+		if err == errLibEVMIteratorAborted {
+			err = dl.flushAfterIteratorAbort(ctx)
+		}
 		// Check if error was due to abort
 		if err == errAborted {
-			dl.keepProgress(ctx)
 			stats.Log("Aborting state snapshot generation", dl.root, dl.genMarker)
 		} else {
 			log.Error("State snapshot generation failed", "root", dl.root, "err", err)

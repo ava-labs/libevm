@@ -17,11 +17,10 @@
 package snapshot
 
 import (
-	"bytes"
+	"errors"
 
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/libevm/options"
-	"github.com/ava-labs/libevm/log"
 )
 
 // generatorPausing is embedded in [generatorContext] to add libevm-specific
@@ -41,9 +40,15 @@ func withCancelFromDiskLayer(dl *diskLayer) generatorContextOption {
 	})
 }
 
-// abortableIterator stops with [errAborted] once cancel is closed. On a hash-scheme
-// database the snapshot iterators skip every trie node whose hash starts with the
-// snapshot prefix, so one Next can run for minutes while stopGeneration waits.
+// errLibEVMIteratorAborted is returned by an [abortableIterator] once
+// cancelled. It differs from [errAborted] so that [diskLayer.generate] knows
+// the work since the last [diskLayer.checkAndFlush] is yet to be saved.
+var errLibEVMIteratorAborted = errors.New("snapshot iterator aborted")
+
+// abortableIterator stops with [errLibEVMIteratorAborted] once cancel is
+// closed. On a hash-scheme database the snapshot iterators skip every trie node
+// whose hash starts with the snapshot prefix, so one Next can run for minutes
+// while stopGeneration waits.
 type abortableIterator struct {
 	ethdb.Iterator
 	cancel <-chan struct{}
@@ -60,7 +65,7 @@ func (it *abortableIterator) Next() bool {
 	}
 	select {
 	case <-it.cancel:
-		it.err = errAborted
+		it.err = errLibEVMIteratorAborted
 		return false
 	default:
 		return it.Iterator.Next()
@@ -74,23 +79,21 @@ func (it *abortableIterator) Error() error {
 	return it.Iterator.Error()
 }
 
-// keepProgress saves the work an aborted run finished, as checkAndFlush does
-// when it is the one to see the stop request. Past ctx.progress the batch holds
-// only deletions of entries missing from the trie, which are safe to keep.
-func (dl *diskLayer) keepProgress(ctx *generatorContext) {
+// flushAfterIteratorAbort converts an [errLibEVMIteratorAborted] into the
+// outcome had [diskLayer.checkAndFlush] itself seen the cancellation request,
+// saving the work finished up to ctx.progress. Past it the batch holds only
+// deletions of entries missing from the trie, which are safe to keep.
+//
+// This method never returns nil.
+func (dl *diskLayer) flushAfterIteratorAbort(ctx *generatorContext) error {
 	if ctx.progress == nil {
-		return
+		// Nothing new to save, and calling [diskLayer.checkAndFlush] with a nil
+		// argument would mark generation as completed, both via
+		// [diskLayer.genMarker] and [journalProgress].
+		return errAborted
 	}
-	if ctx.batch.ValueSize() == 0 && bytes.Equal(ctx.progress, dl.genMarker) {
-		return // checkAndFlush saw the stop and has saved everything already
-	}
-	if err := ctx.batch.Write(); err != nil {
-		log.Error("Failed to flush batch", "err", err)
-		return
-	}
-	ctx.batch.Reset()
-
-	dl.lock.Lock()
-	dl.genMarker = ctx.progress
-	dl.lock.Unlock()
+	// We can only reach here if the [abortableIterator] saw [diskLayer.cancel]
+	// being closed. [diskLayer.checkAndFlush] will therefore always be
+	// `aborting`.
+	return dl.checkAndFlush(ctx, ctx.progress)
 }
