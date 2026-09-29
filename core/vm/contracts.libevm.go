@@ -106,13 +106,29 @@ const (
 	create2 = CallType(CREATE2)
 )
 
-func (t CallType) isValid() bool {
+type callSubType int
+
+const (
+	unknownCallSubType callSubType = iota
+	contractCall                   // CALL, CALLCODE, DELEGATECALL or STATICCALL
+	contractCreation               // CREATE or CREATE2
+)
+
+func (t CallType) subType() callSubType {
 	switch t {
 	case Call, CallCode, DelegateCall, StaticCall:
-		return true
+		return contractCall
+
+	case create, create2:
+		return contractCreation
+
 	default:
-		return false
+		return unknownCallSubType
 	}
+}
+
+func (t CallType) isValid() bool {
+	return t.subType() != unknownCallSubType
 }
 
 // readOnly returns whether the CallType induces a read-only state if not

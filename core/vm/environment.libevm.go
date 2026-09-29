@@ -194,10 +194,8 @@ func (e *environment) buyCallGas(typ CallType, cfg *callConfig, addr *common.Add
 		returnStack(stack)
 	}()
 
-	var isCall bool
-	switch typ {
-	case Call, CallCode, DelegateCall, StaticCall:
-		isCall = true
+	switch typ.subType() {
+	case contractCall:
 		// All *CALL op codes have [gas, address] on the top of the stack, while
 		// CALL and CALLCODE then have the value, while STATICCALL and DELEGATECALL
 		// have the argument offset, which doesn't affect gas.
@@ -205,7 +203,7 @@ func (e *environment) buyCallGas(typ CallType, cfg *callConfig, addr *common.Add
 		stack.push(new(uint256.Int).SetBytes20(addr[:]))
 		stack.push(uint256.NewInt(gas))
 
-	case create, create2:
+	case contractCreation:
 		stack.push(uint256.NewInt(uint64(len(input))))
 		stack.push(new(uint256.Int))
 		stack.push(value)
@@ -246,7 +244,7 @@ func (e *environment) buyCallGas(typ CallType, cfg *callConfig, addr *common.Add
 	}
 
 	switch g := e.Gas(); {
-	case isCall:
+	case typ.subType() == contractCall:
 		// [operation.dynamicGas] for *CALL returns a total that already includes
 		// [EVM.callGasTemp], so the propagated gas was charged above.
 		bought = e.evm.callGasTemp
