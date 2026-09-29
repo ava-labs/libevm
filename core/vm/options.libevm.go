@@ -20,7 +20,7 @@ import "github.com/ava-labs/libevm/libevm/options"
 
 type callConfig struct {
 	unsafeCallerAddressProxying bool
-	legacyOnlyNoEIP150Gas64th   bool
+	legacyOutboundCallGas       bool
 }
 
 // A CallOption modifies the default behaviour of a contract call.
@@ -39,10 +39,16 @@ func WithUNSAFECallerAddressProxying() CallOption {
 	})
 }
 
-// legacyOnlyDisableEIP150Gas64th maintains backwards compatibility with an
-// erroneous implementation, and will be exported as part of its fix.
-func legacyOnlyDisableEIP150Gas64th() CallOption {
+// WithLegacyOutboundCallGas disables all constant- and dynamic-gas charges, as
+// well as call stipends, the EIP-150 63/64 rule, and callee address warming for
+// this call. The gas charged to the caller and the gas received by the callee
+// are identical.
+//
+// Deprecated: only for backwards compatibility with historical chain behaviour
+// (e.g. legacy native-asset precompile semantics). New precompiles MUST NOT use
+// this option.
+func WithLegacyOutboundCallGas() CallOption {
 	return options.Func[callConfig](func(c *callConfig) {
-		c.legacyOnlyNoEIP150Gas64th = true
+		c.legacyOutboundCallGas = true
 	})
 }

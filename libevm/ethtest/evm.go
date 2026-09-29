@@ -19,10 +19,12 @@
 package ethtest
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/state"
@@ -103,9 +105,33 @@ func WithBlockContext(c vm.BlockContext) EVMOption {
 	})
 }
 
-// WithBlockContext overrides the default context.
+// WithChainConfig overrides the default chain config. SHOULD be used with
+// [WithBlockContext] to set a non-nil block number that activates forks defined
+// in the config. Prefer [WithBlockNumberAndChainConfig]. A non-nil `Random`
+// field is also required for post-Merge forks.
 func WithChainConfig(c *params.ChainConfig) EVMOption {
 	return funcOption(func(args *evmConstructorArgs) {
 		args.chainConfig = c
 	})
+}
+
+// WithBlockNumberAndChainConfig overrides the default block number and chain
+// config. The [vm.BlockContext] used to set the block number has a non-nil
+// `Random` field as this is part of the definition of a post-merge fork.
+func WithBlockNumberAndChainConfig(n uint64, c *params.ChainConfig) EVMOption {
+	hdr := &types.Header{
+		Number:     new(big.Int).SetUint64(n),
+		BaseFee:    big.NewInt(0),
+		Difficulty: big.NewInt(0), // sets non-nil random
+	}
+	return funcOption(func(args *evmConstructorArgs) {
+		args.blockContext = core.NewEVMBlockContext(hdr, nil, &common.Address{})
+		args.chainConfig = c
+	})
+}
+
+// WithAllEIPs is a convenience wrapper for [WithBlockNumberAndChainConfig] with
+// block number 1 and [params.MergedTestChainConfig] as arguments.
+func WithAllEIPs() EVMOption {
+	return WithBlockNumberAndChainConfig(1, params.MergedTestChainConfig)
 }

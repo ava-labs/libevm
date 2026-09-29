@@ -69,12 +69,12 @@ func TestGuardIntegration(t *testing.T) {
 	}
 	hooks.Register(t)
 
-	_, evm := ethtest.NewZeroEVM(t)
+	_, evm := ethtest.NewZeroEVM(t, ethtest.WithAllEIPs())
 	got, _, err := evm.Call(vm.AccountRef{}, sut, []byte{}, 1e6, zero())
 	require.True(t, eveCalled, "Malicious contract called")
 	// The error is propagated Guard() -> reentered SUT -> Eve -> top-level SUT -> evm.Call()
 	// This MUST NOT be [assert.ErrorIs] as such errors are never wrapped in geth.
-	assert.Equal(t, err, vm.ErrExecutionReverted, "Precompile reverted")
+	assert.Equal(t, vm.ErrExecutionReverted, err, "Precompile reverted")
 	assert.Equal(t, returnIfGuarded, got, "Precompile reverted with expected data")
 
 	t.Run("static_call", func(t *testing.T) {

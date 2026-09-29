@@ -227,6 +227,9 @@ type PrecompileEnvironment interface {
 	// removed and automatically determined according to the type of call that
 	// invoked the precompile.
 	//
+	// Standard gas rules are enforced as per EIPs currently in force, and the
+	// [CALL] op code's constant and dynamic gas in the current [JumpTable].
+	//
 	// WARNING: using this method makes the precompile susceptible to reentrancy
 	// attacks as with a regular contract. The Checks-Effects-Interactions
 	// pattern, libevm's `reentrancy` package, or some other protection MUST be

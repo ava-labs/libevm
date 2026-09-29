@@ -34,6 +34,9 @@ func MarshalReceipt(r *types.Receipt, blockHash common.Hash, blockNumber uint64,
 	return marshalReceipt(r, blockHash, blockNumber, signer, tx, txIndex)
 }
 
+// AccessListResult exports the [accessListResult] type.
+type AccessListResult = accessListResult
+
 // RevertError exports the [revertError] type.
 type RevertError = revertError
 

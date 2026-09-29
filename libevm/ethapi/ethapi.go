@@ -58,6 +58,7 @@ type (
 	StateOverride         = ethapi.StateOverride
 	BlockOverrides        = ethapi.BlockOverrides
 	RevertError           = ethapi.RevertError
+	AccessListResult      = ethapi.AccessListResult
 	SignTransactionResult = ethapi.SignTransactionResult
 )
 
