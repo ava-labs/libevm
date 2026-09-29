@@ -104,8 +104,19 @@ func (e *environment) Call(addr common.Address, input []byte, gas uint64, value 
 }
 
 func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {
+	if value == nil {
+		// STATIC- and DELEGATECALL pass nil values, which we would otherwise
+		// have to check repeatedly.
+		value = uint256.NewInt(0)
+	}
+	if e.ReadOnly() && !value.IsZero() {
+		return nil, ErrWriteProtection
+	}
+
+	cfg := options.As[callConfig](opts...)
+
 	var caller ContractRef = e.self
-	if options.As[callConfig](opts...).unsafeCallerAddressProxying {
+	if cfg.unsafeCallerAddressProxying {
 		// Note that, in addition to being unsafe, this breaks an EVM
 		// assumption that the caller ContractRef is always a *Contract.
 		caller = AccountRef(e.self.CallerAddress)
@@ -116,11 +127,9 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 		}
 	}
 
-	if e.ReadOnly() && value != nil && !value.IsZero() {
-		return nil, ErrWriteProtection
-	}
-	if !e.UseGas(gas) {
-		return nil, ErrOutOfGas
+	gas, err := e.buyCallGas(typ, cfg, addr, gas, value)
+	if err != nil {
+		return nil, err
 	}
 
 	switch typ {
@@ -141,4 +150,67 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 	default:
 		return nil, fmt.Errorf("unimplemented precompile call type %v", typ)
 	}
+}
+
+func (e *environment) buyCallGas(typ CallType, cfg *callConfig, addr common.Address, gas uint64, value *uint256.Int) (bought uint64, retErr error) {
+	if cfg.legacyOutboundCallGas {
+		if !e.UseGas(gas) {
+			return 0, ErrOutOfGas
+		}
+		return gas, nil
+	}
+
+	// All dynamic-gas calculators for calls store the amount of gas to
+	// propagate in [EVM.callGasTemp] because the [gasFunc] signature doesn't
+	// allow for it to be returned.
+	old := e.evm.callGasTemp
+	stack := newstack()
+	defer func() {
+		e.evm.callGasTemp = old
+		returnStack(stack)
+	}()
+
+	// All *CALL op codes have [gas, address] on the top of the stack, while
+	// CALL and CALLCODE then have the value, while STATICCALL and DELEGATECALL
+	// have the argument offset, which doesn't affect gas.
+	stack.push(value)
+	stack.push(new(uint256.Int).SetBytes20(addr[:]))
+	stack.push(uint256.NewInt(gas))
+
+	// Constant gas cost MUST be charged first otherwise the 63/64 rule of the
+	// dynamic cost will be applied to the incorrect value.
+	op := e.evm.interpreter.table[typ.OpCode()]
+	if !e.UseGas(op.constantGas) {
+		return 0, ErrOutOfGas
+	}
+
+	// Dynamic-gas calculation might warm the address before we've actually paid
+	// for the associated gas. We revert the warming in all error cases, even if
+	// it has been paid for inside [operation.dynamicGas], because this is the
+	// more conservative approach for DoS protection. The alternative is a
+	// convoluted set of checks to see if the address was warmed and whether the
+	// gas was used, which is brittle under upstream (geth) code mergers.
+	sdb := e.evm.StateDB
+	beforeAddrWarming := sdb.Snapshot()
+	defer func() {
+		if retErr != nil {
+			sdb.RevertToSnapshot(beforeAddrWarming)
+		}
+	}()
+
+	dyn, err := op.dynamicGas(e.evm, e.self, stack, NewMemory(), 0 /*memory expansion*/)
+	if err != nil {
+		return 0, err
+	}
+	if !e.UseGas(dyn) {
+		return 0, ErrOutOfGas
+	}
+
+	// [operation.dynamicGas] for *CALL returns a total that already includes
+	// [EVM.callGasTemp], so the propagated gas was charged above.
+	bought = e.evm.callGasTemp
+	if !value.IsZero() {
+		bought += params.CallStipend
+	}
+	return bought, nil
 }

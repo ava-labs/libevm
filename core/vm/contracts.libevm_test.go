@@ -17,6 +17,7 @@ package vm_test
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,6 +34,7 @@ import (
 	"golang.org/x/exp/rand"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
@@ -194,7 +196,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	header := &types.Header{
 		Number:     rng.BigUint64(),
 		Time:       rng.Uint64(),
-		Difficulty: rng.BigUint64(),
+		Difficulty: big.NewInt(0), // post Merge
 	}
 	input := rng.Bytes(8)
 	stateValue := rng.Hash()
@@ -206,14 +208,15 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	eoa := common.HexToAddress("E0A")        // caller of the precompile-caller
 	callerContract := vm.NewContract(vm.AccountRef(eoa), vm.AccountRef(caller), callCallerValue, 1e6)
 
+	config := *params.MergedTestChainConfig
+	config.ChainID = chainID
+
 	state, evm := ethtest.NewZeroEVM(
 		t,
 		ethtest.WithBlockContext(
 			core.NewEVMBlockContext(header, nil, rng.AddressPtr()),
 		),
-		ethtest.WithChainConfig(
-			&params.ChainConfig{ChainID: chainID},
-		),
+		ethtest.WithChainConfig(&config),
 	)
 	state.SetState(precompile, slot, stateValue)
 	state.SetBalance(caller, new(uint256.Int).Not(uint256.NewInt(0)))
@@ -438,17 +441,12 @@ func TestInheritReadOnly(t *testing.T) {
 			),
 		},
 	}
-	hookstest.Register(t, params.Extras[*hookstest.Stub, *hookstest.Stub]{
-		NewRules: func(_ *params.ChainConfig, r *params.Rules, _ *hookstest.Stub, blockNum *big.Int, isMerge bool, timestamp uint64) *hookstest.Stub {
-			r.IsCancun = true // enable PUSH0
-			return hooks
-		},
-	})
+	hooks.Register(t)
 
 	// (2)
 	contract := makeReturnProxy(t, precompile, vm.CALL)
 
-	state, evm := ethtest.NewZeroEVM(t)
+	state, evm := ethtest.NewZeroEVM(t, ethtest.WithAllEIPs())
 	rng := ethtest.NewPseudoRand(42)
 	contractAddr := rng.Address()
 	state.CreateAccount(contractAddr)
@@ -521,7 +519,7 @@ func makeReturnProxy(t *testing.T, dest common.Address, call vm.OpCode) []vm.OpC
 	contract = append(contract, convertBytes[byte, vm.OpCode](dest[:]...)...)
 
 	contract = append(contract,
-		p0, // gas
+		vm.GAS,
 		call,
 
 		// See function comment re ignored reverts.
@@ -687,12 +685,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 			}),
 		},
 	}
-	hookstest.Register(t, params.Extras[*hookstest.Stub, *hookstest.Stub]{
-		NewRules: func(_ *params.ChainConfig, r *params.Rules, _ *hookstest.Stub, blockNum *big.Int, isMerge bool, timestamp uint64) *hookstest.Stub {
-			r.IsCancun = true // enable PUSH0
-			return hooks
-		},
-	})
+	hooks.Register(t)
 
 	tests := []struct {
 		incomingCallType vm.OpCode
@@ -824,7 +817,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 			tt.want.Addresses.Raw = &tt.want.Addresses.EVMSemantic
 
 			t.Logf("calldata = %q", tt.eoaTxCallData)
-			state, evm := ethtest.NewZeroEVM(t)
+			state, evm := ethtest.NewZeroEVM(t, ethtest.WithAllEIPs())
 			evm.Origin = eoa
 			state.CreateAccount(caller)
 			proxy := makeReturnProxy(t, sut, tt.incomingCallType)
@@ -856,7 +849,7 @@ func TestPrecompileCallWithPrestateTracer(t *testing.T) {
 	}
 	hooks.Register(t)
 
-	state, evm := ethtest.NewZeroEVM(t)
+	state, evm := ethtest.NewZeroEVM(t, ethtest.WithAllEIPs())
 	evm.GasPrice = big.NewInt(1)
 
 	state.CreateAccount(contract)
@@ -880,53 +873,214 @@ func TestPrecompileCallWithPrestateTracer(t *testing.T) {
 	require.Equal(t, value, got[contract].Storage[zeroHash], "value loaded with SLOAD")
 }
 
-func TestPrecompileCallWithCallTracer(t *testing.T) {
+func TestPrecompileCallGasWithCallTracer(t *testing.T) {
 	rng := ethtest.NewPseudoRand(42 * 142857)
-	precompile := rng.Address()
-	contract := rng.Address()
-	caller := rng.Address()
+	// Calls: EOA -> precompile -> called
+	eoa := rng.Address()
+	precompile := rng.Address() // account balance == 2^256 - 1
+	called := rng.Address()     // non-zero balance; empty code
 
-	hooks := &hookstest.Stub{
+	config := params.MergedTestChainConfig
+	const (
+		txGas = 10_000_000
+		// Although named WarmStorageRead, this is the value set in eips.go for
+		// the constant gas cost of a [vm.CALL].
+		warmCall = params.WarmStorageReadCostEIP2929
+		coldCall = params.ColdAccountAccessCostEIP2929
+		lowGas   = 500_000 // i.e. unaffected by 63/64 rule
+	)
+
+	type sendGasFunc func(vm.PrecompileEnvironment) uint64
+	constGasFunc := func(gas uint64) sendGasFunc {
+		return func(vm.PrecompileEnvironment) uint64 { return gas }
+	}
+
+	legacy := []vm.CallOption{vm.WithLegacyOutboundCallGas()}
+
+	tests := []struct {
+		name                 string
+		opts                 []vm.CallOption
+		preWarmContractAddr  bool
+		sendGas              sendGasFunc
+		sendValue            *uint256.Int
+		wantGasSent          uint64
+		wantGasRemaining     uint64
+		wantAddrInAccessList bool
+	}{
+		{
+			name:             "legacy_with_all_gas",
+			opts:             legacy,
+			sendGas:          vm.PrecompileEnvironment.Gas,
+			wantGasSent:      txGas,
+			wantGasRemaining: txGas,
+		},
+		{
+			name:             "legacy_with_low_gas",
+			opts:             legacy,
+			sendGas:          constGasFunc(lowGas),
+			wantGasSent:      lowGas,
+			wantGasRemaining: txGas,
+		},
+		{
+			name:                 "send_less_than_63_on_64",
+			preWarmContractAddr:  true,
+			sendGas:              constGasFunc(lowGas),
+			wantGasSent:          lowGas,
+			wantGasRemaining:     txGas - warmCall,
+			wantAddrInAccessList: true,
+		},
+		{
+			name:                 "send_all_available_gas",
+			preWarmContractAddr:  true,
+			sendGas:              vm.PrecompileEnvironment.Gas,
+			wantGasSent:          (txGas - warmCall) - (txGas-warmCall)/64,
+			wantGasRemaining:     txGas - warmCall,
+			wantAddrInAccessList: true,
+		},
+		{
+			name:                 "call_stipend_when_sending_value",
+			preWarmContractAddr:  true,
+			sendGas:              constGasFunc(lowGas),
+			sendValue:            uint256.NewInt(1),
+			wantGasSent:          lowGas + params.CallStipend,
+			wantGasRemaining:     txGas - warmCall - params.CallValueTransferGas + params.CallStipend,
+			wantAddrInAccessList: true,
+		},
+		{
+			name:                 "cold_address",
+			preWarmContractAddr:  false,
+			sendGas:              constGasFunc(lowGas),
+			wantGasSent:          lowGas,
+			wantGasRemaining:     txGas - coldCall,
+			wantAddrInAccessList: true, // i.e. warmed by call
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.sendValue == nil {
+				tt.sendValue = new(uint256.Int)
+			}
+
+			byteOrder := binary.BigEndian
+
+			hooks := &hookstest.Stub{
+				PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+					precompile: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
+						return env.Call(called, nil, tt.sendGas(env), tt.sendValue, tt.opts...)
+					}),
+					called: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
+						return byteOrder.AppendUint64(nil, env.Gas()), nil
+					}),
+				},
+			}
+			hooks.Register(t)
+
+			const tracerName = "callTracer"
+			tracer, err := tracers.DefaultDirectory.New(tracerName, nil, nil)
+			require.NoErrorf(t, err, "tracers.DefaultDirectory.New(%q)", tracerName)
+
+			sdb, evm := ethtest.NewZeroEVM(t, ethtest.WithBlockNumberAndChainConfig(1, config))
+			evm.Config.Tracer = tracer
+
+			sdb.SetBalance(precompile, new(uint256.Int).SetAllOne())
+			sdb.SetBalance(called, uint256.NewInt(1))
+			if tt.preWarmContractAddr {
+				sdb.AddAddressToAccessList(called)
+			}
+
+			gotGasSent, gasRemaining, err := evm.Call(vm.AccountRef(eoa), precompile, nil, txGas, uint256.NewInt(0))
+			require.NoError(t, err, "evm.Call([precompile that calls regular contract])")
+			if got, want := gasRemaining, tt.wantGasRemaining; got != want {
+				t.Errorf("%T.Call(...) gas remaining got %d; want %d", evm, got, want) // testify renders uint64 as hex
+			}
+			require.Len(t, gotGasSent, 8, "return buffer from called contract; MUST be big-endian uint64")
+			assert.Equal(t, tt.wantGasSent, byteOrder.Uint64(gotGasSent), "gas received by contract called by precompile")
+			assert.Equalf(t, tt.wantAddrInAccessList, sdb.AddressInAccessList(called), "%T.AddressInAccessList([called by precompile])", sdb)
+
+			gotJSON, err := tracer.GetResult()
+			require.NoErrorf(t, err, "%T.GetResult()", tracer)
+
+			type call struct {
+				From  common.Address `json:"from"`
+				To    common.Address `json:"to"`
+				Type  string         `json:"type"`
+				Gas   hexutil.Uint64 `json:"gas"`
+				Calls []call         `json:"calls"`
+			}
+			var got call
+			require.NoErrorf(t, json.Unmarshal(gotJSON, &got), "json.Unmarshal(%T.GetResult(), %T)", tracer, &got)
+
+			want := call{
+				From: eoa,
+				To:   precompile,
+				Type: "CALL",
+				Calls: []call{{
+					From: precompile,
+					To:   called,
+					Type: "CALL",
+					Gas:  hexutil.Uint64(tt.wantGasSent),
+				}},
+			}
+			opt := cmp.Transformer("hexutilUint64", unwrapHexutilUint64) // non-hex failure messages
+			if diff := cmp.Diff(want, got, opt); diff != "" {
+				t.Errorf("%q tracer diff (-want +got):\n%s", tracerName, diff)
+			}
+		})
+	}
+}
+
+func unwrapHexutilUint64(x hexutil.Uint64) uint64 {
+	return uint64(x)
+}
+
+func TestNotWarmCalledAddressOnPrecompileOutOfGas(t *testing.T) {
+	eoa := common.Address{'e', 'o', 'a'}
+	precompile := common.Address{'p', 'r', 'e'}
+	called := common.Address{'c', 'a', 'l', 'l'}
+
+	// We test address warming from the perspective of the precompile, not from
+	// the state DB at the end, because a reverting transaction will clear it.
+	returnIfCalledIsWarm := []byte{1}
+	returnIfCalledIsCold := []byte{0}
+
+	hooks := hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
-			precompile: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
-				return env.Call(contract, nil, env.Gas(), uint256.NewInt(0))
+			precompile: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
+				// Sending non-zero value ensures coverage for the case in which
+				// we can't pay for dynamic gas.
+				_, err := env.Call(called, nil, 0, uint256.NewInt(1))
+				if env.StateDB().AddressInAccessList(called) {
+					return returnIfCalledIsWarm, err
+				}
+				return returnIfCalledIsCold, err
 			}),
 		},
 	}
 	hooks.Register(t)
 
-	const tracerName = "callTracer"
-	tracer, err := tracers.DefaultDirectory.New(tracerName, nil, nil)
-	require.NoErrorf(t, err, "tracers.DefaultDirectory.New(%q)", tracerName)
+	sdb, evm := ethtest.NewZeroEVM(t, ethtest.WithAllEIPs())
+	sdb.SetBalance(eoa, new(uint256.Int).SetAllOne())
+	sdb.SetBalance(precompile, new(uint256.Int).SetAllOne())
 
-	_, evm := ethtest.NewZeroEVM(t)
-	evm.Config.Tracer = tracer
-	_, _, err = evm.Call(vm.AccountRef(caller), precompile, nil, 1e6, uint256.NewInt(0))
-	require.NoError(t, err, "evm.Call([precompile that calls regular contract])")
+	for gas := uint64(0); ; gas += 50 {
+		got, _, err := evm.Call(vm.AccountRef(eoa), precompile, nil, gas, uint256.NewInt(0))
+		t.Logf("%T.Call(..., gas = %d, ...) got error %v", evm, gas, err)
 
-	gotJSON, err := tracer.GetResult()
-	require.NoErrorf(t, err, "%T.GetResult()", tracer)
+		if err != nil && err != vm.ErrOutOfGas {
+			t.Fatalf("Unexpected error: %v", err)
+		}
 
-	type call struct {
-		From  common.Address `json:"from"`
-		To    common.Address `json:"to"`
-		Type  string         `json:"type"`
-		Calls []call         `json:"calls"`
-	}
-	var got call
-	require.NoErrorf(t, json.Unmarshal(gotJSON, &got), "json.Unmarshal(%T.GetResult(), %T)", tracer, &got)
+		want := returnIfCalledIsWarm
+		// See comment in [vm.environment.buyCallGas] regarding the rationale
+		// behind reverting the access list for errors.
+		if err != nil {
+			want = returnIfCalledIsCold
+		}
+		assert.Equalf(t, want, got, "%T.AddressInAccessList([called by precompile]) as seen by precompile when %T.Call() error == %v", sdb, evm, err)
 
-	want := call{
-		From: caller,
-		To:   precompile,
-		Type: "CALL",
-		Calls: []call{{
-			From: precompile,
-			To:   contract,
-			Type: "CALL",
-		}},
-	}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("%q tracer diff (-want +got):\n%s", tracerName, diff)
+		if err == nil {
+			break
+		}
 	}
 }
