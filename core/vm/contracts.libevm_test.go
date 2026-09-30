@@ -1203,3 +1203,27 @@ func TestPrecompileCreate(t *testing.T) {
 		})
 	}
 }
+
+func TestCreate2WhenEIPNotEnabled(t *testing.T) {
+	eoa := common.Address{'e', 'o', 'a'}
+	precompile := common.Address{'p', 'r', 'e'}
+
+	hooks := &hookstest.Stub{
+		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+			precompile: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, _ []byte) ([]byte, error) {
+				ret, _, err := env.Create2([]byte{}, nil, [32]byte{})
+				return ret, err
+			}),
+		},
+	}
+	hooks.Register(t)
+
+	sdb, evm := ethtest.NewZeroEVM(t /* explicitly NOT all EIPs */)
+	sdb.SetBalance(eoa, new(uint256.Int).SetAllOne())
+
+	want := testerr.As[*vm.ErrInvalidOpCode](nil)
+	_, _, got := evm.Call(vm.AccountRef(eoa), precompile, []byte{}, 1e6, uint256.NewInt(0))
+	if diff := testerr.Diff(got, want); diff != "" {
+		t.Errorf("PrecompileEnvironment.Create2() when opcode not supported: %s", diff)
+	}
+}

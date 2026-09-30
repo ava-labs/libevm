@@ -229,14 +229,18 @@ func (e *environment) buyGas(typ CallType, cfg *callConfig, buyer gasBuyer) (bou
 		return g, nil
 	}
 
+	op := e.evm.interpreter.table[typ.OpCode()]
+	if op.dynamicGas == nil {
+		return 0, &ErrInvalidOpCode{typ.OpCode()}
+	}
+
 	// Constant gas cost MUST be charged first otherwise the 63/64 rule of the
 	// dynamic cost will be applied to the incorrect value.
-	op := e.evm.interpreter.table[typ.OpCode()]
 	if !e.UseGas(op.constantGas) {
 		return 0, ErrOutOfGas
 	}
 
-	if op.dynamicGas != nil {
+	{
 		// Dynamic-gas calculation might warm the address before we've actually paid
 		// for the associated gas. We revert the warming in all error cases, even if
 		// it has been paid for inside [operation.dynamicGas], because this is the
