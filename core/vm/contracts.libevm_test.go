@@ -1184,10 +1184,10 @@ func TestPrecompileCreate(t *testing.T) {
 				}
 			})
 
+			if t.Failed() {
+				t.Skip("May result in spurious failures")
+			}
 			t.Run("retry", func(t *testing.T) {
-				if t.Failed() {
-					t.Skip("May result in spurious failures")
-				}
 				tt.wantDeployed = tt.wantDeployedOnRetry
 
 				_, _, err := evm.Call(vm.AccountRef(eoa), precompile, nil, 1e6, uint256.NewInt(0))
