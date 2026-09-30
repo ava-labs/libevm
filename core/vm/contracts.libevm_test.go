@@ -1103,7 +1103,7 @@ func TestPrecompileCreate(t *testing.T) {
 
 	rng := ethtest.NewPseudoRand(142857)
 	precompile := rng.Address()
-	salt := rng.Uint256()
+	salt := rng.Hash()
 	const callGas = 30e6
 
 	tests := []struct {
@@ -1128,7 +1128,7 @@ func TestPrecompileCreate(t *testing.T) {
 				return env.Create2(returnCallerAddress, env.Value(), salt)
 			},
 			wantGasRemaining: callGas - params.Create2Gas - (params.InitCodeWordGas+params.Keccak256WordGas)*initCodeWords - initCodeCost,
-			wantDeployed:     crypto.CreateAddress2(precompile, salt.Bytes32(), crypto.Keccak256(returnCallerAddress)),
+			wantDeployed:     crypto.CreateAddress2(precompile, salt, crypto.Keccak256(returnCallerAddress)),
 			wantErrOnRetry:   testerr.Equals(vm.ErrContractAddressCollision),
 		},
 	}

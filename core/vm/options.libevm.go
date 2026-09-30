@@ -44,6 +44,8 @@ func WithUNSAFECallerAddressProxying() CallOption {
 // this call. The gas charged to the caller and the gas received by the callee
 // are identical.
 //
+// The returned [CallOption] is ignored by Create*() methods.
+//
 // Deprecated: only for backwards compatibility with historical chain behaviour
 // (e.g. legacy native-asset precompile semantics). New precompiles MUST NOT use
 // this option.

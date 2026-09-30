@@ -258,7 +258,7 @@ type PrecompileEnvironment interface {
 	//
 	// WARNING: See [PrecompileEnvironment.Call] regarding reentrancy.
 	Create(code []byte, value *uint256.Int) ([]byte, common.Address, error)
-	Create2(code []byte, value, salt *uint256.Int) ([]byte, common.Address, error)
+	Create2(code []byte, value *uint256.Int, salt [32]byte) ([]byte, common.Address, error)
 }
 
 func (args *evmCallArgs) env() *environment {
