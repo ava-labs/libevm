@@ -1091,14 +1091,25 @@ func TestPrecompileCreate(t *testing.T) {
 		vm.CALLER, vm.PUSH0, vm.MSTORE,
 		vm.PUSH1, 20, vm.PUSH1, 12, vm.RETURN,
 	)
+	const (
+		q = vm.GasQuickStep
+		f = vm.GasFastestStep
+	)
+	initCodeWords := uint64(len(returnCallerAddress)+31) / 32
+	initCodeCost := 0 +
+		q + q + (f + 1*params.MemoryGas) + // MSTORE is 1 word, by definition
+		f + f +
+		common.AddressLength*params.CreateDataGas
 
 	rng := ethtest.NewPseudoRand(142857)
 	precompile := rng.Address()
 	salt := rng.Uint256()
+	const callGas = 30e6
 
 	tests := []struct {
 		name                              string
 		deploy                            func(vm.PrecompileEnvironment) ([]byte, common.Address, error)
+		wantGasRemaining                  uint64
 		wantDeployed, wantDeployedOnRetry common.Address
 		wantErrOnRetry                    testerr.Want
 	}{
@@ -1107,6 +1118,7 @@ func TestPrecompileCreate(t *testing.T) {
 			deploy: func(env vm.PrecompileEnvironment) ([]byte, common.Address, error) {
 				return env.Create(returnCallerAddress, env.Value())
 			},
+			wantGasRemaining:    callGas - params.CreateGas - params.InitCodeWordGas*initCodeWords - initCodeCost,
 			wantDeployed:        crypto.CreateAddress(precompile, 0),
 			wantDeployedOnRetry: crypto.CreateAddress(precompile, 1),
 		},
@@ -1115,8 +1127,9 @@ func TestPrecompileCreate(t *testing.T) {
 			deploy: func(env vm.PrecompileEnvironment) ([]byte, common.Address, error) {
 				return env.Create2(returnCallerAddress, env.Value(), salt)
 			},
-			wantDeployed:   crypto.CreateAddress2(precompile, salt.Bytes32(), crypto.Keccak256(returnCallerAddress)),
-			wantErrOnRetry: testerr.Equals(vm.ErrContractAddressCollision),
+			wantGasRemaining: callGas - params.Create2Gas - (params.InitCodeWordGas+params.Keccak256WordGas)*initCodeWords - initCodeCost,
+			wantDeployed:     crypto.CreateAddress2(precompile, salt.Bytes32(), crypto.Keccak256(returnCallerAddress)),
+			wantErrOnRetry:   testerr.Equals(vm.ErrContractAddressCollision),
 		},
 	}
 
@@ -1141,8 +1154,11 @@ func TestPrecompileCreate(t *testing.T) {
 			max256 := new(uint256.Int).SetAllOne()
 			state.SetBalance(eoa, max256)
 			value := rng.Uint256()
-			got, _, err := evm.Call(vm.AccountRef(eoa), precompile, nil, 30e6, value)
+			got, gotGasRemaining, err := evm.Call(vm.AccountRef(eoa), precompile, nil, callGas, value)
 			require.NoErrorf(t, err, "%T.Call([EOA], [precompile], ...)", evm)
+			if got, want := gotGasRemaining, tt.wantGasRemaining; got != want { // testify prints uint64 as hex
+				t.Errorf("%T.Call([EOA], [precompile], ...) got gas remaining %d; want %d", evm, got, want)
+			}
 
 			t.Run("deployed_code", func(t *testing.T) {
 				// Note that contract deployment stores the buffer returned by
