@@ -83,12 +83,57 @@ func TestStateDBCommitPropagatesOptions(t *testing.T) {
 	assert.Equalf(t, currentHash, trieRec.currentBlockHash, "%T currentHash propagated via %T.Commit() to %T.Update()", triedbOpt, sdb, trieRec)
 }
 
-type snapTreeRecorder struct {
-	SnapshotTree
-	gotPayload any
+func TestStateDBCommitSnapshotCapLayers(t *testing.T) {
+	tests := []struct {
+		name       string
+		opts       []stateconf.StateDBCommitOption
+		wantLayers int
+	}{
+		{
+			name:       "default",
+			wantLayers: stateconf.DefaultSnapshotCapLayers,
+		},
+		{
+			name:       "override",
+			opts:       []stateconf.StateDBCommitOption{stateconf.WithSnapshotCapLayers(1)},
+			wantLayers: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			memdb := rawdb.NewMemoryDatabase()
+			trieRec := &triedbRecorder{Database: hashdb.New(memdb, nil, &trie.MerkleResolver{})}
+			triedb := triedb.NewDatabase(
+				memdb,
+				&triedb.Config{
+					DBOverride: func(_ ethdb.Database) triedb.DBOverride {
+						return trieRec
+					},
+				},
+			)
+			var snapRec snapTreeRecorder
+			sdb, err := New(types.EmptyRootHash, NewDatabaseWithNodeDB(memdb, triedb), &snapRec)
+			require.NoError(t, err, "New()")
+
+			// Ensures the snapshot-maintenance branch of Commit runs.
+			sdb.SetNonce(common.Address{}, 42)
+
+			_, err = sdb.Commit(0, false, tt.opts...)
+			require.NoErrorf(t, err, "%T.Commit()", sdb)
+			assert.Equalf(t, tt.wantLayers, snapRec.gotCapLayers, "layers passed to %T.Cap() by %T.Commit()", &snapRec, sdb)
+		})
+	}
 }
 
-func (*snapTreeRecorder) Cap(common.Hash, int) error {
+type snapTreeRecorder struct {
+	SnapshotTree
+	gotPayload   any
+	gotCapLayers int
+}
+
+func (r *snapTreeRecorder) Cap(_ common.Hash, layers int) error {
+	r.gotCapLayers = layers
 	return nil
 }
 
