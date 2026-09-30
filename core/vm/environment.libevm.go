@@ -314,6 +314,8 @@ func (b callGasBuyer) freeStipend() uint64 {
 }
 
 func (b createGasBuyer) populateForDynamicGas(s *Stack) {
+	// Although [CREATE2] also has the salt on the stack, [operation.dynamicGas]
+	// doesn't read from it.
 	s.push(uint256.NewInt(uint64(len(b.initData))))
 	s.push(new(uint256.Int)) // arbitrary memory offset
 	s.push(&b.value)
