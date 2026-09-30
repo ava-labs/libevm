@@ -152,7 +152,7 @@ func (e *environment) callOrCreate(typ CallType, to *common.Address, input []byt
 	cfg := options.As[callConfig](opts...)
 
 	var caller ContractRef = e.self
-	if cfg.unsafeCallerAddressProxying {
+	if typ.subType() == contractCall && cfg.unsafeCallerAddressProxying {
 		// Note that, in addition to being unsafe, this breaks an EVM
 		// assumption that the caller ContractRef is always a *Contract.
 		caller = AccountRef(e.self.CallerAddress)

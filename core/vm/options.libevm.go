@@ -31,6 +31,8 @@ type CallOption = options.Option[callConfig]
 // regular use as callers of the precompile may not understand that they are
 // escalating the precompile's privileges.
 //
+// The returned [CallOption] is ignored by Create*() methods.
+//
 // Deprecated: this option MUST NOT be used other than to allow migration to
 // libevm when backwards compatibility is required.
 func WithUNSAFECallerAddressProxying() CallOption {
