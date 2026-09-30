@@ -1150,6 +1150,10 @@ func TestPrecompileCreate(t *testing.T) {
 
 			state, evm := ethtest.NewZeroEVM(t, ethtest.WithAllEIPs())
 
+			// Shadow the outer RNG to ensures determinism when subtests are run
+			// in different orders.
+			rng := ethtest.NewPseudoRand(314159)
+
 			eoa := rng.Address()
 			max256 := new(uint256.Int).SetAllOne()
 			state.SetBalance(eoa, max256)
