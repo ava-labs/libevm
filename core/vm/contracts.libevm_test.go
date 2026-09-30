@@ -1168,7 +1168,7 @@ func TestPrecompileCreate(t *testing.T) {
 				// Note that contract deployment stores the buffer returned by
 				// the init bytecode, so env.Addresses().EVMSemantic.Self of the
 				// precompile.
-				want := precompile.Bytes() // the "constructor" just deploy's its caller address as the code
+				want := precompile.Bytes() // the "constructor" just deploys its caller address as the code
 				assert.Equalf(t, want, got, "returned by PrecompileEnvironment.%s()", tt.name)
 				assert.Equalf(t, want, state.GetCode(tt.wantDeployed), "via %T.GetCode(...)", state)
 			})
@@ -1181,7 +1181,7 @@ func TestPrecompileCreate(t *testing.T) {
 				}{
 					{"EOA", eoa, new(uint256.Int).Sub(max256, value)},
 					{"precompile", precompile, uint256.NewInt(0)}, // all propagated
-					{"depoloyed contract", tt.wantDeployed, value},
+					{"deployed contract", tt.wantDeployed, value},
 				}
 				for _, tt := range tests {
 					assert.Equalf(t, tt.want, state.GetBalance(tt.addr), "balance of %s", tt.name)
@@ -1196,7 +1196,7 @@ func TestPrecompileCreate(t *testing.T) {
 
 				_, _, err := evm.Call(vm.AccountRef(eoa), precompile, nil, 1e6, uint256.NewInt(0))
 				if diff := testerr.Diff(err, tt.wantErrOnRetry); diff != "" {
-					t.Errorf("%T.Call([EOA], [precomile], ...) retry after successful deployment %s", evm, diff)
+					t.Errorf("%T.Call([EOA], [precompile], ...) retry after successful deployment %s", evm, diff)
 				}
 			})
 		})
