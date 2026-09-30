@@ -1107,11 +1107,11 @@ func TestPrecompileCreate(t *testing.T) {
 	const callGas = 30e6
 
 	tests := []struct {
-		name                              string
-		deploy                            func(vm.PrecompileEnvironment) ([]byte, common.Address, error)
-		wantGasRemaining                  uint64
-		wantDeployed, wantDeployedOnRetry common.Address
-		wantErrOnRetry                    testerr.Want
+		name                                   string
+		deploy                                 func(vm.PrecompileEnvironment) ([]byte, common.Address, error)
+		wantGasRemaining                       uint64
+		wantDeployedFirst, wantDeployedOnRetry common.Address
+		wantErrOnRetry                         testerr.Want
 	}{
 		{
 			name: "Create",
@@ -1119,7 +1119,7 @@ func TestPrecompileCreate(t *testing.T) {
 				return env.Create(returnCallerAddress, env.Value())
 			},
 			wantGasRemaining:    callGas - params.CreateGas - params.InitCodeWordGas*initCodeWords - initCodeCost,
-			wantDeployed:        crypto.CreateAddress(precompile, 0),
+			wantDeployedFirst:   crypto.CreateAddress(precompile, 0),
 			wantDeployedOnRetry: crypto.CreateAddress(precompile, 1),
 		},
 		{
@@ -1127,20 +1127,21 @@ func TestPrecompileCreate(t *testing.T) {
 			deploy: func(env vm.PrecompileEnvironment) ([]byte, common.Address, error) {
 				return env.Create2(returnCallerAddress, env.Value(), salt)
 			},
-			wantGasRemaining: callGas - params.Create2Gas - (params.InitCodeWordGas+params.Keccak256WordGas)*initCodeWords - initCodeCost,
-			wantDeployed:     crypto.CreateAddress2(precompile, salt, crypto.Keccak256(returnCallerAddress)),
-			wantErrOnRetry:   testerr.Equals(vm.ErrContractAddressCollision),
+			wantGasRemaining:  callGas - params.Create2Gas - (params.InitCodeWordGas+params.Keccak256WordGas)*initCodeWords - initCodeCost,
+			wantDeployedFirst: crypto.CreateAddress2(precompile, salt, crypto.Keccak256(returnCallerAddress)),
+			wantErrOnRetry:    testerr.Equals(vm.ErrContractAddressCollision),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			wantDeployed := tt.wantDeployedFirst // -> precompile is NOT thread safe
 			hooks := &hookstest.Stub{
 				PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
 					precompile: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
-						ret, contract, err := tt.deploy(env)
-						if contract != tt.wantDeployed {
-							return nil, fmt.Errorf("deployed contract address %v does not match predicted %v", contract, tt.wantDeployed)
+						ret, got, err := tt.deploy(env)
+						if got != wantDeployed {
+							return nil, fmt.Errorf("deployed contract address %v does not match predicted %v", got, wantDeployed)
 						}
 						return ret, err
 					}),
@@ -1170,7 +1171,7 @@ func TestPrecompileCreate(t *testing.T) {
 				// precompile.
 				want := precompile.Bytes() // the "constructor" just deploys its caller address as the code
 				assert.Equalf(t, want, got, "returned by PrecompileEnvironment.%s()", tt.name)
-				assert.Equalf(t, want, state.GetCode(tt.wantDeployed), "via %T.GetCode(...)", state)
+				assert.Equalf(t, want, state.GetCode(tt.wantDeployedFirst), "via %T.GetCode(...)", state)
 			})
 
 			t.Run("account_balances", func(t *testing.T) {
@@ -1181,7 +1182,7 @@ func TestPrecompileCreate(t *testing.T) {
 				}{
 					{"EOA", eoa, new(uint256.Int).Sub(max256, value)},
 					{"precompile", precompile, uint256.NewInt(0)}, // all propagated
-					{"deployed contract", tt.wantDeployed, value},
+					{"deployed contract", tt.wantDeployedFirst, value},
 				}
 				for _, tt := range tests {
 					assert.Equalf(t, tt.want, state.GetBalance(tt.addr), "balance of %s", tt.name)
@@ -1192,7 +1193,7 @@ func TestPrecompileCreate(t *testing.T) {
 				t.Skip("May result in spurious failures")
 			}
 			t.Run("retry", func(t *testing.T) {
-				tt.wantDeployed = tt.wantDeployedOnRetry
+				wantDeployed = tt.wantDeployedOnRetry
 
 				_, _, err := evm.Call(vm.AccountRef(eoa), precompile, nil, 1e6, uint256.NewInt(0))
 				if diff := testerr.Diff(err, tt.wantErrOnRetry); diff != "" {
