@@ -253,7 +253,8 @@ type PrecompileEnvironment interface {
 	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...CallOption) (ret []byte, _ error)
 
 	// Create and Create2 are equivalent to [CREATE] and [CREATE2],
-	// respectively.
+	// respectively. Both methods MAY return a non-zero [common.Address] even if
+	// creation failed.
 	//
 	// WARNING: See [PrecompileEnvironment.Call] regarding reentrancy.
 	Create(code []byte, value *uint256.Int) ([]byte, common.Address, error)

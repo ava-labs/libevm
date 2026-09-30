@@ -1073,8 +1073,8 @@ func TestNotWarmCalledAddressOnPrecompileOutOfGas(t *testing.T) {
 		}
 
 		want := returnIfCalledIsWarm
-		// See comment in [vm.environment.buyCallGas] regarding the rationale
-		// behind reverting the access list for errors.
+		// See comment in [vm.environment.buyGas] regarding the rationale behind
+		// reverting the access list for errors.
 		if err != nil {
 			want = returnIfCalledIsCold
 		}
