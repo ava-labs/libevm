@@ -27,6 +27,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/arr4n/shed/testerr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
@@ -1072,8 +1073,8 @@ func TestNotWarmCalledAddressOnPrecompileOutOfGas(t *testing.T) {
 		}
 
 		want := returnIfCalledIsWarm
-		// See comment in [vm.environment.buyCallGas] regarding the rationale
-		// behind reverting the access list for errors.
+		// See comment in [vm.environment.buyGas] regarding the rationale behind
+		// reverting the access list for errors.
 		if err != nil {
 			want = returnIfCalledIsCold
 		}
@@ -1082,5 +1083,147 @@ func TestNotWarmCalledAddressOnPrecompileOutOfGas(t *testing.T) {
 		if err == nil {
 			break
 		}
+	}
+}
+
+func TestPrecompileCreate(t *testing.T) {
+	returnCallerAddress := convertBytes[vm.OpCode, byte](
+		vm.CALLER, vm.PUSH0, vm.MSTORE,
+		vm.PUSH1, 20, vm.PUSH1, 12, vm.RETURN,
+	)
+	const (
+		q = vm.GasQuickStep
+		f = vm.GasFastestStep
+	)
+	initCodeWords := uint64(len(returnCallerAddress)+31) / 32 //nolint:gosec // Non-negative value
+	initCodeCost := 0 +
+		q + q + (f + 1*params.MemoryGas) + // MSTORE is 1 word, by definition
+		f + f +
+		common.AddressLength*params.CreateDataGas
+
+	rng := ethtest.NewPseudoRand(142857)
+	precompile := rng.Address()
+	salt := rng.Hash()
+	const callGas = 30e6
+
+	tests := []struct {
+		name                                   string
+		deploy                                 func(vm.PrecompileEnvironment) ([]byte, common.Address, error)
+		wantGasRemaining                       uint64
+		wantDeployedFirst, wantDeployedOnRetry common.Address
+		wantErrOnRetry                         testerr.Want
+	}{
+		{
+			name: "Create",
+			deploy: func(env vm.PrecompileEnvironment) ([]byte, common.Address, error) {
+				return env.Create(returnCallerAddress, env.Value())
+			},
+			wantGasRemaining:    callGas - params.CreateGas - params.InitCodeWordGas*initCodeWords - initCodeCost,
+			wantDeployedFirst:   crypto.CreateAddress(precompile, 0),
+			wantDeployedOnRetry: crypto.CreateAddress(precompile, 1),
+		},
+		{
+			name: "Create2",
+			deploy: func(env vm.PrecompileEnvironment) ([]byte, common.Address, error) {
+				return env.Create2(returnCallerAddress, env.Value(), salt)
+			},
+			wantGasRemaining:  callGas - params.Create2Gas - (params.InitCodeWordGas+params.Keccak256WordGas)*initCodeWords - initCodeCost,
+			wantDeployedFirst: crypto.CreateAddress2(precompile, salt, crypto.Keccak256(returnCallerAddress)),
+			wantErrOnRetry:    testerr.Equals(vm.ErrContractAddressCollision),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wantDeployed := tt.wantDeployedFirst // -> precompile is NOT thread safe
+			hooks := &hookstest.Stub{
+				PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+					precompile: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
+						ret, got, err := tt.deploy(env)
+						if got != wantDeployed {
+							return nil, fmt.Errorf("deployed contract address %v does not match predicted %v", got, wantDeployed)
+						}
+						return ret, err
+					}),
+				},
+			}
+			hooks.Register(t)
+
+			state, evm := ethtest.NewZeroEVM(t, ethtest.WithAllEIPs())
+
+			// Shadow the outer RNG to ensures determinism when subtests are run
+			// in different orders.
+			rng := ethtest.NewPseudoRand(314159)
+
+			eoa := rng.Address()
+			max256 := new(uint256.Int).SetAllOne()
+			state.SetBalance(eoa, max256)
+			value := rng.Uint256()
+			got, gotGasRemaining, err := evm.Call(vm.AccountRef(eoa), precompile, nil, callGas, value)
+			require.NoErrorf(t, err, "%T.Call([EOA], [precompile], ...)", evm)
+			if got, want := gotGasRemaining, tt.wantGasRemaining; got != want { // testify prints uint64 as hex
+				t.Errorf("%T.Call([EOA], [precompile], ...) got gas remaining %d; want %d", evm, got, want)
+			}
+
+			t.Run("deployed_code", func(t *testing.T) {
+				// Note that contract deployment stores the buffer returned by
+				// the init bytecode, so env.Addresses().EVMSemantic.Self of the
+				// precompile.
+				want := precompile.Bytes() // the "constructor" just deploys its caller address as the code
+				assert.Equalf(t, want, got, "returned by PrecompileEnvironment.%s()", tt.name)
+				assert.Equalf(t, want, state.GetCode(tt.wantDeployedFirst), "via %T.GetCode(...)", state)
+			})
+
+			t.Run("account_balances", func(t *testing.T) {
+				tests := []struct {
+					name string
+					addr common.Address
+					want *uint256.Int
+				}{
+					{"EOA", eoa, new(uint256.Int).Sub(max256, value)},
+					{"precompile", precompile, uint256.NewInt(0)}, // all propagated
+					{"deployed contract", tt.wantDeployedFirst, value},
+				}
+				for _, tt := range tests {
+					assert.Equalf(t, tt.want, state.GetBalance(tt.addr), "balance of %s", tt.name)
+				}
+			})
+
+			if t.Failed() {
+				t.Skip("May result in spurious failures")
+			}
+			t.Run("retry", func(t *testing.T) {
+				wantDeployed = tt.wantDeployedOnRetry
+
+				_, _, err := evm.Call(vm.AccountRef(eoa), precompile, nil, 1e6, uint256.NewInt(0))
+				if diff := testerr.Diff(err, tt.wantErrOnRetry); diff != "" {
+					t.Errorf("%T.Call([EOA], [precompile], ...) retry after successful deployment %s", evm, diff)
+				}
+			})
+		})
+	}
+}
+
+func TestCreate2WhenEIPNotEnabled(t *testing.T) {
+	eoa := common.Address{'e', 'o', 'a'}
+	precompile := common.Address{'p', 'r', 'e'}
+
+	hooks := &hookstest.Stub{
+		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+			precompile: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, _ []byte) ([]byte, error) {
+				ret, _, err := env.Create2([]byte{}, nil, [32]byte{})
+				return ret, err
+			}),
+		},
+	}
+	hooks.Register(t)
+
+	sdb, evm := ethtest.NewZeroEVM(t /* explicitly NOT all EIPs */)
+	sdb.SetBalance(eoa, new(uint256.Int).SetAllOne())
+
+	want := testerr.As[*vm.ErrInvalidOpCode](nil)
+	_, _, got := evm.Call(vm.AccountRef(eoa), precompile, []byte{}, 1e6, uint256.NewInt(0))
+	if diff := testerr.Diff(got, want); diff != "" {
+		t.Errorf("PrecompileEnvironment.Create2() when opcode not supported: %s", diff)
 	}
 }
