@@ -1095,7 +1095,7 @@ func TestPrecompileCreate(t *testing.T) {
 		q = vm.GasQuickStep
 		f = vm.GasFastestStep
 	)
-	initCodeWords := uint64(len(returnCallerAddress)+31) / 32
+	initCodeWords := uint64(len(returnCallerAddress)+31) / 32 //nolint:gosec // Non-negative value
 	initCodeCost := 0 +
 		q + q + (f + 1*params.MemoryGas) + // MSTORE is 1 word, by definition
 		f + f +
