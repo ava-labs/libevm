@@ -21,13 +21,14 @@ import (
 	"time"
 )
 
-// SetCallTimeout limits how long each method call may run on connections
-// served by [Server.ServeCodec], such as WebSockets. When a call runs too long,
-// its context is cancelled and the client gets a timeout error. The connection
-// stays open. A non-positive timeout, the default, means no limit.
-//
-// It doesn't apply to HTTP. To limit HTTP calls, set a deadline on the
-// request's context.
+// ErrCodeTimeout is the JSON-RPC error code for a call that times out.
+const ErrCodeTimeout = errcodeTimeout
+
+// SetCallTimeout limits how long each call, or batch of calls, may run on
+// connections served by [Server.ServeCodec], such as WebSockets. When one runs
+// too long, its context is cancelled and the client gets a timeout error, but
+// the connection stays open. A non-positive timeout, the default, means no
+// limit.
 //
 // This method should be called before processing any requests via ServeCodec.
 func (s *Server) SetCallTimeout(timeout time.Duration) {
@@ -37,7 +38,7 @@ func (s *Server) SetCallTimeout(timeout time.Duration) {
 // callTimeout returns the timeout set by [Server.SetCallTimeout] for the
 // connection that ctx belongs to.
 func callTimeout(ctx context.Context) (time.Duration, bool) {
-	// The registry is the only server state reachable from ctx.
+	// ctx carries the Client, which shares the Server's registry.
 	c, ok := ctx.Value(clientContextKey{}).(*Client)
 	if !ok {
 		return 0, false
