@@ -47,9 +47,25 @@ func (r keyRange) empty() bool {
 	return r.from == nil || r.to == nil || bytes.Compare(r.from, r.to) > 0
 }
 
+func (r keyRange) startsAtOrBeforeEndOf(s keyRange) bool {
+	return bytes.Compare(r.from, s.to) <= 0
+}
+
+func (r keyRange) entirelyBefore(s keyRange) bool {
+	return bytes.Compare(r.to, s.from) < 0
+}
+
+func (r keyRange) startsAfter(key []byte) bool {
+	return bytes.Compare(r.from, key) > 0
+}
+
+func (r keyRange) endsAfter(key []byte) bool {
+	return bytes.Compare(r.to, key) > 0
+}
+
 // after returns the part of r that sorts after key.
 func (r keyRange) after(key []byte) keyRange {
-	if r.empty() || bytes.Compare(r.from, key) > 0 {
+	if r.empty() || r.startsAfter(key) {
 		return r
 	}
 	return keyRange{from: append(common.CopyBytes(key), 0), to: r.to, keys: r.keys}
@@ -59,29 +75,40 @@ func (r keyRange) after(key []byte) keyRange {
 // receiver or its elements, so a copy handed to an iterator stays valid.
 type keyRanges []keyRange
 
+// firstThat is syntactic sugar for [sort.Search] over the [keyRanges].
+func (rs keyRanges) firstThat(fn func(keyRange) bool) int {
+	return sort.Search(
+		len(rs),
+		func(k int) bool {
+			return fn(rs[k])
+		},
+	)
+}
+
 // with returns rs plus r, merged with any stretch it overlaps, keeping only the
 // maxSkipRanges stretches holding the most keys.
 func (rs keyRanges) with(r keyRange) keyRanges {
 	if r.empty() || r.keys < minSkipKeys {
 		return rs
 	}
-	r = keyRange{from: common.CopyBytes(r.from), to: common.CopyBytes(r.to), keys: r.keys}
+
+	insert := keyRange{
+		from: slices.Clone(r.from),
+		to:   slices.Clone(r.to),
+		keys: r.keys,
+	}
 	// rs[i:j] are the stretches r overlaps.
-	i := sort.Search(len(rs), func(k int) bool { return bytes.Compare(rs[k].to, r.from) >= 0 })
-	j := sort.Search(len(rs), func(k int) bool { return bytes.Compare(rs[k].from, r.to) > 0 })
+	i := rs.firstThat(r.startsAtOrBeforeEndOf)
+	j := rs.firstThat(r.entirelyBefore)
 	if i < j {
-		if bytes.Compare(rs[i].from, r.from) < 0 {
-			r.from = rs[i].from
-		}
-		if bytes.Compare(rs[j-1].to, r.to) > 0 {
-			r.to = rs[j-1].to
-		}
+		insert.from = minBytes(insert.from, rs[i].from)
+		insert.to = maxBytes(insert.to, rs[j-1].to)
 		for _, o := range rs[i:j] {
-			r.keys = max(r.keys, o.keys)
+			insert.keys = max(insert.keys, o.keys)
 		}
 	}
-	out := make(keyRanges, 0, len(rs)-(j-i)+1)
-	out = append(append(append(out, rs[:i]...), r), rs[j:]...)
+	out := slices.Concat(rs[:i], keyRanges{insert}, rs[j:])
+
 	if len(out) > maxSkipRanges {
 		fewest := 0
 		for i := range out {
@@ -94,10 +121,27 @@ func (rs keyRanges) with(r keyRange) keyRanges {
 	return out
 }
 
+func minBytes(a, b []byte) []byte {
+	return extremum(a, b, -1)
+}
+
+func maxBytes(a, b []byte) []byte {
+	return extremum(a, b, 1)
+}
+
+func extremum(a, b []byte, sign int) []byte {
+	if sign*bytes.Compare(a, b) > 0 {
+		return a
+	}
+	return b
+}
+
 // after returns the parts of rs that sort after key.
 func (rs keyRanges) after(key []byte) keyRanges {
-	i := sort.Search(len(rs), func(k int) bool { return bytes.Compare(rs[k].to, key) > 0 })
-	if i == len(rs) || bytes.Compare(rs[i].from, key) > 0 {
+	i := rs.firstThat(func(r keyRange) bool {
+		return r.endsAfter(key)
+	})
+	if i == len(rs) || rs[i].startsAfter(key) {
 		return rs[i:]
 	}
 	out := slices.Clone(rs[i:])
@@ -152,7 +196,7 @@ func newSkippingIterator(db ethdb.KeyValueStore, it ethdb.Iterator, prefix, star
 		found:  found,
 		it:     it,
 		// Start after the resume key, as the flush of diff layers writes its entry.
-		run: keyRange{from: append(append(common.CopyBytes(prefix), start...), 0)},
+		run: keyRange{from: slices.Concat(prefix, start, []byte{0})},
 	}
 }
 
