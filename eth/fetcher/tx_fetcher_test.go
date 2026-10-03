@@ -562,7 +562,7 @@ func TestTransactionFetcherFailedRescheduling(t *testing.T) {
 					"A": {{0x01}, {0x02}},
 				},
 			},
-			// While the original peer is stuck in the request, push in an second
+			// While the original peer is stuck in the request, push in a second
 			// data source.
 			doTxNotify{peer: "B", hashes: []common.Hash{{0x02}}},
 			isWaiting(nil),
