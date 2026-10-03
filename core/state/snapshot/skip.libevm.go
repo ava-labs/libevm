@@ -48,7 +48,7 @@ func (r keyRange) empty() bool {
 }
 
 func (r keyRange) startsAtOrBeforeEndOf(s keyRange) bool {
-	return bytes.Compare(r.from, s.to) <= 0
+	return r.startsAtOrBefore(s.to)
 }
 
 func (r keyRange) entirelyBefore(s keyRange) bool {
@@ -59,8 +59,24 @@ func (r keyRange) startsAfter(key []byte) bool {
 	return bytes.Compare(r.from, key) > 0
 }
 
+func (r keyRange) startsAtOrBefore(key []byte) bool {
+	return bytes.Compare(r.from, key) <= 0
+}
+
+func (r keyRange) endsBefore(key []byte) bool {
+	return bytes.Compare(r.to, key) < 0
+}
+
 func (r keyRange) endsAfter(key []byte) bool {
 	return bytes.Compare(r.to, key) > 0
+}
+
+// firstKeyAfter returns the smallest key that sorts, under [bytes.Compare],
+// strictly after the concatenation of `parts`; i.e. said concatenation with a
+// 0x00 byte appended. Used as an inclusive start, it excludes the concatenation
+// itself.
+func firstKeyAfter(parts ...[]byte) []byte {
+	return append(slices.Concat(parts...), 0)
 }
 
 // after returns the part of r that sorts after key.
@@ -68,7 +84,7 @@ func (r keyRange) after(key []byte) keyRange {
 	if r.empty() || r.startsAfter(key) {
 		return r
 	}
-	return keyRange{from: append(common.CopyBytes(key), 0), to: r.to, keys: r.keys}
+	return keyRange{from: firstKeyAfter(key), to: r.to, keys: r.keys}
 }
 
 // keyRanges are disjoint stretches sorted by key. Methods never modify the
@@ -172,9 +188,9 @@ func withSkipsFromDiskLayer(dl *diskLayer) generatorContextOption {
 	})
 }
 
-// skippingIterator iterates the raw keys under prefix, jumping over the known
-// stretches, and records in found each stretch it reads that holds no key of
-// keyLen.
+// skippingIterator iterates the raw keys under prefix, jumping over the `known`
+// stretches, and records in `found` each stretch it reads that holds no key of
+// `keyLen`.
 type skippingIterator struct {
 	db     ethdb.KeyValueStore
 	prefix []byte
@@ -196,37 +212,56 @@ func newSkippingIterator(db ethdb.KeyValueStore, it ethdb.Iterator, prefix, star
 		found:  found,
 		it:     it,
 		// Start after the resume key, as the flush of diff layers writes its entry.
-		run: keyRange{from: slices.Concat(prefix, start, []byte{0})},
+		run: keyRange{from: firstKeyAfter(prefix, start)},
 	}
 }
 
 func (it *skippingIterator) Next() bool {
+	more := func() bool { return it.next < len(it.known) }
+	nextKnown := func() keyRange { return it.known[it.next] }
+
 	for it.it.Next() {
 		key := it.it.Key()
-		for it.next < len(it.known) && bytes.Compare(it.known[it.next].to, key) < 0 {
+
+		for more() && nextKnown().endsBefore(key) {
 			it.next++
 		}
-		if it.next < len(it.known) && bytes.Compare(it.known[it.next].from, key) <= 0 {
+		if more() && nextKnown().startsAtOrBefore(key) {
 			// The run so far and the whole known stretch hold no key of keyLen,
-			// so the run carries on to the end of the stretch.
-			skip := it.known[it.next]
+			// so the run extends to the end of the stretch, and we replace the
+			// iterator with one starting at the next key.
+			skip := nextKnown()
 			it.next++
+
 			it.run.to = common.CopyBytes(skip.to)
 			it.run.keys += skip.keys
+
 			it.it.Release()
-			it.it = it.db.NewIterator(it.prefix, append(common.CopyBytes(skip.to[len(it.prefix):]), 0))
+			it.it = it.db.NewIterator(
+				it.prefix,
+				firstKeyAfter(it.stripPrefix(skip.to)),
+			)
 			continue
 		}
-		if len(key) == it.keyLen {
-			it.keepRun()
-			it.run = keyRange{from: append(common.CopyBytes(key), 0)}
+
+		if len(key) != it.keyLen {
+			it.run.to = append(it.run.to[:0], key...)
+			it.run.keys++
+			// Even though we still don't have the correct length, yield to the
+			// [abortableIterator] that wraps this [skippingIterator], to allow
+			// for more responsive cancellation.
 			return true
 		}
-		it.run.to = append(it.run.to[:0], key...)
-		it.run.keys++
+
+		it.keepRun()
+		it.run = keyRange{from: firstKeyAfter(key)}
 		return true
 	}
 	return false
+}
+
+func (it *skippingIterator) stripPrefix(key []byte) []byte {
+	return key[len(it.prefix):]
 }
 
 // keepRun records the stretch read since the last key of keyLen, once.
