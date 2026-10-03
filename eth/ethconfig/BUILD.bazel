@@ -1,0 +1,26 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "ethconfig",
+    srcs = [
+        "config.go",
+        "gen_config.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/eth/ethconfig",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//consensus",
+        "//consensus/beacon",
+        "//consensus/clique",
+        "//consensus/ethash",
+        "//core",
+        "//core/txpool/blobpool",
+        "//core/txpool/legacypool",
+        "//eth/downloader",
+        "//eth/gasprice",
+        "//ethdb",
+        "//miner",
+        "//params",
+    ],
+)

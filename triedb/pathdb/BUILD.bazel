@@ -1,0 +1,58 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "pathdb",
+    srcs = [
+        "database.go",
+        "difflayer.go",
+        "disklayer.go",
+        "errors.go",
+        "history.go",
+        "journal.go",
+        "layertree.go",
+        "metrics.go",
+        "nodebuffer.go",
+        "testutils.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/triedb/pathdb",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//common/hexutil",
+        "//core/rawdb",
+        "//core/types",
+        "//crypto",
+        "//ethdb",
+        "//log",
+        "//metrics",
+        "//params",
+        "//rlp",
+        "//trie/trienode",
+        "//trie/triestate",
+        "@com_github_victoriametrics_fastcache//:fastcache",
+        "@org_golang_x_crypto//sha3",
+        "@org_golang_x_exp//slices",
+    ],
+)
+
+go_test(
+    name = "pathdb_test",
+    srcs = [
+        "database_test.go",
+        "difflayer_test.go",
+        "history_test.go",
+    ],
+    embed = [":pathdb"],
+    deps = [
+        "//common",
+        "//core/rawdb",
+        "//core/types",
+        "//crypto",
+        "//ethdb",
+        "//rlp",
+        "//trie/testutil",
+        "//trie/trienode",
+        "//trie/triestate",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)

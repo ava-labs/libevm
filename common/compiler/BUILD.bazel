@@ -1,0 +1,11 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "compiler",
+    srcs = [
+        "helpers.go",
+        "solidity.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/common/compiler",
+    visibility = ["//visibility:public"],
+)

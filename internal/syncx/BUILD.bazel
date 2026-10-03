@@ -1,0 +1,8 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "syncx",
+    srcs = ["mutex.go"],
+    importpath = "github.com/ava-labs/libevm/internal/syncx",
+    visibility = ["//:__subpackages__"],
+)

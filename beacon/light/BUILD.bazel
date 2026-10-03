@@ -1,0 +1,37 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "light",
+    srcs = [
+        "canonical.go",
+        "committee_chain.go",
+        "range.go",
+        "test_helpers.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/beacon/light",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//beacon/merkle",
+        "//beacon/params",
+        "//beacon/types",
+        "//common",
+        "//common/lru",
+        "//common/mclock",
+        "//core/rawdb",
+        "//ethdb",
+        "//log",
+        "//rlp",
+    ],
+)
+
+go_test(
+    name = "light_test",
+    srcs = ["committee_chain_test.go"],
+    embed = [":light"],
+    deps = [
+        "//beacon/params",
+        "//beacon/types",
+        "//common/mclock",
+        "//ethdb/memorydb",
+    ],
+)

@@ -1,0 +1,27 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "prque",
+    srcs = [
+        "lazyqueue.go",
+        "prque.go",
+        "sstack.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/common/prque",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common/mclock",
+        "@org_golang_x_exp//constraints",
+    ],
+)
+
+go_test(
+    name = "prque_test",
+    srcs = [
+        "lazyqueue_test.go",
+        "prque_test.go",
+        "sstack_test.go",
+    ],
+    embed = [":prque"],
+    deps = ["//common/mclock"],
+)

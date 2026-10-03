@@ -1,0 +1,16 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "triestate",
+    srcs = ["state.go"],
+    importpath = "github.com/ava-labs/libevm/trie/triestate",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//core/types",
+        "//crypto",
+        "//rlp",
+        "//trie/trienode",
+        "@org_golang_x_crypto//sha3",
+    ],
+)

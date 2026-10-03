@@ -1,0 +1,52 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "clique",
+    srcs = [
+        "api.go",
+        "clique.go",
+        "snapshot.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/consensus/clique",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//accounts",
+        "//common",
+        "//common/hexutil",
+        "//common/lru",
+        "//consensus",
+        "//consensus/misc",
+        "//consensus/misc/eip1559",
+        "//core/rawdb",
+        "//core/state",
+        "//core/types",
+        "//crypto",
+        "//ethdb",
+        "//log",
+        "//params",
+        "//rlp",
+        "//rpc",
+        "//trie",
+        "@org_golang_x_crypto//sha3",
+        "@org_golang_x_exp//slices",
+    ],
+)
+
+go_test(
+    name = "clique_test",
+    srcs = [
+        "clique_test.go",
+        "snapshot_test.go",
+    ],
+    embed = [":clique"],
+    deps = [
+        "//common",
+        "//core",
+        "//core/rawdb",
+        "//core/types",
+        "//core/vm",
+        "//crypto",
+        "//params",
+        "@org_golang_x_exp//slices",
+    ],
+)

@@ -1,0 +1,9 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "stateconf",
+    srcs = ["conf.go"],
+    importpath = "github.com/ava-labs/libevm/libevm/stateconf",
+    visibility = ["//visibility:public"],
+    deps = ["//libevm/options"],
+)

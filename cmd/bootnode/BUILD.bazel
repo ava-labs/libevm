@@ -1,0 +1,23 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "bootnode_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/ava-labs/libevm/cmd/bootnode",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//cmd/utils",
+        "//crypto",
+        "//log",
+        "//p2p/discover",
+        "//p2p/enode",
+        "//p2p/nat",
+        "//p2p/netutil",
+    ],
+)
+
+go_binary(
+    name = "bootnode",
+    embed = [":bootnode_lib"],
+    visibility = ["//visibility:public"],
+)

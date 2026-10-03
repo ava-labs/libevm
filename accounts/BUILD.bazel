@@ -1,0 +1,33 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "accounts",
+    srcs = [
+        "accounts.go",
+        "errors.go",
+        "hd.go",
+        "manager.go",
+        "sort.go",
+        "url.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/accounts",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//:libevm",
+        "//common",
+        "//core/types",
+        "//event",
+        "@org_golang_x_crypto//sha3",
+    ],
+)
+
+go_test(
+    name = "accounts_test",
+    srcs = [
+        "accounts_test.go",
+        "hd_test.go",
+        "url_test.go",
+    ],
+    embed = [":accounts"],
+    deps = ["//common/hexutil"],
+)

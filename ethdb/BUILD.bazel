@@ -1,0 +1,13 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "ethdb",
+    srcs = [
+        "batch.go",
+        "database.go",
+        "iterator.go",
+        "snapshot.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/ethdb",
+    visibility = ["//visibility:public"],
+)

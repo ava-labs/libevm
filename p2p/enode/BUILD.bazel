@@ -1,0 +1,50 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "enode",
+    srcs = [
+        "idscheme.go",
+        "iter.go",
+        "localnode.go",
+        "node.go",
+        "nodedb.go",
+        "urlv4.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/p2p/enode",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common/math",
+        "//crypto",
+        "//log",
+        "//p2p/enr",
+        "//p2p/netutil",
+        "//rlp",
+        "@com_github_syndtr_goleveldb//leveldb",
+        "@com_github_syndtr_goleveldb//leveldb/errors",
+        "@com_github_syndtr_goleveldb//leveldb/iterator",
+        "@com_github_syndtr_goleveldb//leveldb/opt",
+        "@com_github_syndtr_goleveldb//leveldb/storage",
+        "@com_github_syndtr_goleveldb//leveldb/util",
+        "@org_golang_x_crypto//sha3",
+    ],
+)
+
+go_test(
+    name = "enode_test",
+    srcs = [
+        "idscheme_test.go",
+        "iter_test.go",
+        "localnode_test.go",
+        "node_test.go",
+        "nodedb_test.go",
+        "urlv4_test.go",
+    ],
+    embed = [":enode"],
+    deps = [
+        "//crypto",
+        "//p2p/enr",
+        "//rlp",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)

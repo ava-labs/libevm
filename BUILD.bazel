@@ -1,0 +1,27 @@
+load("@gazelle//:def.bzl", "gazelle")
+load("@rules_go//go:def.bzl", "go_library")
+
+# No need for gazelle:prefix as it reads from go.mod
+# libevm/tooling is a different Go/Bazel module
+# gazelle:exclude libevm/tooling/**
+gazelle(
+    name = "gazelle",
+    command = "fix",
+)
+
+gazelle(
+    name = "gazelle_diff",
+    command = "fix",
+    extra_args = ["--mode=diff"],
+)
+
+go_library(
+    name = "libevm",
+    srcs = ["interfaces.go"],
+    importpath = "github.com/ava-labs/libevm",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//core/types",
+    ],
+)

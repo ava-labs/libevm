@@ -1,0 +1,21 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "libevm",
+    srcs = ["libevm.go"],
+    importpath = "github.com/ava-labs/libevm/libevm",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "@com_github_holiman_uint256//:uint256",
+    ],
+)
+
+go_test(
+    name = "libevm_test",
+    srcs = ["interfaces_test.go"],
+    deps = [
+        ":libevm",
+        "//core/vm",
+    ],
+)
