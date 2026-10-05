@@ -20,7 +20,9 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/libevm/options"
 	"github.com/ava-labs/libevm/params"
 )
 
@@ -43,4 +45,40 @@ type RevertError = revertError
 // NewRevertError exports the [newRevertError] constructor.
 func NewRevertError(revert []byte) *RevertError {
 	return newRevertError(revert)
+}
+
+type (
+	// A CallOption configures [DoCall].
+	CallOption = options.Option[callConfig]
+
+	callConfig struct {
+		interceptResult CallResultInterceptor
+	}
+
+	// A CallResultInterceptor receives the return argument of [DoCall] before
+	// it is returned. If the interceptor returns an error then it is propagated
+	// along with a nil [core.ExecutionResult].
+	CallResultInterceptor func(*core.ExecutionResult) error
+)
+
+// WithCallResultInterceptor returns an option to configure [DoCall] with the
+// provided interceptor.
+func WithCallResultInterceptor(fn CallResultInterceptor) CallOption {
+	return options.Func[callConfig](func(c *callConfig) {
+		c.interceptResult = fn
+	})
+}
+
+func interceptCallResult(r *core.ExecutionResult, err error, opts ...CallOption) (*core.ExecutionResult, error) {
+	if err != nil {
+		return nil, err
+	}
+	fn := options.As[callConfig](opts...).interceptResult
+	if fn == nil {
+		return r, nil
+	}
+	if err := fn(r); err != nil {
+		return nil, err
+	}
+	return r, nil
 }
