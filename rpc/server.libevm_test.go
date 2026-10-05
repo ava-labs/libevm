@@ -26,16 +26,23 @@ import (
 
 func TestServerSetCallTimeout(t *testing.T) {
 	tests := []struct {
-		name    string
-		timeout time.Duration
-		wantErr error
+		name           string
+		timeout, sleep time.Duration
+		wantErr        error
 	}{
 		{
-			name: "no_timeout",
+			name:  "no_timeout",
+			sleep: time.Hour,
 		},
 		{
-			name:    "timeout",
+			name:    "timeout_longer_than_sleep",
+			timeout: time.Second + time.Nanosecond,
+			sleep:   time.Second,
+		},
+		{
+			name:    "timeout_shorter_than_sleep",
 			timeout: time.Second,
+			sleep:   time.Second + time.Nanosecond,
 			wantErr: &jsonError{Code: errcodeTimeout, Message: errMsgTimeout},
 		},
 	}
@@ -51,8 +58,7 @@ func TestServerSetCallTimeout(t *testing.T) {
 				client := DialInProc(srv)
 				defer client.Close()
 
-				const sleep = time.Minute
-				err := client.CallContext(t.Context(), nil, "test_sleep", sleep)
+				err := client.CallContext(t.Context(), nil, "test_sleep", tt.sleep)
 				require.Equal(t, tt.wantErr, err, "CallContext(test_sleep)")
 
 				// A timed-out call doesn't close the connection.
@@ -60,7 +66,7 @@ func TestServerSetCallTimeout(t *testing.T) {
 
 				// A timed-out call keeps running on the server, so let it return
 				// before the bubble ends.
-				time.Sleep(sleep)
+				time.Sleep(tt.sleep)
 			})
 		})
 	}
