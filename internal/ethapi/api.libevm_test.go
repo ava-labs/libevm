@@ -21,6 +21,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/consensus/beacon"
 	"github.com/ava-labs/libevm/consensus/ethash"
@@ -28,7 +30,6 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/params"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestCallInterceptor(t *testing.T) {
@@ -64,6 +65,6 @@ func TestCallInterceptor(t *testing.T) {
 	})
 
 	_, err := api.Call(t.Context(), TransactionArgs{To: &addr}, nil, nil, nil, opt)
-	assert.Equalf(t, retErr, err, "%T.Call() error propagated from CallResultInterceptor")
-	assert.Lenf(t, got, returnBufSize, "%T.ReturnData received by CallResultInterceptor")
+	assert.Equalf(t, retErr, err, "%T.Call() error propagated from CallResultInterceptor", api)
+	assert.Lenf(t, got, returnBufSize, "%T.ReturnData received by CallResultInterceptor", &core.ExecutionResult{})
 }
