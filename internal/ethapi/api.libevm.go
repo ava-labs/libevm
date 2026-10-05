@@ -71,7 +71,7 @@ func WithCallResultInterceptor(fn CallResultInterceptor) CallOption {
 
 func interceptCallResult(r *core.ExecutionResult, err error, opts ...CallOption) (*core.ExecutionResult, error) {
 	if err != nil {
-		return nil, err
+		return r, err
 	}
 	fn := options.As[callConfig](opts...).interceptResult
 	if fn == nil {
