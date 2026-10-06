@@ -188,6 +188,7 @@ type BlockBodyHooks interface {
 	BodyRLPFieldsForEncoding(*Body) *rlp.Fields
 	BodyRLPFieldPointersForDecoding(*Body) *rlp.Fields
 	PostRPCMarshal(b *Block, marshalled map[string]any)
+	PostRPCUnmarshal(b *Block, raw []byte) error
 }
 
 // NOOPBlockBodyHooks implements [BlockBodyHooks] such that they are equivalent
@@ -228,3 +229,5 @@ func (NOOPBlockBodyHooks) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 }
 
 func (NOOPBlockBodyHooks) PostRPCMarshal(*Block, map[string]any) {}
+
+func (NOOPBlockBodyHooks) PostRPCUnmarshal(*Block, []byte) error { return nil }

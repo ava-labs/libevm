@@ -236,6 +236,12 @@ func (b *Block) PostRPCMarshal(m map[string]any) {
 	b.hooks().PostRPCMarshal(b, m)
 }
 
+// PostRPCUnmarshal propagates `b` and `raw` to the respective method on the
+// registered [BlockBodyHooks], if any, and is otherwise a noop.
+func (b *Block) PostRPCUnmarshal(raw []byte) error {
+	return b.hooks().PostRPCUnmarshal(b, raw)
+}
+
 func (e *StateAccountExtra) clone() *StateAccountExtra {
 	switch r := registeredExtras; {
 	case !r.Registered(), e == nil:
