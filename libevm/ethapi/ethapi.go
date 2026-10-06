@@ -68,8 +68,8 @@ func NewEthereumAPI(b Backend) *EthereumAPI {
 }
 
 // NewBlockChainAPI is identical to [ethapi.NewBlockChainAPI].
-func NewBlockChainAPI(b Backend) *BlockChainAPI {
-	return ethapi.NewBlockChainAPI(b)
+func NewBlockChainAPI(b Backend, opts ...BlockChainAPIOption) *BlockChainAPI {
+	return ethapi.NewBlockChainAPI(b, opts...)
 }
 
 // NewTransactionAPI is identical to [ethapi.NewTransactionAPI].
@@ -100,6 +100,16 @@ func NewRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 // MarshalReceipt is identical to [ethapi.MarshalReceipt].
 func MarshalReceipt(r *types.Receipt, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex int) map[string]any {
 	return ethapi.MarshalReceipt(r, blockHash, blockNumber, signer, tx, txIndex)
+}
+
+// A BlockChainAPIOption configures a [BlockChainAPI].
+type BlockChainAPIOption = ethapi.BlockChainAPIOption
+
+// WithDefaultCallOptions returns an option to configure a [BlockChainAPI] with
+// default options to be passed to [DoCall] by [BlockChainAPI.Call]. Repeated
+// options result in a concatenation of the arguments to each.
+func WithDefaultCallOptions(opts ...CallOption) BlockChainAPIOption {
+	return ethapi.WithDefaultCallOptions(opts...)
 }
 
 // A CallOption configures [DoCall].

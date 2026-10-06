@@ -504,7 +504,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 		return msg.errorResponse(&methodNotFoundError{method: msg.Method})
 	}
 
-	args, err := parsePositionalArguments(msg.Params, callb.argTypes, callb.isVariadic())
+	args, err := parsePositionalArguments(msg.Params, callb.argTypes)
 	if err != nil {
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
@@ -546,7 +546,7 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 
 	// Parse subscription name arg too, but remove it before calling the callback.
 	argTypes := append([]reflect.Type{stringType}, callb.argTypes...)
-	args, err := parsePositionalArguments(msg.Params, argTypes, callb.isVariadic())
+	args, err := parsePositionalArguments(msg.Params, argTypes)
 	if err != nil {
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}

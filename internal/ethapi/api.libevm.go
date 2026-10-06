@@ -48,6 +48,13 @@ func NewRevertError(revert []byte) *RevertError {
 }
 
 type (
+	// A BlockChainAPIOption configures a [BlockChainAPI].
+	BlockChainAPIOption = options.Option[blockChainAPIConfig]
+
+	blockChainAPIConfig struct {
+		callOpts []CallOption
+	}
+
 	// A CallOption configures [DoCall].
 	CallOption = options.Option[callConfig]
 
@@ -60,6 +67,15 @@ type (
 	// along with a nil [core.ExecutionResult].
 	CallResultInterceptor func(*core.ExecutionResult) error
 )
+
+// WithDefaultCallOptions returns an option to configure a [BlockChainAPI] with
+// default options to be passed to [DoCall] by [BlockChainAPI.Call]. Repeated
+// options result in a concatenation of the arguments to each.
+func WithDefaultCallOptions(opts ...CallOption) BlockChainAPIOption {
+	return options.Func[blockChainAPIConfig](func(c *blockChainAPIConfig) {
+		c.callOpts = append(c.callOpts, opts...)
+	})
+}
 
 // WithCallResultInterceptor returns an option to configure [DoCall] with the
 // provided interceptor.

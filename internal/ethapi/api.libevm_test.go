@@ -36,35 +36,38 @@ func TestCallInterceptor(t *testing.T) {
 	addr := common.Address{'f', 'o', 'o'}
 	const returnBufSize = 17 // arbitrary
 
-	api := NewBlockChainAPI(newTestBackend(
-		t,
-		0,
-		&core.Genesis{
-			Config: params.TestChainConfig,
-			Alloc: types.GenesisAlloc{
-				addr: types.Account{
-					Code: []byte{
-						byte(vm.PUSH1), returnBufSize,
-						byte(vm.PUSH1), 0,
-						byte(vm.RETURN),
-					},
-				},
-			},
-		},
-		beacon.New(ethash.NewFaker()),
-		func(i int, b *core.BlockGen) {
-			b.SetPoS()
-		}),
-	)
-
 	var got []byte
 	retErr := errors.New("intercepted!")
-	opt := WithCallResultInterceptor(func(r *core.ExecutionResult) error {
+	intercept := WithCallResultInterceptor(func(r *core.ExecutionResult) error {
 		got = slices.Clone(r.ReturnData)
 		return retErr
 	})
 
-	_, err := api.Call(t.Context(), TransactionArgs{To: &addr}, nil, nil, nil, opt)
+	api := NewBlockChainAPI(
+		newTestBackend(
+			t,
+			0,
+			&core.Genesis{
+				Config: params.TestChainConfig,
+				Alloc: types.GenesisAlloc{
+					addr: types.Account{
+						Code: []byte{
+							byte(vm.PUSH1), returnBufSize,
+							byte(vm.PUSH1), 0,
+							byte(vm.RETURN),
+						},
+					},
+				},
+			},
+			beacon.New(ethash.NewFaker()),
+			func(i int, b *core.BlockGen) {
+				b.SetPoS()
+			},
+		),
+		WithDefaultCallOptions(intercept),
+	)
+
+	_, err := api.Call(t.Context(), TransactionArgs{To: &addr}, nil, nil, nil)
 	assert.Equalf(t, retErr, err, "%T.Call() error propagated from CallResultInterceptor", api)
 	assert.Lenf(t, got, returnBufSize, "%T.ReturnData received by CallResultInterceptor", &core.ExecutionResult{})
 }
