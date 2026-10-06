@@ -19,8 +19,8 @@ package ethclient
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"math/big"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,18 +33,16 @@ import (
 	"github.com/ava-labs/libevm/rpc"
 )
 
-const blockExtraKey = "libevmBlockExtra"
+const blockExtraKey = "extra"
 
 type blockHooks struct {
-	Extra     hexutil.Bytes
-	errDecode error
+	Extra hexutil.Bytes
 	types.NOOPBlockBodyHooks
 }
 
 func (bh *blockHooks) Copy() *blockHooks {
 	return &blockHooks{
-		Extra:     append(hexutil.Bytes(nil), bh.Extra...),
-		errDecode: bh.errDecode,
+		Extra: slices.Clone(bh.Extra),
 	}
 }
 
@@ -52,18 +50,12 @@ func (bh *blockHooks) PostRPCMarshal(_ *types.Block, m map[string]any) {
 	m[blockExtraKey] = bh.Extra
 }
 
-var errPostRPCUnmarshal = errors.New("PostRPCUnmarshal error")
-
 func (bh *blockHooks) PostRPCUnmarshal(_ *types.Block, raw []byte) error {
 	var fields struct {
-		Extra hexutil.Bytes `json:"libevmBlockExtra"`
-		Fail  bool          `json:"libevmFail"`
+		Extra hexutil.Bytes `json:"extra"`
 	}
 	if err := json.Unmarshal(raw, &fields); err != nil {
 		return err
-	}
-	if fields.Fail {
-		return errPostRPCUnmarshal
 	}
 	bh.Extra = fields.Extra
 	return nil
@@ -103,17 +95,17 @@ func TestBlockBodyHooksRPCRoundTrip(t *testing.T) {
 	extras.Block.Set(block, &blockHooks{Extra: want})
 
 	tests := []struct {
-		name     string
-		addField map[string]any
-		wantErr  error
+		name        string
+		addField    map[string]any
+		wantErrType error
 	}{
 		{
 			name: "extra_payload",
 		},
 		{
-			name:     "hook_error_propagated",
-			addField: map[string]any{"libevmFail": true},
-			wantErr:  errPostRPCUnmarshal,
+			name:        "hook_error_propagated",
+			addField:    map[string]any{blockExtraKey: 42},
+			wantErrType: new(json.UnmarshalTypeError),
 		},
 	}
 
@@ -129,10 +121,11 @@ func TestBlockBodyHooksRPCRoundTrip(t *testing.T) {
 			t.Cleanup(client.Close)
 
 			got, err := client.BlockByNumber(t.Context(), big.NewInt(1))
-			require.ErrorIs(t, err, tt.wantErr)
-			if tt.wantErr != nil {
+			if tt.wantErrType != nil {
+				require.ErrorAs(t, err, &tt.wantErrType)
 				return
 			}
+			require.NoError(t, err)
 			assert.Equal(t, block.Hash(), got.Hash(), "block hash")
 			assert.Equal(t, want, extras.Block.Get(got).Extra, "extra payload")
 		})
