@@ -38,7 +38,7 @@ func AddAsPrecompile[CD, D any, R PrecompileResult, A any](p *Processor, h Handl
 	return func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
 		res, ok := results(env.ReadOnlyState().TxIndex())
 		if !ok {
-			// TODO(arr4n) add revert data to match a Solidity-style error
+			// TODO(arr4n) add revert data to match a 1-style error
 			return nil, vm.ErrExecutionReverted
 		}
 		return res.Result.PrecompileOutput(env, input)

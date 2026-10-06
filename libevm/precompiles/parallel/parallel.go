@@ -19,9 +19,11 @@
 package parallel
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sync"
 
 	"github.com/ava-labs/libevm/common"
@@ -36,7 +38,7 @@ import (
 // A handler is the non-generic equivalent of a [Handler], exposed by [wrapper].
 type handler interface {
 	beforeBlock(libevm.StateReader, *types.Block)
-	shouldProcess(IndexedTx) (do bool, gas uint64)
+	shouldProcess(IndexedTx) (do bool, priority, gas uint64)
 	beforeWork(jobs int)
 	prefetch(libevm.StateReader, *prefetch)
 	nullResult(*job)
@@ -63,8 +65,9 @@ type (
 	// generic type parameters, while prefetch and process are explicitly *not*
 	// aliases, to guarantee that they aren't considered equivalent.
 	job = struct {
-		handler handler
-		tx      IndexedTx
+		handler  handler
+		tx       IndexedTx
+		priority uint64
 	}
 	prefetch job
 	process  job
@@ -75,9 +78,15 @@ type result[T any] struct {
 	val *T
 }
 
+// A decision is the outcome of ShouldProcess()
+type decision struct {
+	do       bool
+	priority uint64
+}
+
 // New constructs a new [Processor] with the specified number of concurrent
 // prefetching and processing workers. As prefetching is typically IO-bound, it
-// is reasonable to have more prefetchers than processors. The number of
+// is reasonable to have“ more prefetchers than processors. The number of
 // processors SHOULD be determined from GOMAXPROCS. Pipelining in such a fashion
 // stops prefetching for later transactions being blocked by earlier,
 // long-running processing; see the respective methods on [Handler] for more
@@ -200,16 +209,17 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 			Transaction: rawTx,
 		}
 
-		do, err := p.shouldProcess(tx, rules) // MUST NOT be concurrent within a Handler
+		decisions, err := p.shouldProcess(tx, rules) // MUST NOT be concurrent within a Handler
 		if err != nil {
 			return err
 		}
 		for i, h := range p.handlers {
 			j := &job{
-				tx:      tx,
-				handler: h,
+				tx:       tx,
+				handler:  h,
+				priority: decisions[i].priority,
 			}
-			if !do[i] {
+			if !decisions[i].do {
 				h.nullResult(j)
 				continue
 			}
@@ -217,6 +227,11 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 			jobs = append(jobs, j)
 		}
 	}
+	// Jobs were appended in transaction order. A stable sort breaks ties
+	// in priority by transaction order.
+	slices.SortStableFunc(jobs, func(a, b *job) int {
+		return cmp.Compare(a.priority, b.priority)
+	})
 
 	for i, w := range workloads {
 		p.handlers[i].beforeWork(w)
@@ -256,19 +271,19 @@ func (p *Processor) FinishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipt
 	}
 }
 
-func (p *Processor) shouldProcess(tx IndexedTx, rules params.Rules) (process []bool, retErr error) {
+func (p *Processor) shouldProcess(tx IndexedTx, rules params.Rules) (decisions []decision, retErr error) {
 	// An explicit 0 is necessary to avoid [Processor.PreprocessingGasCharge]
 	// returning [ErrTxUnknown].
 	p.txGas[tx.Hash()] = 0
 
-	process = make([]bool, len(p.handlers))
+	decisions = make([]decision, len(p.handlers))
 	var totalCost uint64
 	for i, h := range p.handlers {
-		do, cost := h.shouldProcess(tx)
+		do, priority, cost := h.shouldProcess(tx)
 		if !do {
 			continue
 		}
-		process[i] = true
+		decisions[i] = decision{do: true, priority: priority}
 		// It's safe to cap total cost at [math.MaxUint64] because intrinsic gas
 		// is always non-zero and the tx would therefore OOG. Not that we could
 		// reasonably expect such high gas consumption though ¯\_(ツ)_/¯
@@ -292,11 +307,11 @@ func (p *Processor) shouldProcess(tx IndexedTx, rules params.Rules) (process []b
 		return nil, core.ErrIntrinsicGas
 	}
 	if remain := tx.Gas() - spent; remain < totalCost {
-		for i := range process {
-			process[i] = false
+		for i := range decisions {
+			decisions[i].do = false
 		}
 	}
-	return process, nil
+	return decisions, nil
 }
 
 func txIntrinsicGas(tx *types.Transaction, rules *params.Rules) (uint64, error) {

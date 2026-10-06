@@ -24,6 +24,7 @@ import (
 	"math/rand/v2"
 	"slices"
 	"testing"
+	stdcmp "cmp"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -58,8 +59,10 @@ type recorder struct {
 	gotAggregated aggregated
 }
 
+var _ Handler[commonData, prefetched, recorded, aggregated] = (*recorder)(nil)
+
 type aggregated struct {
-	txOrder, processOrder []TxResult[recorded]
+	txOrder, processOrder, priorityOrder []TxResult[recorded]
 }
 
 type recorded struct {
@@ -80,13 +83,17 @@ func (r *recorder) BeforeBlock(sdb libevm.StateReader, h *types.Header) commonDa
 	}
 }
 
-func (r *recorder) ShouldProcess(tx IndexedTx, _ commonData) (bool, uint64) {
+func (r *recorder) priority(txIdx int) uint64 {
+	return uint64((txIdx * 3) % 7)
+}
+
+func (r *recorder) ShouldProcess(tx IndexedTx, _ commonData) (bool, uint64, uint64) {
 	// TODO(arr4n) test that the [commonData] received here is the same as that
 	// returned by [recorder.BeforeBlock].
 	if to := tx.To(); to != nil && *to == r.addr {
-		return true, r.gas
+		return true, r.priority(tx.Index), r.gas
 	}
-	return false, 0
+	return false, 0, 0
 }
 
 type prefetched struct {
@@ -145,6 +152,9 @@ func (r *recorder) PostProcess(cd commonData, res Results[recorded]) aggregated 
 	for res := range res.ProcessOrder {
 		out.processOrder = append(out.processOrder, res)
 	}
+	for res := range res.PriorityOrder {
+		out.priorityOrder = append(out.priorityOrder, res)
+	}
 
 	if len(out.txOrder) > 0 {
 		if diff := cmp.Diff(cd, out.txOrder[0].Result.Common); diff != "" {
@@ -179,8 +189,8 @@ func TestProcessor(t *testing.T) {
 	t.Cleanup(p.Close)
 
 	type blockParams struct {
-		numTxs                              int
-		sendToAddrEvery, sufficientGasEvery int
+		numTxs                                 int
+		sendToHandlerEvery, sufficientGasEvery int
 	}
 
 	// Each set of params is effectively a test case, but they are all run on
@@ -191,22 +201,22 @@ func TestProcessor(t *testing.T) {
 		},
 		{
 			numTxs:             500,
-			sendToAddrEvery:    7,
+			sendToHandlerEvery: 7,
 			sufficientGasEvery: 5,
 		},
 		{
 			numTxs:             1_000,
-			sendToAddrEvery:    7,
+			sendToHandlerEvery: 7,
 			sufficientGasEvery: 5,
 		},
 		{
 			numTxs:             1_000,
-			sendToAddrEvery:    11,
+			sendToHandlerEvery: 11,
 			sufficientGasEvery: 3,
 		},
 		{
 			numTxs:             100,
-			sendToAddrEvery:    1,
+			sendToHandlerEvery: 1,
 			sufficientGasEvery: 1,
 		},
 		{
@@ -218,7 +228,7 @@ func TestProcessor(t *testing.T) {
 	for range 100 {
 		tests = append(tests, blockParams{
 			numTxs:             rng.IntN(1000),
-			sendToAddrEvery:    1 + rng.IntN(30),
+			sendToHandlerEvery: 1 + rng.IntN(30),
 			sufficientGasEvery: 1 + rng.IntN(30),
 		})
 	}
@@ -246,7 +256,7 @@ func TestProcessor(t *testing.T) {
 				)
 
 				wantProcessed[i] = true
-				if i%tt.sendToAddrEvery == 0 {
+				if i%tt.sendToHandlerEvery == 0 {
 					to = handler.addr
 				} else {
 					wantProcessed[i] = false
@@ -306,22 +316,34 @@ func TestProcessor(t *testing.T) {
 				}
 			}
 
+			wantPriority := slices.Clone(wantPerTx)
+			slices.SortStableFunc(wantPriority, func(a,b TxResult[recorded]) int {
+				return stdcmp.Compare(handler.priority(a.Tx.Index), handler.priority(b.Tx.Index))
+			})
+
 			p.FinishBlock(sdb, block, nil)
 			tests := []struct {
 				name string
+				want []TxResult[recorded]
 				got  []TxResult[recorded]
 				opt  cmp.Option
 			}{
 				{
 					name: "in_transaction_order",
+					want: wantPerTx,
 					got:  h.gotAggregated.txOrder,
 				},
 				{
 					name: "in_process_order",
+					want: wantPerTx,
 					got:  h.gotAggregated.processOrder,
 					opt: cmpopts.SortSlices(func(a, b TxResult[recorded]) bool {
 						return a.Tx.Index < b.Tx.Index
 					}),
+				}, {
+					name: "in_priority_order",
+					want: wantPriority, 
+					got:  h.gotAggregated.priorityOrder,
 				},
 			}
 			for _, tt := range tests {
@@ -332,7 +354,7 @@ func TestProcessor(t *testing.T) {
 							return a.Hash() == b.Hash()
 						}),
 					}
-					if diff := cmp.Diff(wantPerTx, tt.got, opts); diff != "" {
+					if diff := cmp.Diff(tt.want, tt.got, opts); diff != "" {
 						t.Errorf("handler.PostProcess() argument diff (-want +got):\n%s", diff)
 					}
 				})
@@ -508,7 +530,7 @@ type expensive struct {
 }
 
 func (expensive) BeforeBlock(libevm.StateReader, *types.Header) int     { return 0 }
-func (e expensive) ShouldProcess(IndexedTx, int) (do bool, gas uint64)  { return true, e.gasCost }
+func (e expensive) ShouldProcess(IndexedTx, int) (do bool, priority, gas uint64)  { return true, 0, e.gasCost }
 func (expensive) Prefetch(libevm.StateReader, IndexedTx, int) int       { return 0 }
 func (expensive) Process(libevm.StateReader, IndexedTx, int, int) int   { return 0 }
 func (expensive) PostProcess(int, Results[int]) int                     { return 0 }
