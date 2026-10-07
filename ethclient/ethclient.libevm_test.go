@@ -122,8 +122,8 @@ func TestBlockBodyHooksRPCRoundTrip(t *testing.T) {
 
 			got, err := client.BlockByNumber(t.Context(), big.NewInt(1))
 			if tt.wantErr {
-				want := new(json.InvalidUnmarshalError)
-				require.ErrorAs(t, err, &want, "client.BlockByNumber()")
+				want := new(json.UnmarshalTypeError)
+				require.ErrorAsf(t, err, &want, "client.BlockByNumber(), got %T", err)
 				return
 			}
 			require.NoError(t, err)
