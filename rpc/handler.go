@@ -73,6 +73,7 @@ type callProc struct {
 }
 
 func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, batchRequestLimit, batchResponseMaxSize int) *handler {
+	connCtx = context.WithValue(connCtx, registryContextKey{}, reg) // libevm: see [Server.SetCallTimeout]
 	rootCtx, cancelRoot := context.WithCancel(connCtx)
 	h := &handler{
 		reg:                  reg,
