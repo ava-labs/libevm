@@ -95,17 +95,17 @@ func TestBlockBodyHooksRPCRoundTrip(t *testing.T) {
 	extras.Block.Set(block, &blockHooks{Extra: want})
 
 	tests := []struct {
-		name        string
-		addField    map[string]any
-		wantErrType error
+		name     string
+		addField map[string]any
+		wantErr  bool
 	}{
 		{
 			name: "extra_payload",
 		},
 		{
-			name:        "hook_error_propagated",
-			addField:    map[string]any{blockExtraKey: 42},
-			wantErrType: new(json.UnmarshalTypeError),
+			name:     "hook_error_propagated",
+			addField: map[string]any{blockExtraKey: 42},
+			wantErr:  true,
 		},
 	}
 
@@ -121,8 +121,9 @@ func TestBlockBodyHooksRPCRoundTrip(t *testing.T) {
 			t.Cleanup(client.Close)
 
 			got, err := client.BlockByNumber(t.Context(), big.NewInt(1))
-			if tt.wantErrType != nil {
-				require.ErrorAs(t, err, &tt.wantErrType)
+			if tt.wantErr {
+				want := new(json.InvalidUnmarshalError)
+				require.ErrorAs(t, err, &want, "client.BlockByNumber()")
 				return
 			}
 			require.NoError(t, err)

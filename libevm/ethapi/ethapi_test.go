@@ -18,6 +18,7 @@ package ethapi
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"math/big"
@@ -28,8 +29,31 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/ethclient"
 	"github.com/ava-labs/libevm/params"
+	"github.com/ava-labs/libevm/rpc"
 )
+
+// Header and block hooks write to the same map in eth_getBlockBy*, so they
+// MUST use different keys.
+const (
+	headerExtraKey = "libevm_header_extra_field"
+	blockExtraKey  = "libevm_block_extra_field"
+)
+
+// decodeKey returns a map containing only the key field of the JSON object
+// raw, decoded as a T.
+func decodeKey[T any](raw []byte, key string) (map[string]any, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, err
+	}
+	var v T
+	if err := json.Unmarshal(fields[key], &v); err != nil {
+		return nil, err
+	}
+	return map[string]any{key: v}, nil
+}
 
 type headerHooks struct {
 	add map[string]any
@@ -40,6 +64,18 @@ func (hh *headerHooks) PostRPCMarshal(_ *types.Header, m map[string]any) {
 	maps.Copy(m, hh.add)
 }
 
+func (hh *headerHooks) DecodeJSON(h *types.Header, raw []byte) error {
+	if err := hh.NOOPHeaderHooks.DecodeJSON(h, raw); err != nil {
+		return err
+	}
+	add, err := decodeKey[int](raw, headerExtraKey)
+	if err != nil {
+		return err
+	}
+	hh.add = add
+	return nil
+}
+
 type blockHooks struct {
 	add map[string]any
 	types.NOOPBlockBodyHooks
@@ -47,6 +83,15 @@ type blockHooks struct {
 
 func (bh *blockHooks) PostRPCMarshal(_ *types.Block, m map[string]any) {
 	maps.Copy(m, bh.add)
+}
+
+func (bh *blockHooks) PostRPCUnmarshal(_ *types.Block, raw []byte) error {
+	add, err := decodeKey[int](raw, blockExtraKey)
+	if err != nil {
+		return err
+	}
+	bh.add = add
+	return nil
 }
 
 func (b *blockHooks) Copy() *blockHooks {
@@ -80,24 +125,29 @@ func (be *backend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.H
 func (*backend) ChainConfig() *params.ChainConfig            { return params.MergedTestChainConfig }
 func (*backend) GetTd(context.Context, common.Hash) *big.Int { return big.NewInt(0) }
 
-func TestPostRPCMarshalHooks(t *testing.T) {
+func TestPostRPCHooks(t *testing.T) {
 	extras := types.RegisterExtras[headerHooks, *headerHooks, blockHooks, *blockHooks, struct{}]()
 	t.Cleanup(types.TestOnlyClearRegisteredExtras)
 
 	const (
-		extraKey        = "libevm_extra_field"
 		headerValue int = 42
 		blockValue  int = 1e6
 	)
 
-	hdr := &types.Header{}
+	hdr := &types.Header{
+		// Required for decoding by [ethclient.Client].
+		Number:     big.NewInt(0),
+		Difficulty: big.NewInt(0),
+		UncleHash:  types.EmptyUncleHash,
+		TxHash:     types.EmptyTxsHash,
+	}
 	extras.Header.Set(hdr, &headerHooks{
-		add: map[string]any{extraKey: headerValue},
+		add: map[string]any{headerExtraKey: headerValue},
 	})
 
 	blk := types.NewBlockWithHeader(hdr)
 	extras.Block.Set(blk, &blockHooks{
-		add: map[string]any{extraKey: blockValue},
+		add: map[string]any{blockExtraKey: blockValue},
 	})
 
 	api := NewBlockChainAPI(&backend{
@@ -106,13 +156,37 @@ func TestPostRPCMarshalHooks(t *testing.T) {
 		},
 	})
 
-	t.Run("HeaderHooks", func(t *testing.T) {
-		got := api.GetHeaderByHash(t.Context(), blk.Hash())
-		assert.Equalf(t, headerValue, got[extraKey], "%T.GetHeaderByHash(...)[%q]", api, extraKey)
+	t.Run("RPC API", func(t *testing.T) {
+		t.Run("HeaderHooks", func(t *testing.T) {
+			got := api.GetHeaderByHash(t.Context(), blk.Hash())
+			assert.Equalf(t, headerValue, got[headerExtraKey], "%T.GetHeaderByHash(...)[%q]", api, headerExtraKey)
+		})
+		t.Run("BlockBodyHooks", func(t *testing.T) {
+			got, err := api.GetBlockByHash(t.Context(), blk.Hash(), false)
+			require.NoErrorf(t, err, "%T.GetBlockByHash(...)", api)
+			assert.Equalf(t, headerValue, got[headerExtraKey], "%T.GetBlockByHash(...).Header()[%q]", api, headerExtraKey)
+			assert.Equalf(t, blockValue, got[blockExtraKey], "%T.GetBlockByHash(...)[%q]", api, blockExtraKey)
+		})
 	})
-	t.Run("BlockBodyHooks", func(t *testing.T) {
-		got, err := api.GetBlockByHash(t.Context(), blk.Hash(), false)
-		require.NoErrorf(t, err, "%T.GetBlockByHash(...)", api)
-		assert.Equalf(t, blockValue, got[extraKey], "%T.GetBlockByHash(...)[%q]", api, extraKey)
+
+	t.Run("ethclient", func(t *testing.T) {
+		srv := rpc.NewServer()
+		t.Cleanup(srv.Stop)
+		require.NoError(t, srv.RegisterName("eth", api), "RegisterName()")
+		client := ethclient.NewClient(rpc.DialInProc(srv))
+		t.Cleanup(client.Close)
+
+		t.Run("HeaderHooks", func(t *testing.T) {
+			got, err := client.HeaderByHash(t.Context(), blk.Hash())
+			require.NoErrorf(t, err, "%T.HeaderByHash(...)", client)
+			assert.Equalf(t, headerValue, extras.Header.Get(got).add[headerExtraKey], "%T.HeaderByHash(...) extra", client)
+		})
+		t.Run("BlockBodyHooks", func(t *testing.T) {
+			got, err := client.BlockByHash(t.Context(), blk.Hash())
+			require.NoErrorf(t, err, "%T.BlockByHash(...)", client)
+			assert.Equalf(t, blk.Hash(), got.Hash(), "%T.BlockByHash(...).Hash()", client)
+			assert.Equalf(t, blockValue, extras.Block.Get(got).add[blockExtraKey], "%T.BlockByHash(...) extra", client)
+			assert.Equalf(t, headerValue, extras.Header.Get(got.Header()).add[headerExtraKey], "%T.BlockByHash(...).Header() extra", client)
+		})
 	})
 }
