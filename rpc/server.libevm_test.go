@@ -49,32 +49,54 @@ func TestServerSetCallTimeout(t *testing.T) {
 		},
 	}
 
+	transports := []struct {
+		name   string
+		client func(*testing.T, *Server) *Client
+	}{
+		{
+			// In-process connections are served like WebSockets, by
+			// [Server.ServeCodec].
+			name: "in-process",
+			client: func(t *testing.T, s *Server) *Client {
+				return DialInProc(s)
+			},
+		},
+		{
+			name: "http",
+			client: func(t *testing.T, s *Server) *Client {
+				t.Helper()
+				opt := WithHTTPClient(&http.Client{Transport: handlerTransport{s}})
+				c, err := DialOptions(t.Context(), "http://localhost", opt)
+				require.NoError(t, err, "DialOptions()")
+				return c
+			},
+		},
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			synctest.Test(t, func(t *testing.T) { //nolint:thelper // False positive, fixed in thelper v0.7.1.
-				srv := newTestServer()
-				srv.SetCallTimeout(tt.timeout)
-				defer srv.Stop()
-				// In-process connections are served like WebSockets, by
-				// [Server.ServeCodec].
-				inProc := DialInProc(srv)
-				defer inProc.Close()
-				overHTTP, err := DialHTTPWithClient("http://localhost", &http.Client{Transport: handlerTransport{srv}})
-				require.NoError(t, err, "DialHTTPWithClient()")
-				defer overHTTP.Close()
+			for _, tr := range transports {
+				t.Run(tr.name, func(t *testing.T) {
+					synctest.Test(t, func(t *testing.T) { //nolint:thelper // False positive, fixed in thelper v0.7.1.
+						srv := newTestServer()
+						srv.SetCallTimeout(tt.timeout)
+						defer srv.Stop()
 
-				for name, client := range map[string]*Client{"in_proc": inProc, "http": overHTTP} {
-					err := client.CallContext(t.Context(), nil, "test_sleep", tt.sleep)
-					require.Equalf(t, tt.wantErr, err, "%s CallContext(test_sleep)", name)
+						c := tr.client(t, srv)
+						t.Cleanup(c.Close)
 
-					// A timed-out call doesn't close the connection.
-					require.NoErrorf(t, client.CallContext(t.Context(), nil, "test_noArgsRets"), "%s CallContext(test_noArgsRets)", name)
-				}
+						err := c.CallContext(t.Context(), nil, "test_sleep", tt.sleep)
+						require.Equal(t, tt.wantErr, err, "CallContext(test_sleep)")
 
-				// A timed-out call keeps running on the server, so let it return
-				// before the bubble ends.
-				time.Sleep(tt.sleep)
-			})
+						// A timed-out call doesn't close the connection.
+						require.NoError(t, c.CallContext(t.Context(), nil, "test_noArgsRets"), "CallContext(test_noArgsRets)")
+
+						// A timed-out call keeps running on the server, so let it return
+						// before the bubble ends.
+						time.Sleep(tt.sleep)
+					})
+				})
+			}
 		})
 	}
 }
