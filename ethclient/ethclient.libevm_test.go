@@ -36,7 +36,33 @@ import (
 	"github.com/ava-labs/libevm/rpc"
 )
 
-const blockExtraKey = "extra"
+const (
+	headerExtraKey = "headerExtra"
+	blockExtraKey  = "extra"
+)
+
+type headerHooks struct {
+	Extra hexutil.Bytes
+	types.NOOPHeaderHooks
+}
+
+func (hh *headerHooks) PostRPCMarshal(_ *types.Header, m map[string]any) {
+	m[headerExtraKey] = hh.Extra
+}
+
+func (hh *headerHooks) DecodeJSON(h *types.Header, raw []byte) error {
+	if err := hh.NOOPHeaderHooks.DecodeJSON(h, raw); err != nil {
+		return err
+	}
+	var fields struct {
+		Extra hexutil.Bytes `json:"headerExtra"`
+	}
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	hh.Extra = fields.Extra
+	return nil
+}
 
 type blockHooks struct {
 	Extra hexutil.Bytes
@@ -78,20 +104,27 @@ func (s *blockService) GetBlockByNumber(context.Context, rpc.BlockNumber, bool) 
 	return m, nil
 }
 
-func TestBlockBodyHooksRPCRoundTrip(t *testing.T) {
+// TestBlockBodyHooksRPCRoundTrip tests that block body hooks are correctly
+// invoked to fill states, as well as ensuring that no equivalent is needed
+// for extra header fields.
+func TestBlockHooksRPCRoundTrip(t *testing.T) {
 	extras := types.RegisterExtras[
-		types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
+		headerHooks, *headerHooks,
 		blockHooks, *blockHooks,
 		struct{},
 	]()
 	t.Cleanup(types.TestOnlyClearRegisteredExtras)
 
-	block := types.NewBlockWithHeader(&types.Header{
+	header := &types.Header{
 		Number:     big.NewInt(1),
 		Difficulty: big.NewInt(42),
 		UncleHash:  types.EmptyUncleHash,
 		TxHash:     types.EmptyTxsHash,
-	})
+	}
+	wantHeader := hexutil.Bytes("world")
+	extras.Header.Set(header, &headerHooks{Extra: wantHeader})
+
+	block := types.NewBlockWithHeader(header)
 	want := hexutil.Bytes("hello")
 	extras.Block.Set(block, &blockHooks{Extra: want})
 
@@ -136,6 +169,13 @@ func TestBlockBodyHooksRPCRoundTrip(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, block.Hash(), got.Hash(), "block hash")
 			assert.Equal(t, want, extras.Block.Get(got).Extra, "extra payload")
+			assert.Equal(t, wantHeader, extras.Header.Get(got.Header()).Extra, "header extra payload")
+
+			// Header fields should be unaffected.
+			gotHeader, err := client.HeaderByNumber(t.Context(), big.NewInt(1))
+			require.NoError(t, err)
+			assert.Equal(t, block.Hash(), gotHeader.Hash(), "header hash")
+			assert.Equal(t, wantHeader, extras.Header.Get(gotHeader).Extra, "HeaderByNumber() extra payload")
 		})
 	}
 }
