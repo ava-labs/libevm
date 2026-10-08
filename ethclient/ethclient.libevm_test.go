@@ -19,10 +19,13 @@ package ethclient
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"maps"
 	"math/big"
 	"slices"
 	"testing"
 
+	"github.com/arr4n/shed/testerr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -50,7 +53,7 @@ func (bh *blockHooks) PostRPCMarshal(_ *types.Block, m map[string]any) {
 	m[blockExtraKey] = bh.Extra
 }
 
-func (bh *blockHooks) PostRPCUnmarshal(_ *types.Block, raw []byte) error {
+func (bh *blockHooks) PostRPCUnmarshal(_ *types.Block, raw json.RawMessage) error {
 	var fields struct {
 		Extra hexutil.Bytes `json:"extra"`
 	}
@@ -71,9 +74,7 @@ type blockService struct {
 
 func (s *blockService) GetBlockByNumber(context.Context, rpc.BlockNumber, bool) (map[string]any, error) {
 	m := ethapi.RPCMarshalBlock(s.block, true, false, params.TestChainConfig)
-	for k, v := range s.addField {
-		m[k] = v
-	}
+	maps.Copy(m, s.addField)
 	return m, nil
 }
 
@@ -87,7 +88,7 @@ func TestBlockBodyHooksRPCRoundTrip(t *testing.T) {
 
 	block := types.NewBlockWithHeader(&types.Header{
 		Number:     big.NewInt(1),
-		Difficulty: big.NewInt(0),
+		Difficulty: big.NewInt(42),
 		UncleHash:  types.EmptyUncleHash,
 		TxHash:     types.EmptyTxsHash,
 	})
@@ -97,7 +98,7 @@ func TestBlockBodyHooksRPCRoundTrip(t *testing.T) {
 	tests := []struct {
 		name     string
 		addField map[string]any
-		wantErr  bool
+		wantErr  testerr.Want
 	}{
 		{
 			name: "extra_payload",
@@ -105,7 +106,12 @@ func TestBlockBodyHooksRPCRoundTrip(t *testing.T) {
 		{
 			name:     "hook_error_propagated",
 			addField: map[string]any{blockExtraKey: 42},
-			wantErr:  true,
+			wantErr: testerr.As(func(err *json.UnmarshalTypeError) string {
+				if err.Field != blockExtraKey {
+					return fmt.Sprintf("%T.Field = %q", err, blockExtraKey)
+				}
+				return ""
+			}),
 		},
 	}
 
@@ -121,9 +127,10 @@ func TestBlockBodyHooksRPCRoundTrip(t *testing.T) {
 			t.Cleanup(client.Close)
 
 			got, err := client.BlockByNumber(t.Context(), big.NewInt(1))
-			if tt.wantErr {
-				want := new(json.UnmarshalTypeError)
-				require.ErrorAsf(t, err, &want, "client.BlockByNumber(), got %T", err)
+			if diff := testerr.Diff(err, tt.wantErr); diff != "" {
+				t.Fatalf("client.BlockByNumber() %s", diff)
+			}
+			if tt.wantErr != nil {
 				return
 			}
 			require.NoError(t, err)

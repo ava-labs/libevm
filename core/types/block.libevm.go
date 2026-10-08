@@ -34,7 +34,7 @@ type HeaderHooks interface {
 	DecodeRLP(*Header, *rlp.Stream) error
 	PostCopy(dst *Header)
 	// PostRPCMarshal is called after a [Header] has been marshalled to a map
-	// for RPC responses. Note there is not "PostRPCUnmarshal" like
+	// for RPC responses. Note there is no "PostRPCUnmarshal" unlike
 	// [BlockBodyHooks], since the Header is decoded using [HeaderHooks.DecodeJSON].
 	PostRPCMarshal(h *Header, marshalled map[string]any)
 }
@@ -196,7 +196,7 @@ type BlockBodyHooks interface {
 	PostRPCMarshal(b *Block, marshalled map[string]any)
 	// PostRPCUnmarshal is called after a Block has been unmarshalled from its
 	// raw JSON representation, as used by ethclient.
-	PostRPCUnmarshal(b *Block, raw []byte) error
+	PostRPCUnmarshal(*Block, json.RawMessage) error
 }
 
 // NOOPBlockBodyHooks implements [BlockBodyHooks] such that they are equivalent
@@ -238,4 +238,4 @@ func (NOOPBlockBodyHooks) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 
 func (NOOPBlockBodyHooks) PostRPCMarshal(*Block, map[string]any) {}
 
-func (NOOPBlockBodyHooks) PostRPCUnmarshal(*Block, []byte) error { return nil }
+func (NOOPBlockBodyHooks) PostRPCUnmarshal(*Block, json.RawMessage) error { return nil }

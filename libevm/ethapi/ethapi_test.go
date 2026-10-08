@@ -85,7 +85,7 @@ func (bh *blockHooks) PostRPCMarshal(_ *types.Block, m map[string]any) {
 	maps.Copy(m, bh.add)
 }
 
-func (bh *blockHooks) PostRPCUnmarshal(_ *types.Block, raw []byte) error {
+func (bh *blockHooks) PostRPCUnmarshal(_ *types.Block, raw json.RawMessage) error {
 	add, err := decodeKey[int](raw, blockExtraKey)
 	if err != nil {
 		return err
