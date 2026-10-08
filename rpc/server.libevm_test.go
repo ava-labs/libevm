@@ -58,6 +58,7 @@ func TestServerSetCallTimeout(t *testing.T) {
 			// [Server.ServeCodec].
 			name: "in-process",
 			client: func(t *testing.T, s *Server) *Client {
+				t.Helper()
 				return DialInProc(s)
 			},
 		},
