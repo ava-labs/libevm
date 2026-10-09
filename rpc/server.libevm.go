@@ -24,26 +24,26 @@ import (
 // ErrCodeTimeout is the JSON-RPC error code for a call that times out.
 const ErrCodeTimeout = errcodeTimeout
 
-// SetCallTimeout limits how long each call, or batch of calls, may run on
-// connections served by [Server.ServeCodec], such as WebSockets. When one runs
-// too long, its context is cancelled and the client gets a timeout error, but
-// the connection stays open. A non-positive timeout, the default, means no
-// limit.
+// SetCallTimeout limits how long each call, or batch of calls, may run. When
+// one runs too long, its context is cancelled and the client gets a timeout
+// error, but the connection stays open. A non-positive timeout, the default,
+// means no limit.
 //
-// This method should be called before processing any requests via ServeCodec.
+// This method should be called before processing any requests.
 func (s *Server) SetCallTimeout(timeout time.Duration) {
 	s.services.libevm.callTimeout = timeout
 }
 
+type registryContextKey struct{}
+
 // callTimeout returns the timeout set by [Server.SetCallTimeout] for the
-// connection that ctx belongs to.
+// registry that ctx carries.
 func callTimeout(ctx context.Context) (time.Duration, bool) {
-	// ctx carries the Client, which shares the Server's registry.
-	c, ok := ctx.Value(clientContextKey{}).(*Client)
+	reg, ok := ctx.Value(registryContextKey{}).(*serviceRegistry)
 	if !ok {
 		return 0, false
 	}
-	d := c.services.libevm.callTimeout
+	d := reg.libevm.callTimeout
 	return d, d > 0
 }
 
