@@ -38,7 +38,7 @@ import (
 
 const (
 	headerExtraKey = "headerExtra"
-	blockExtraKey  = "extra"
+	blockExtraKey  = "blockExtra"
 )
 
 type headerHooks struct {
@@ -81,7 +81,7 @@ func (bh *blockHooks) PostRPCMarshal(_ *types.Block, m map[string]any) {
 
 func (bh *blockHooks) PostRPCUnmarshal(_ *types.Block, raw json.RawMessage) error {
 	var fields struct {
-		Extra hexutil.Bytes `json:"extra"`
+		Extra hexutil.Bytes `json:"blockExtra"`
 	}
 	if err := json.Unmarshal(raw, &fields); err != nil {
 		return err
@@ -166,14 +166,14 @@ func TestBlockHooksRPCRoundTrip(t *testing.T) {
 			if tt.wantErr != nil {
 				return
 			}
-			require.NoError(t, err)
+
 			assert.Equal(t, block.Hash(), got.Hash(), "block hash")
 			assert.Equal(t, want, extras.Block.Get(got).Extra, "extra payload")
 			assert.Equal(t, wantHeader, extras.Header.Get(got.Header()).Extra, "header extra payload")
 
 			// Header fields should be unaffected.
 			gotHeader, err := client.HeaderByNumber(t.Context(), big.NewInt(1))
-			require.NoError(t, err)
+			require.NoErrorf(t, err, "%T.HeaderByNumber(...)", client)
 			assert.Equal(t, block.Hash(), gotHeader.Hash(), "header hash")
 			assert.Equal(t, wantHeader, extras.Header.Get(gotHeader).Extra, "HeaderByNumber() extra payload")
 		})
