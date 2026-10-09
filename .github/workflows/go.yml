@@ -27,6 +27,20 @@ jobs:
       EXECUTION_SPEC_TESTS_FILE: fixtures_develop.tar.gz
       FLAKY_REGEX: "ava-labs/libevm/(triedb/pathdb|eth|eth/tracers/js|eth/tracers/logger|eth/tracers/internal/tracetest|accounts/abi/bind|accounts/keystore|eth/downloader|miner|ethclient|ethclient/gethclient|eth/catalyst)$"
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Upstream flakes are race conditions exacerbated by concurrent tests
+          - which: flaky
+            how: sequentially
+            grep_flags: -P    # FLAKY_REGEX
+            xargs_flags: -n 1 # sequential
+          - which: non-flaky
+            how: concurrently
+            grep_flags: -Pv   # !FLAKY_REGEX
+            xargs_flags: ""   # concurrent
+    name: go_test_short (${{ matrix.which }})
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,13 +56,8 @@ jobs:
             sha256sum --ignore-missing --check build/checksums.txt | grep "${EXECUTION_SPEC_TESTS_FILE}: OK"
       - name: Extract spec tests
         run: mkdir -p tests/spec-tests && tar -xz -f "${EXECUTION_SPEC_TESTS_FILE}" -C tests/spec-tests
-      - name: Run flaky tests sequentially
-        run:
-          | # Upstream flakes are race conditions exacerbated by concurrent tests
-          go list ./... | grep -P "${FLAKY_REGEX}" | xargs -n 1 go test -short;
-      - name: Run non-flaky tests concurrently
-        run: |
-          go test -short $(go list ./... | grep -Pv "${FLAKY_REGEX}");
+      - name: Run ${{ matrix.which }} tests ${{ matrix.how }}
+        run: go list ./... | grep ${{ matrix.grep_flags }} "${FLAKY_REGEX}" | xargs ${{ matrix.xargs_flags }} go test -short
 
   go_test_tooling:
     runs-on: ubuntu-latest
