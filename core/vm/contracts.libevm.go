@@ -98,15 +98,37 @@ const (
 	CallCode     = CallType(CALLCODE)
 	DelegateCall = CallType(DELEGATECALL)
 	StaticCall   = CallType(STATICCALL)
+
+	// Although not technically calls, the CREATE OpCodes also enter a new call
+	// frame and therefore have similar setup to _outgoing_ *CALL* types. They
+	// are only used internally, by [environment].
+	create  = CallType(CREATE)
+	create2 = CallType(CREATE2)
 )
 
-func (t CallType) isValid() bool {
+type callSubType int
+
+const (
+	unknownCallSubType callSubType = iota
+	contractCall                   // CALL, CALLCODE, DELEGATECALL or STATICCALL
+	contractCreation               // CREATE or CREATE2
+)
+
+func (t CallType) subType() callSubType {
 	switch t {
 	case Call, CallCode, DelegateCall, StaticCall:
-		return true
+		return contractCall
+
+	case create, create2:
+		return contractCreation
+
 	default:
-		return false
+		return unknownCallSubType
 	}
+}
+
+func (t CallType) isValid() bool {
+	return t.subType() != unknownCallSubType
 }
 
 // readOnly returns whether the CallType induces a read-only state if not
@@ -229,6 +251,14 @@ type PrecompileEnvironment interface {
 	// pattern, libevm's `reentrancy` package, or some other protection MUST be
 	// used in conjunction with `Call()`.
 	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...CallOption) (ret []byte, _ error)
+
+	// Create and Create2 are equivalent to [CREATE] and [CREATE2],
+	// respectively. Both methods MAY return a non-zero [common.Address] even if
+	// creation failed.
+	//
+	// WARNING: See [PrecompileEnvironment.Call] regarding reentrancy.
+	Create(code []byte, value *uint256.Int) ([]byte, common.Address, error)
+	Create2(code []byte, value *uint256.Int, salt [32]byte) ([]byte, common.Address, error)
 }
 
 func (args *evmCallArgs) env() *environment {
