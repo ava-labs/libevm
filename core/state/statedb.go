@@ -1250,12 +1250,14 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, opts ...statecon
 			if err := s.snaps.Update(root, parent, s.convertAccountSet(s.stateObjectsDestruct), s.accounts, s.storages, stateconf.ExtractSnapshotUpdateOpts(opts...)...); err != nil {
 				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
 			}
-			// Keep 128 diff layers in the memory, persistent layer is 129th.
+			// Keep 128 diff layers in the memory by default, overridable via
+			// stateconf.WithSnapshotCapLayers; persistent layer is the next one.
 			// - head layer is paired with HEAD state
 			// - head-1 layer is paired with HEAD-1 state
 			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
-			if err := s.snaps.Cap(root, 128); err != nil {
-				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
+			capLayers := stateconf.ExtractSnapshotCapLayers(opts...)
+			if err := s.snaps.Cap(root, capLayers); err != nil {
+				log.Warn("Failed to cap snapshot tree", "root", root, "layers", capLayers, "err", err)
 			}
 		}
 		if metrics.EnabledExpensive {
