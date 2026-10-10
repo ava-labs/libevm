@@ -865,7 +865,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 // IntermediateRoot computes the current root hash of the state trie.
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
-func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
+func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool, opts ...stateconf.StateDBIntermediateRootOption) common.Hash {
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
@@ -883,6 +883,15 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.prefetcher = nil
 		}()
 	}
+
+	if stateconf.ShouldDestructStateDB(opts...) {
+		for addr := range s.stateObjectsDestruct {
+			if obj := s.stateObjects[addr]; obj != nil {
+				s.trie.DeleteAccount(addr) // prefix delete in firewood
+			}
+		}
+	}
+
 	// Although naively it makes sense to retrieve the account trie and then do
 	// the contract storage and account updates sequentially, that short circuits
 	// the account prefetcher. Instead, let's process all the storage updates
@@ -1163,7 +1172,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, opts ...statecon
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
 	// Finalize any pending changes and merge everything into the tries
-	s.IntermediateRoot(deleteEmptyObjects)
+	s.IntermediateRoot(deleteEmptyObjects, stateconf.ExtractIntermediateRootOpts(opts...)...)
 
 	// Commit objects to the trie, measuring the elapsed time
 	var (
