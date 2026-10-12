@@ -49,6 +49,22 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
+          cache: false # see `actions/cache` steps
+      - name: Compute Go cache-key prefix
+        # The first Go job finish is the one that writes the `actions/setup-go`
+        # cache, but that is never going to be a long-running one, which is when
+        # caching is most useful. We therefore use dedicated caching here.
+        id: go-cache
+        run: echo "prefix=${{ github.job }}-${{ matrix.which }}-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum') }}-" >> "$GITHUB_OUTPUT"
+      - name: Restore Go cache
+        uses: actions/cache/restore@v4
+        with:
+          path: &go-cache-path |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: &go-cache-key ${{ steps.go-cache.outputs.prefix }}${{ github.sha }}
+          # Most recent save, which is only ever from `main`
+          restore-keys: ${{ steps.go-cache.outputs.prefix }}
       - name: Download spec tests
         run: curl -o "${EXECUTION_SPEC_TESTS_FILE}" -L "https://github.com/ethereum/execution-spec-tests/releases/download/${EXECUTION_SPEC_TESTS_VERSION}/${EXECUTION_SPEC_TESTS_FILE}"
       - name: Verify spec tests
@@ -58,6 +74,12 @@ jobs:
         run: mkdir -p tests/spec-tests && tar -xz -f "${EXECUTION_SPEC_TESTS_FILE}" -C tests/spec-tests
       - name: Run ${{ matrix.which }} tests ${{ matrix.how }}
         run: go list ./... | grep ${{ matrix.grep_flags }} "${FLAKY_REGEX}" | xargs ${{ matrix.xargs_flags }} go test -short
+      - name: Save Go cache
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: *go-cache-path
+          key: *go-cache-key
 
   go_test_tooling:
     runs-on: ubuntu-latest
