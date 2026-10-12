@@ -14,7 +14,7 @@
 // along with the go-ethereum library. If not, see
 // <http://www.gnu.org/licenses/>.
 
-package parallel
+package parallel //nolint:testableexamples // Example is boilerplate for documentation only; no deterministic output.
 
 import (
 	"math/big"
@@ -102,10 +102,10 @@ func (r mixedResult) PrecompileOutput(env vm.PrecompileEnvironment, calldata []b
 	return nil, nil
 }
 
+// Here be dragons (and boilerplate code)!
+
 func ExampleHandler_mixedParallelAndSequential() {
 }
-
-// Here be dragons (and boilerplate code)!
 
 var _ Handler[struct{}, struct{}, mixedResult, struct{}] = mixedHandler{}
 
