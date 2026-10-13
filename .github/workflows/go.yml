@@ -57,7 +57,7 @@ jobs:
         id: go-cache
         run: echo "prefix=${{ github.job }}-${{ matrix.which }}-${{ runner.os }}" >> "$GITHUB_OUTPUT"
       - name: Restore Go cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 #v6
         with:
           path: &go-cache-path |
             ~/.cache/go-build
@@ -81,7 +81,7 @@ jobs:
         # work done in building the test files.
         # Source: https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#status-check-functions
         if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 #v6
         with:
           path: *go-cache-path
           key: *go-cache-key
