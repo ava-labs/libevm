@@ -55,14 +55,14 @@ jobs:
         # cache, but that is never going to be a long-running one, which is when
         # caching is most useful. We therefore use dedicated caching here.
         id: go-cache
-        run: echo "prefix=${{ github.job }}-${{ matrix.which }}-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum') }}-" >> "$GITHUB_OUTPUT"
+        run: echo "prefix=${{ github.job }}-${{ matrix.which }}-${{ runner.os }}" >> "$GITHUB_OUTPUT"
       - name: Restore Go cache
         uses: actions/cache/restore@v4
         with:
           path: &go-cache-path |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: &go-cache-key ${{ steps.go-cache.outputs.prefix }}${{ github.sha }}
+          key: &go-cache-key ${{ steps.go-cache.outputs.prefix }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
           # Most recent save, which is only ever from `main`
           restore-keys: ${{ steps.go-cache.outputs.prefix }}
       - name: Download spec tests
