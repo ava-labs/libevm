@@ -384,6 +384,9 @@ func ContextRequestTimeout(ctx context.Context) (time.Duration, bool) {
 	if deadline, ok := ctx.Deadline(); ok {
 		setTimeout(time.Until(deadline))
 	}
+	if d, ok := callTimeout(ctx); ok { // libevm
+		setTimeout(d)
+	}
 
 	// If the context is an HTTP request context, use the server's WriteTimeout.
 	httpSrv, ok := ctx.Value(http.ServerContextKey).(*http.Server)

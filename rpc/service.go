@@ -38,6 +38,7 @@ var (
 type serviceRegistry struct {
 	mu       sync.Mutex
 	services map[string]service
+	libevm   registryExtras // libevm: see [Server.SetCallTimeout]
 }
 
 // service represents a registered object.
