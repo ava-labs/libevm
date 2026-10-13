@@ -73,6 +73,7 @@ jobs:
       - name: Extract spec tests
         run: mkdir -p tests/spec-tests && tar -xz -f "${EXECUTION_SPEC_TESTS_FILE}" -C tests/spec-tests
       - name: Run ${{ matrix.which }} tests ${{ matrix.how }}
+      shell: bash
         run: go list ./... | grep ${{ matrix.grep_flags }} "${FLAKY_REGEX}" | xargs ${{ matrix.xargs_flags }} go test -short
       - name: Save Go cache
         if: github.ref == 'refs/heads/main'
