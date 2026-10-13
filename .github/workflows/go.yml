@@ -42,11 +42,11 @@ jobs:
             xargs_flags: ""   # concurrent
     name: go_test_short (${{ matrix.which }})
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: recursive
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: "go.mod"
           cache: false # see `actions/cache` steps
@@ -94,12 +94,12 @@ jobs:
     env:
       TARGET_BRANCH: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0 # everything
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: "./libevm/tooling/go.mod"
       - name: Create local `main` if non-existent
@@ -111,9 +111,9 @@ jobs:
       EXCLUDE_REGEX: "ava-labs/libevm/(accounts/usbwallet/trezor)$"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: "go.mod"
 
@@ -132,9 +132,9 @@ jobs:
       run:
         working-directory: ${{ matrix.dir }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: "${{ matrix.dir }}/go.mod"
       - run: go mod tidy
