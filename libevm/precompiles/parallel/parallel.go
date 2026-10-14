@@ -271,12 +271,12 @@ func (p *Processor) FinishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipt
 	}
 }
 
-func (p *Processor) shouldProcess(tx IndexedTx, rules params.Rules) (decisions []decision, retErr error) {
+func (p *Processor) shouldProcess(tx IndexedTx, rules params.Rules) (_ []decision, retErr error) {
 	// An explicit 0 is necessary to avoid [Processor.PreprocessingGasCharge]
 	// returning [ErrTxUnknown].
 	p.txGas[tx.Hash()] = 0
 
-	decisions = make([]decision, len(p.handlers))
+	decisions := make([]decision, len(p.handlers))
 	var totalCost uint64
 	for i, h := range p.handlers {
 		do, priority, cost := h.shouldProcess(tx)
