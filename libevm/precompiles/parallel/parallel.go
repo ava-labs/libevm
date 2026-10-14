@@ -38,7 +38,7 @@ import (
 // A handler is the non-generic equivalent of a [Handler], exposed by [wrapper].
 type handler interface {
 	beforeBlock(libevm.StateReader, *types.Block)
-	shouldProcess(IndexedTx) (do bool, priority, gas uint64)
+	shouldProcess(IndexedTx) *Priority
 	beforeWork(jobs int)
 	prefetch(libevm.StateReader, *prefetch)
 	nullResult(*job)
@@ -76,12 +76,6 @@ type (
 type result[T any] struct {
 	tx  IndexedTx
 	val *T
-}
-
-// A decision is the outcome of ShouldProcess()
-type decision struct {
-	do       bool
-	priority uint64
 }
 
 // New constructs a new [Processor] with the specified number of concurrent
@@ -215,14 +209,14 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 		}
 		for i, h := range p.handlers {
 			j := &job{
-				tx:       tx,
-				handler:  h,
-				priority: decisions[i].priority,
+				tx:      tx,
+				handler: h,
 			}
-			if !decisions[i].do {
+			if decisions[i] == nil {
 				h.nullResult(j)
 				continue
 			}
+			j.priority = decisions[i].Value
 			workloads[i]++
 			jobs = append(jobs, j)
 		}
@@ -271,23 +265,23 @@ func (p *Processor) FinishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipt
 	}
 }
 
-func (p *Processor) shouldProcess(tx IndexedTx, rules params.Rules) (_ []decision, retErr error) {
+func (p *Processor) shouldProcess(tx IndexedTx, rules params.Rules) (_ []*Priority, retErr error) {
 	// An explicit 0 is necessary to avoid [Processor.PreprocessingGasCharge]
 	// returning [ErrTxUnknown].
 	p.txGas[tx.Hash()] = 0
 
-	decisions := make([]decision, len(p.handlers))
+	decisions := make([]*Priority, len(p.handlers))
 	var totalCost uint64
 	for i, h := range p.handlers {
-		do, priority, cost := h.shouldProcess(tx)
-		if !do {
+		pr := h.shouldProcess(tx)
+		if pr == nil {
 			continue
 		}
-		decisions[i] = decision{do: true, priority: priority}
+		decisions[i] = pr
 		// It's safe to cap total cost at [math.MaxUint64] because intrinsic gas
 		// is always non-zero and the tx would therefore OOG. Not that we could
 		// reasonably expect such high gas consumption though ¯\_(ツ)_/¯
-		totalCost += min(cost, math.MaxUint64-totalCost)
+		totalCost += min(pr.Gas, math.MaxUint64-totalCost)
 	}
 
 	defer func() {
@@ -307,9 +301,7 @@ func (p *Processor) shouldProcess(tx IndexedTx, rules params.Rules) (_ []decisio
 		return nil, core.ErrIntrinsicGas
 	}
 	if remain := tx.Gas() - spent; remain < totalCost {
-		for i := range decisions {
-			decisions[i].do = false
-		}
+		clear(decisions)
 	}
 	return decisions, nil
 }

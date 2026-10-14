@@ -17,6 +17,7 @@
 package parallel
 
 import (
+	stdcmp "cmp"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -24,7 +25,6 @@ import (
 	"math/rand/v2"
 	"slices"
 	"testing"
-	stdcmp "cmp"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -87,13 +87,13 @@ func (r *recorder) priority(txIdx int) uint64 {
 	return uint64((txIdx * 3) % 7)
 }
 
-func (r *recorder) ShouldProcess(tx IndexedTx, _ commonData) (bool, uint64, uint64) {
+func (r *recorder) ShouldProcess(tx IndexedTx, _ commonData) *Priority {
 	// TODO(arr4n) test that the [commonData] received here is the same as that
 	// returned by [recorder.BeforeBlock].
 	if to := tx.To(); to != nil && *to == r.addr {
-		return true, r.priority(tx.Index), r.gas
+		return &Priority{Value: r.priority(tx.Index), Gas: r.gas}
 	}
-	return false, 0, 0
+	return nil
 }
 
 type prefetched struct {
@@ -317,7 +317,7 @@ func TestProcessor(t *testing.T) {
 			}
 
 			wantPriority := slices.Clone(wantPerTx)
-			slices.SortStableFunc(wantPriority, func(a,b TxResult[recorded]) int {
+			slices.SortStableFunc(wantPriority, func(a, b TxResult[recorded]) int {
 				return stdcmp.Compare(handler.priority(a.Tx.Index), handler.priority(b.Tx.Index))
 			})
 
@@ -342,7 +342,7 @@ func TestProcessor(t *testing.T) {
 					}),
 				}, {
 					name: "in_priority_order",
-					want: wantPriority, 
+					want: wantPriority,
 					got:  h.gotAggregated.priorityOrder,
 				},
 			}
@@ -530,7 +530,7 @@ type expensive struct {
 }
 
 func (expensive) BeforeBlock(libevm.StateReader, *types.Header) int     { return 0 }
-func (e expensive) ShouldProcess(IndexedTx, int) (do bool, priority, gas uint64)  { return true, 0, e.gasCost }
+func (e expensive) ShouldProcess(IndexedTx, int) *Priority              { return &Priority{Gas: e.gasCost} }
 func (expensive) Prefetch(libevm.StateReader, IndexedTx, int) int       { return 0 }
 func (expensive) Process(libevm.StateReader, IndexedTx, int, int) int   { return 0 }
 func (expensive) PostProcess(int, Results[int]) int                     { return 0 }

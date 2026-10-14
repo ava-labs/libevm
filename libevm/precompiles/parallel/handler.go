@@ -68,12 +68,13 @@ type Handler[CommonData, Data, Result, Aggregated any] interface {
 	// Handler.
 	BeforeBlock(libevm.StateReader, *types.Header) CommonData
 	// ShouldProcess reports whether the Handler SHOULD receive the transaction
-	// for processing and, if so, its priority and how much gas to charge. Processing is
-	// performed i.f.f. the returned boolean is true and there is sufficient gas
-	// limit to cover intrinsic gas for all Handlers that returned true. If
-	// there is insufficient gas for processing then the transaction will result
-	// in [vm.ErrOutOfGas] as long as the [Processor] is registered with
-	// [vm.RegisterHooks] as a [vm.Preprocessor].
+	// for processing. A nil return means the transaction is not processed.
+	// Otherwise, the returned [Priority] gives the order in which it is processed
+	// and how much gas to charge. Processing is performed i.f.f. the return value
+	// is non-nil and there is sufficient gas limit to cover intrinsic gas for all Handlers
+	// that returned non-nil. If there is insufficient gas for processing then the
+	// transaction will result in [vm.ErrOutOfGas] as long as the [Processor] is
+	// registered with [vm.RegisterHooks] as a [vm.Preprocessor].
 	//
 	// Transactions with lower priority values are dispatched to Prefetch()
 	// and Process() first, and are delivered first on [Results.PriorityOrder].
@@ -82,7 +83,7 @@ type Handler[CommonData, Data, Result, Aggregated any] interface {
 	// Implementations MUST NOT perform any meaningful computation
 	// but MAY perform inter-transaction checks such as, for example,
 	// deduplication of work.
-	ShouldProcess(IndexedTx, CommonData) (do bool, priority, gas uint64)
+	ShouldProcess(IndexedTx, CommonData) *Priority
 	// Prefetch is called before the respective call to Process() on this
 	// Handler. It MUST NOT perform any meaningful computation beyond what is
 	// necessary to determine the necessary state to propagate to Process().
@@ -122,6 +123,13 @@ type IndexedTx struct {
 type Results[R any] struct {
 	WaitForAll                           func()
 	TxOrder, ProcessOrder, PriorityOrder <-chan TxResult[R]
+}
+
+// Priority is returned by [Handler.ShouldProcess] to indicate that a
+// transaction should be processed along with the order and gas.
+type Priority struct {
+	Value uint64
+	Gas   uint64
 }
 
 // A TxResult couples an [IndexedTx] with its respective result from
@@ -211,12 +219,12 @@ func (w *wrapper[CD, D, R, A]) beforeBlock(sdb libevm.StateReader, b *types.Bloc
 	}()
 }
 
-func (w *wrapper[CD, D, R, A]) shouldProcess(tx IndexedTx) (do bool, priority, gas uint64) {
-	do, priority, gas = w.Handler.ShouldProcess(tx, w.common.Peek())
-	if do {
-		w.candidates = append(w.candidates, candidate{tx.Index, priority})
+func (w *wrapper[CD, D, R, A]) shouldProcess(tx IndexedTx) *Priority {
+	p := w.Handler.ShouldProcess(tx, w.common.Peek())
+	if p != nil {
+		w.candidates = append(w.candidates, candidate{tx.Index, p.Value})
 	}
-	return do, priority, gas
+	return p
 }
 
 func (w *wrapper[CD, D, R, A]) beforeWork(jobs int) {
