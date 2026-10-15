@@ -39,7 +39,7 @@ import (
 type handler interface {
 	beforeBlock(libevm.StateReader, *types.Block)
 	shouldProcess(IndexedTx) *Priority
-	beforeWork(jobs int)
+	beforeWork(jobs []*job)
 	prefetch(libevm.StateReader, *prefetch)
 	nullResult(*job)
 	process(libevm.StateReader, *process)
@@ -195,7 +195,7 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 
 	txs := b.Transactions()
 	jobs := make([]*job, 0, len(p.handlers)*len(txs))
-	workloads := make([]int, len(p.handlers))
+	perHandler := make([][]*job, len(p.handlers))
 
 	for txIdx, rawTx := range txs {
 		tx := IndexedTx{
@@ -217,18 +217,18 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 				continue
 			}
 			j.priority = decisions[i].Value
-			workloads[i]++
 			jobs = append(jobs, j)
+			perHandler[i] = append(perHandler[i], j)
 		}
 	}
 	// Jobs were appended in transaction order. A stable sort breaks ties
 	// in priority by transaction order.
-	slices.SortStableFunc(jobs, func(a, b *job) int {
-		return cmp.Compare(a.priority, b.priority)
-	})
+	byPriority := func(a, b *job) int { return cmp.Compare(a.priority, b.priority) }
+	slices.SortStableFunc(jobs, byPriority)
 
-	for i, w := range workloads {
-		p.handlers[i].beforeWork(w)
+	for i, hj := range perHandler {
+		slices.SortStableFunc(hj, byPriority)
+		p.handlers[i].beforeWork(hj)
 	}
 	// All of the following goroutines are dependent on the one(s) preceding
 	// them, while [wrapper.finishBlock] is dependent on [wrapper.postProcess].

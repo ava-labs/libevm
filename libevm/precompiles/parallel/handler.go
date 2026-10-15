@@ -17,8 +17,6 @@
 package parallel
 
 import (
-	"cmp"
-	"slices"
 	"sync"
 
 	"github.com/ava-labs/libevm/common"
@@ -52,7 +50,7 @@ import (
 //
 //  1. BeforeBlock() precedes all ShouldProcess() calls.
 //  2. ShouldProcess() calls are sequential, in the same order as transactions in the block.
-//  3. Prefetch() precedes the respective Process() call. Not called if ShouldProcess() returns false.
+//  3. Prefetch() precedes the respective Process() call. Not called if ShouldProcess() returns nil.
 //  4. PostProcess() precedes AfterBlock().
 //
 // Note that PostProcess() MAY be called at any time after BeforeBlock(), and
@@ -139,12 +137,6 @@ type TxResult[R any] struct {
 	Result R
 }
 
-// A candidate records the priority returned by [Handler.ShouldProcess].
-type candidate struct {
-	index    int
-	priority uint64
-}
-
 // StateDB is the subset of [state.StateDB] methods that MAY be called by
 // [Handler.AfterBlock].
 type StateDB interface {
@@ -169,7 +161,7 @@ type wrapper[CD, D, R, A any] struct {
 	whenProcessed, txOrder, priorityOrder chan TxResult[R]
 
 	aggregated eventual.Value[A]
-	candidates []candidate
+	byPriority []*job
 }
 
 // AddHandler registers the [Handler] with the [Processor] and returns a
@@ -203,7 +195,6 @@ func AddHandler[CD, D, R, A any](p *Processor, h Handler[CD, D, R, A]) func(txIn
 
 func (w *wrapper[CD, D, R, A]) beforeBlock(sdb libevm.StateReader, b *types.Block) {
 	w.totalTxsInBlock = len(b.Transactions())
-	w.candidates = w.candidates[:0]
 	// We can reuse the channels already in the data and results slices because
 	// they're emptied by [wrapper.process] and [wrapper.finishBlock]
 	// respectively.
@@ -220,18 +211,16 @@ func (w *wrapper[CD, D, R, A]) beforeBlock(sdb libevm.StateReader, b *types.Bloc
 }
 
 func (w *wrapper[CD, D, R, A]) shouldProcess(tx IndexedTx) *Priority {
-	p := w.Handler.ShouldProcess(tx, w.common.Peek())
-	if p != nil {
-		w.candidates = append(w.candidates, candidate{tx.Index, p.Value})
-	}
-	return p
+	return w.Handler.ShouldProcess(tx, w.common.Peek())
 }
 
-func (w *wrapper[CD, D, R, A]) beforeWork(jobs int) {
-	w.txsBeingProcessed.Add(jobs)
-	w.whenProcessed = make(chan TxResult[R], jobs)
-	w.txOrder = make(chan TxResult[R], jobs)
-	w.priorityOrder = make(chan TxResult[R], jobs)
+func (w *wrapper[CD, D, R, A]) beforeWork(jobs []*job) {
+	w.byPriority = jobs
+	n := len(jobs)
+	w.txsBeingProcessed.Add(n)
+	w.whenProcessed = make(chan TxResult[R], n)
+	w.txOrder = make(chan TxResult[R], n)
+	w.priorityOrder = make(chan TxResult[R], n)
 	go func() {
 		w.txsBeingProcessed.Wait()
 		// [wrapper.finishBlock] blocks until this is closed, guaranteeing
@@ -298,15 +287,10 @@ func (w *wrapper[CD, D, R, A]) postProcess() {
 		// [wrapper.finishBlock] blocks until this is closed, guaranteeing
 		// cleanup of this goroutine.
 		defer close(w.priorityOrder)
-		slices.SortStableFunc(w.candidates, func(a, b candidate) int {
-			return cmp.Compare(a.priority, b.priority)
-		})
 
-		for _, c := range w.candidates {
-			r, ok := w.result(c.index)
-			if !ok {
-				continue
-			}
+		for _, j := range w.byPriority {
+			// Every job has a non-nil result, so ok is always true
+			r, _ := w.result(j.tx.Index)
 			w.priorityOrder <- r
 		}
 	}()
