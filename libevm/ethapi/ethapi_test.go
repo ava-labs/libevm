@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/params"
 )
@@ -116,3 +117,17 @@ func TestPostRPCMarshalHooks(t *testing.T) {
 		assert.Equalf(t, blockValue, got[extraKey], "%T.GetBlockByHash(...)[%q]", api, extraKey)
 	})
 }
+
+// As this package acts only to export an internal package, we need to ensure
+// that we have all the necessary identifiers. Actual testing is done in the
+// internal version.
+var _ = NewBlockChainAPI(
+	Backend(nil),
+	WithDefaultCallOptions(
+		WithCallResultInterceptor(
+			CallResultInterceptor(func(*core.ExecutionResult) error {
+				return nil
+			}),
+		),
+	),
+)

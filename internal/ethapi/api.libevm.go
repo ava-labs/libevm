@@ -20,7 +20,9 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/libevm/options"
 	"github.com/ava-labs/libevm/params"
 )
 
@@ -43,4 +45,56 @@ type RevertError = revertError
 // NewRevertError exports the [newRevertError] constructor.
 func NewRevertError(revert []byte) *RevertError {
 	return newRevertError(revert)
+}
+
+type (
+	// A BlockChainAPIOption configures a [BlockChainAPI].
+	BlockChainAPIOption = options.Option[blockChainAPIConfig]
+
+	blockChainAPIConfig struct {
+		callOpts []CallOption
+	}
+
+	// A CallOption configures [DoCall].
+	CallOption = options.Option[callConfig]
+
+	callConfig struct {
+		interceptResult CallResultInterceptor
+	}
+
+	// A CallResultInterceptor receives the return argument of [DoCall] before
+	// it is returned. If the interceptor returns an error then it is propagated
+	// along with a nil [core.ExecutionResult].
+	CallResultInterceptor func(*core.ExecutionResult) error
+)
+
+// WithDefaultCallOptions returns an option to configure a [BlockChainAPI] with
+// default options to be passed to [DoCall] by [BlockChainAPI.Call]. Repeated
+// options result in a concatenation of the arguments to each.
+func WithDefaultCallOptions(opts ...CallOption) BlockChainAPIOption {
+	return options.Func[blockChainAPIConfig](func(c *blockChainAPIConfig) {
+		c.callOpts = append(c.callOpts, opts...)
+	})
+}
+
+// WithCallResultInterceptor returns an option to configure [DoCall] with the
+// provided interceptor.
+func WithCallResultInterceptor(fn CallResultInterceptor) CallOption {
+	return options.Func[callConfig](func(c *callConfig) {
+		c.interceptResult = fn
+	})
+}
+
+func interceptCallResult(r *core.ExecutionResult, err error, opts ...CallOption) (*core.ExecutionResult, error) {
+	if err != nil {
+		return r, err
+	}
+	fn := options.As[callConfig](opts...).interceptResult
+	if fn == nil {
+		return r, nil
+	}
+	if err := fn(r); err != nil {
+		return nil, err
+	}
+	return r, nil
 }

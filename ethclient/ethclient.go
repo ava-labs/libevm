@@ -191,11 +191,15 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		}
 		txs[i] = tx.tx
 	}
-	return types.NewBlockWithHeader(head).WithBody(
+	block := types.NewBlockWithHeader(head).WithBody(
 		types.Body{
 			Transactions: txs,
 			Uncles:       uncles,
-		}).WithWithdrawals(body.Withdrawals), nil
+		}).WithWithdrawals(body.Withdrawals)
+	if err := block.PostRPCUnmarshal(raw); err != nil { //libevm
+		return nil, err
+	}
+	return block, nil
 }
 
 // HeaderByHash returns the block header with the given hash.
