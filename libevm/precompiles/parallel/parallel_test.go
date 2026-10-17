@@ -17,7 +17,7 @@
 package parallel
 
 import (
-	stdcmp "cmp"
+	"cmp"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -26,7 +26,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
+	gocmp "github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
@@ -109,7 +109,7 @@ func (r *recorder) Prefetch(sdb libevm.StateReader, tx IndexedTx, cd commonData)
 }
 
 func (r *recorder) Process(sdb libevm.StateReader, tx IndexedTx, cd commonData, data prefetched) recorded {
-	if diff := cmp.Diff(cd, data.common); diff != "" {
+	if diff := gocmp.Diff(cd, data.common); diff != "" {
 		r.tb.Errorf("Mismatched CommonData propagation to Handler methods; diff (-Process, +Prefetch):\n%s", diff)
 	}
 
@@ -157,7 +157,7 @@ func (r *recorder) PostProcess(cd commonData, res Results[recorded]) aggregated 
 	}
 
 	if len(out.txOrder) > 0 {
-		if diff := cmp.Diff(cd, out.txOrder[0].Result.Common); diff != "" {
+		if diff := gocmp.Diff(cd, out.txOrder[0].Result.Common); diff != "" {
 			r.tb.Errorf("Mismatched CommonData propagation to Handler methods; diff (-PostProcess, +Process):\n%s", diff)
 		}
 	}
@@ -311,14 +311,17 @@ func TestProcessor(t *testing.T) {
 					t.Errorf("Result(%d) got ok %t; want %t", i, gotOK, wantOK)
 					continue
 				}
-				if diff := cmp.Diff(want, got.Result); diff != "" {
+				if diff := gocmp.Diff(want, got.Result); diff != "" {
 					t.Errorf("Result(%d) diff (-want +got):\n%s", i, diff)
 				}
 			}
 
 			wantPriority := slices.Clone(wantPerTx)
 			slices.SortStableFunc(wantPriority, func(a, b TxResult[recorded]) int {
-				return stdcmp.Compare(handler.priority(a.Tx.Index), handler.priority(b.Tx.Index))
+				if x := cmp.Compare(handler.priority(a.Tx.Index), handler.priority(b.Tx.Index)); x != 0 {
+					return x
+				}
+				return cmp.Compare(a.Tx.Index, b.Tx.Index)
 			})
 
 			p.FinishBlock(sdb, block, nil)
@@ -326,7 +329,7 @@ func TestProcessor(t *testing.T) {
 				name string
 				want []TxResult[recorded]
 				got  []TxResult[recorded]
-				opt  cmp.Option
+				opt  gocmp.Option
 			}{
 				{
 					name: "in_transaction_order",
@@ -348,13 +351,13 @@ func TestProcessor(t *testing.T) {
 			}
 			for _, tt := range tests {
 				t.Run(tt.name, func(t *testing.T) {
-					opts := cmp.Options{
+					opts := gocmp.Options{
 						tt.opt,
-						cmp.Comparer(func(a, b *types.Transaction) bool {
+						gocmp.Comparer(func(a, b *types.Transaction) bool {
 							return a.Hash() == b.Hash()
 						}),
 					}
-					if diff := cmp.Diff(tt.want, tt.got, opts); diff != "" {
+					if diff := gocmp.Diff(tt.want, tt.got, opts); diff != "" {
 						t.Errorf("handler.PostProcess() argument diff (-want +got):\n%s", diff)
 					}
 				})
@@ -410,7 +413,7 @@ func TestIntegration(t *testing.T) {
 		wantReturnData [][]byte
 		wantReceipts   types.Receipts
 	)
-	ignore := cmp.Options{
+	ignore := gocmp.Options{
 		cmpopts.IgnoreFields(
 			types.Receipt{},
 			"PostState", "CumulativeGasUsed", "BlockNumber", "BlockHash", "Bloom",
@@ -498,7 +501,7 @@ func TestIntegration(t *testing.T) {
 
 			got, err := core.ApplyMessage(evm, msg, &pool)
 			require.NoError(t, err, "core.ApplyMessage()")
-			if diff := cmp.Diff(wantReturnData[i], got.ReturnData, cmpopts.EquateEmpty()); diff != "" {
+			if diff := gocmp.Diff(wantReturnData[i], got.ReturnData, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("Return data from precompile (-want +got):\n%s", diff)
 			}
 		})
@@ -520,7 +523,7 @@ func TestIntegration(t *testing.T) {
 	}
 	sut.FinishBlock(state, block, receipts)
 
-	if diff := cmp.Diff(wantReceipts, handler.gotReceipts, ignore); diff != "" {
+	if diff := gocmp.Diff(wantReceipts, handler.gotReceipts, ignore); diff != "" {
 		t.Errorf("%T diff (-want +got):\n%s", receipts, diff)
 	}
 }

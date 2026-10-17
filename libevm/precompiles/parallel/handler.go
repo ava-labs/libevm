@@ -17,6 +17,7 @@
 package parallel
 
 import (
+	"iter"
 	"sync"
 
 	"github.com/ava-labs/libevm/common"
@@ -273,30 +274,37 @@ func (w *wrapper[CD, D, R, A]) result(i int) (TxResult[R], bool) {
 }
 
 func (w *wrapper[CD, D, R, A]) postProcess() {
-	go func() {
-		// [wrapper.finishBlock] blocks until this is closed, guaranteeing
-		// cleanup of this goroutine.
-		defer close(w.txOrder)
-		for i := range w.totalTxsInBlock {
-			r, ok := w.result(i)
-			if !ok {
-				continue
+	orders := map[chan<- TxResult[R]]iter.Seq[int]{
+		w.txOrder: func(yield func(int) bool) {
+			for i := range w.totalTxsInBlock {
+				if !yield(i) {
+					return
+				}
 			}
-			w.txOrder <- r
-		}
-	}()
+		},
+		w.priorityOrder: func(yield func(int) bool) {
+			for _, j := range w.byPriority {
+				if !yield(j.tx.Index) {
+					return
+				}
+			}
+		},
+	}
 
-	go func() {
-		// [wrapper.finishBlock] blocks until this is closed, guaranteeing
-		// cleanup of this goroutine.
-		defer close(w.priorityOrder)
-
-		for _, j := range w.byPriority {
-			// Every job has a non-nil result, so ok is always true
-			r, _ := w.result(j.tx.Index)
-			w.priorityOrder <- r
-		}
-	}()
+	for ch, iter := range orders {
+		// [wrapper.finishBlock] blocks until the channels are closed,
+		// guaranteeing cleanup of the goroutines.
+		go func() {
+			defer close(ch)
+			for i := range iter {
+				r, ok := w.result(i)
+				if !ok {
+					continue
+				}
+				ch <- r
+			}
+		}()
+	}
 
 	res := Results[R]{
 		WaitForAll:    w.txsBeingProcessed.Wait,
