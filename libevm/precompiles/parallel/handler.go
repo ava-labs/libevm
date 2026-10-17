@@ -42,15 +42,15 @@ import (
 //
 //	|                                      - Prefetch(i) - Process(i)
 //	|                                    /                        /
-//	| BeforeBlock() - ShouldProcess(0..n)                         - PostProcess() - AfterBlock()
+//	| BeforeBlock() - Schedule(0..n)                         - PostProcess() - AfterBlock()
 //	|                                    \                        \
 //	|                                      - Prefetch(j) - Process(j)
 //
 // IntRA-Handler guarantees:
 //
-//  1. BeforeBlock() precedes all ShouldProcess() calls.
-//  2. ShouldProcess() calls are sequential, in the same order as transactions in the block.
-//  3. Prefetch() precedes the respective Process() call. Not called if ShouldProcess() returns nil.
+//  1. BeforeBlock() precedes all Schedule() calls.
+//  2. Schedule() calls are sequential, in the same order as transactions in the block.
+//  3. Prefetch() precedes the respective Process() call. Not called if Schedule() returns false.
 //  4. PostProcess() precedes AfterBlock().
 //
 // Note that PostProcess() MAY be called at any time after BeforeBlock(), and
@@ -65,23 +65,21 @@ type Handler[CommonData, Data, Result, Aggregated any] interface {
 	// BeforeBlock is called before all calls to ShouldProcess() on this
 	// Handler.
 	BeforeBlock(libevm.StateReader, *types.Header) CommonData
-	// ShouldProcess reports whether the Handler SHOULD receive the transaction
-	// for processing. A nil return means the transaction is not processed.
-	// Otherwise, the returned [Priority] gives the order in which it is processed
-	// and how much gas to charge. Processing is performed i.f.f. the return value
-	// is non-nil and there is sufficient gas limit to cover intrinsic gas for all Handlers
-	// that returned non-nil. If there is insufficient gas for processing then the
+	// Schedule reports whether the Handler SHOULD receive the transaction
+	// for processing, and if so, when and at what cost, as defined by the returned
+	// [Schedule]. The schedule is meaningful i.f.f. the returned boolean is true, otherwise
+	// it must be zero and is ignored.
+	//
+	// Processing is performed i.f.f. the return boolean is true and there is
+	// sufficient gas limit to cover intrinsic gas for all Handlers
+	// that returned true. If there is insufficient gas for processing then the
 	// transaction will result in [vm.ErrOutOfGas] as long as the [Processor] is
 	// registered with [vm.RegisterHooks] as a [vm.Preprocessor].
-	//
-	// Transactions with lower priority values are dispatched to Prefetch()
-	// and Process() first, and are delivered first on [Results.PriorityOrder].
-	// Ties are broken by transaction order.
 	//
 	// Implementations MUST NOT perform any meaningful computation
 	// but MAY perform inter-transaction checks such as, for example,
 	// deduplication of work.
-	ShouldProcess(IndexedTx, CommonData) *Priority
+	Schedule(IndexedTx, CommonData) (Schedule, bool)
 	// Prefetch is called before the respective call to Process() on this
 	// Handler. It MUST NOT perform any meaningful computation beyond what is
 	// necessary to determine the necessary state to propagate to Process().
@@ -123,11 +121,16 @@ type Results[R any] struct {
 	TxOrder, ProcessOrder, PriorityOrder <-chan TxResult[R]
 }
 
-// Priority is returned by [Handler.ShouldProcess] to indicate that a
-// transaction should be processed along with the order and gas.
-type Priority struct {
-	Value uint64
-	Gas   uint64
+// A Schedule defines when and at what cost a transaction should be processed by
+// the [Handler].
+//
+// Transactions with lower priority values are dispatched first to
+// [Handler.Prefetch] and [Handler.Process], and are delivered first on
+// [Results.PriorityOrder]. Ties are broken by transaction order within the
+// block
+type Schedule struct {
+	Priority uint64
+	Gas      uint64
 }
 
 // A TxResult couples an [IndexedTx] with its respective result from
@@ -210,8 +213,8 @@ func (w *wrapper[CD, D, R, A]) beforeBlock(sdb libevm.StateReader, b *types.Bloc
 	}()
 }
 
-func (w *wrapper[CD, D, R, A]) shouldProcess(tx IndexedTx) *Priority {
-	return w.Handler.ShouldProcess(tx, w.common.Peek())
+func (w *wrapper[CD, D, R, A]) schedule(tx IndexedTx) (Schedule, bool) {
+	return w.Handler.Schedule(tx, w.common.Peek())
 }
 
 func (w *wrapper[CD, D, R, A]) beforeWork(jobs []*job) {

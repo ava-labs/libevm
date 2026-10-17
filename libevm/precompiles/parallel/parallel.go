@@ -38,7 +38,7 @@ import (
 // A handler is the non-generic equivalent of a [Handler], exposed by [wrapper].
 type handler interface {
 	beforeBlock(libevm.StateReader, *types.Block)
-	shouldProcess(IndexedTx) *Priority
+	schedule(IndexedTx) (Schedule, bool)
 	beforeWork(jobs []*job)
 	prefetch(libevm.StateReader, *prefetch)
 	nullResult(*job)
@@ -76,6 +76,12 @@ type (
 type result[T any] struct {
 	tx  IndexedTx
 	val *T
+}
+
+// scheduled pairs a [Schedule] with whether the handler wants the transaction.
+type scheduled struct {
+	Schedule
+	ok bool
 }
 
 // New constructs a new [Processor] with the specified number of concurrent
@@ -203,7 +209,7 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 			Transaction: rawTx,
 		}
 
-		decisions, err := p.shouldProcess(tx, rules) // MUST NOT be concurrent within a Handler
+		schedules, err := p.schedule(tx, rules) // MUST NOT be concurrent within a Handler
 		if err != nil {
 			return err
 		}
@@ -212,11 +218,11 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 				tx:      tx,
 				handler: h,
 			}
-			if decisions[i] == nil {
+			if !schedules[i].ok {
 				h.nullResult(j)
 				continue
 			}
-			j.priority = decisions[i].Value
+			j.priority = schedules[i].Priority
 			jobs = append(jobs, j)
 			perHandler[i] = append(perHandler[i], j)
 		}
@@ -265,23 +271,23 @@ func (p *Processor) FinishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipt
 	}
 }
 
-func (p *Processor) shouldProcess(tx IndexedTx, rules params.Rules) (_ []*Priority, retErr error) {
+func (p *Processor) schedule(tx IndexedTx, rules params.Rules) (_ []scheduled, retErr error) {
 	// An explicit 0 is necessary to avoid [Processor.PreprocessingGasCharge]
 	// returning [ErrTxUnknown].
 	p.txGas[tx.Hash()] = 0
 
-	decisions := make([]*Priority, len(p.handlers))
+	schedules := make([]scheduled, len(p.handlers))
 	var totalCost uint64
 	for i, h := range p.handlers {
-		pr := h.shouldProcess(tx)
-		if pr == nil {
+		s, ok := h.schedule(tx)
+		if !ok {
 			continue
 		}
-		decisions[i] = pr
+		schedules[i] = scheduled{Schedule: s, ok: true}
 		// It's safe to cap total cost at [math.MaxUint64] because intrinsic gas
 		// is always non-zero and the tx would therefore OOG. Not that we could
 		// reasonably expect such high gas consumption though ¯\_(ツ)_/¯
-		totalCost += min(pr.Gas, math.MaxUint64-totalCost)
+		totalCost += min(s.Gas, math.MaxUint64-totalCost)
 	}
 
 	defer func() {
@@ -301,9 +307,9 @@ func (p *Processor) shouldProcess(tx IndexedTx, rules params.Rules) (_ []*Priori
 		return nil, core.ErrIntrinsicGas
 	}
 	if remain := tx.Gas() - spent; remain < totalCost {
-		clear(decisions)
+		clear(schedules)
 	}
-	return decisions, nil
+	return schedules, nil
 }
 
 func txIntrinsicGas(tx *types.Transaction, rules *params.Rules) (uint64, error) {
