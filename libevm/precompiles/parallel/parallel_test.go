@@ -87,13 +87,13 @@ func (r *recorder) priority(txIdx int) uint64 {
 	return uint64((txIdx * 3) % 7)
 }
 
-func (r *recorder) ShouldProcess(tx IndexedTx, _ commonData) *Priority {
+func (r *recorder) Schedule(tx IndexedTx, _ commonData) (Schedule, bool) {
 	// TODO(arr4n) test that the [commonData] received here is the same as that
 	// returned by [recorder.BeforeBlock].
 	if to := tx.To(); to != nil && *to == r.addr {
-		return &Priority{Value: r.priority(tx.Index), Gas: r.gas}
+		return Schedule{Priority: r.priority(tx.Index), Gas: r.gas}, true
 	}
-	return nil
+	return Schedule{}, false
 }
 
 type prefetched struct {
@@ -530,7 +530,7 @@ type expensive struct {
 }
 
 func (expensive) BeforeBlock(libevm.StateReader, *types.Header) int     { return 0 }
-func (e expensive) ShouldProcess(IndexedTx, int) *Priority              { return &Priority{Gas: e.gasCost} }
+func (e expensive) Schedule(IndexedTx, int) (Schedule, bool)            { return Schedule{Gas: e.gasCost}, true }
 func (expensive) Prefetch(libevm.StateReader, IndexedTx, int) int       { return 0 }
 func (expensive) Process(libevm.StateReader, IndexedTx, int, int) int   { return 0 }
 func (expensive) PostProcess(int, Results[int]) int                     { return 0 }
