@@ -17,6 +17,8 @@
 package rpc
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -47,27 +49,67 @@ func TestServerSetCallTimeout(t *testing.T) {
 		},
 	}
 
+	transports := []struct {
+		name   string
+		client func(*testing.T, *Server) *Client
+	}{
+		{
+			// In-process connections are served like WebSockets, by
+			// [Server.ServeCodec].
+			name: "in-process",
+			client: func(t *testing.T, s *Server) *Client {
+				t.Helper()
+				return DialInProc(s)
+			},
+		},
+		{
+			name: "http",
+			client: func(t *testing.T, s *Server) *Client {
+				t.Helper()
+				opt := WithHTTPClient(&http.Client{Transport: handlerTransport{s}})
+				c, err := DialOptions(t.Context(), "http://localhost", opt)
+				require.NoError(t, err, "DialOptions()")
+				return c
+			},
+		},
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			synctest.Test(t, func(t *testing.T) { //nolint:thelper // False positive, fixed in thelper v0.7.1.
-				srv := newTestServer()
-				srv.SetCallTimeout(tt.timeout)
-				defer srv.Stop()
-				// In-process connections are served like WebSockets, by
-				// [Server.ServeCodec].
-				client := DialInProc(srv)
-				defer client.Close()
+			for _, tr := range transports {
+				t.Run(tr.name, func(t *testing.T) {
+					synctest.Test(t, func(t *testing.T) { //nolint:thelper // False positive, fixed in thelper v0.7.1.
+						srv := newTestServer()
+						srv.SetCallTimeout(tt.timeout)
+						defer srv.Stop()
 
-				err := client.CallContext(t.Context(), nil, "test_sleep", tt.sleep)
-				require.Equal(t, tt.wantErr, err, "CallContext(test_sleep)")
+						c := tr.client(t, srv)
+						t.Cleanup(c.Close)
 
-				// A timed-out call doesn't close the connection.
-				require.NoError(t, client.CallContext(t.Context(), nil, "test_noArgsRets"), "CallContext(test_noArgsRets)")
+						err := c.CallContext(t.Context(), nil, "test_sleep", tt.sleep)
+						require.Equal(t, tt.wantErr, err, "CallContext(test_sleep)")
 
-				// A timed-out call keeps running on the server, so let it return
-				// before the bubble ends.
-				time.Sleep(tt.sleep)
-			})
+						// A timed-out call doesn't close the connection.
+						require.NoError(t, c.CallContext(t.Context(), nil, "test_noArgsRets"), "CallContext(test_noArgsRets)")
+
+						// A timed-out call keeps running on the server, so let it return
+						// before the bubble ends.
+						time.Sleep(tt.sleep)
+					})
+				})
+			}
 		})
 	}
+}
+
+// handlerTransport serves each HTTP request in memory with its Handler, as
+// synctest can't advance time while a goroutine waits on a network.
+type handlerTransport struct {
+	http.Handler
+}
+
+func (h handlerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	return rec.Result(), nil
 }

@@ -68,8 +68,8 @@ func NewEthereumAPI(b Backend) *EthereumAPI {
 }
 
 // NewBlockChainAPI is identical to [ethapi.NewBlockChainAPI].
-func NewBlockChainAPI(b Backend) *BlockChainAPI {
-	return ethapi.NewBlockChainAPI(b)
+func NewBlockChainAPI(b Backend, opts ...BlockChainAPIOption) *BlockChainAPI {
+	return ethapi.NewBlockChainAPI(b, opts...)
 }
 
 // NewTransactionAPI is identical to [ethapi.NewTransactionAPI].
@@ -102,9 +102,33 @@ func MarshalReceipt(r *types.Receipt, blockHash common.Hash, blockNumber uint64,
 	return ethapi.MarshalReceipt(r, blockHash, blockNumber, signer, tx, txIndex)
 }
 
+// A BlockChainAPIOption configures a [BlockChainAPI].
+type BlockChainAPIOption = ethapi.BlockChainAPIOption
+
+// WithDefaultCallOptions returns an option to configure a [BlockChainAPI] with
+// default options to be passed to [DoCall] by [BlockChainAPI.Call]. Repeated
+// options result in a concatenation of the arguments to each.
+func WithDefaultCallOptions(opts ...CallOption) BlockChainAPIOption {
+	return ethapi.WithDefaultCallOptions(opts...)
+}
+
+// A CallOption configures [DoCall].
+type CallOption = ethapi.CallOption
+
+// A CallResultInterceptor receives the return argument of [DoCall] before
+// it is returned. If the interceptor returns an error then it is propagated
+// along with a nil [core.ExecutionResult].
+type CallResultInterceptor = ethapi.CallResultInterceptor
+
 // DoCall is identical to [ethapi.DoCall].
-func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
-	return ethapi.DoCall(ctx, b, args, blockNrOrHash, overrides, blockOverrides, timeout, globalGasCap)
+func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides, timeout time.Duration, globalGasCap uint64, opts ...CallOption) (*core.ExecutionResult, error) {
+	return ethapi.DoCall(ctx, b, args, blockNrOrHash, overrides, blockOverrides, timeout, globalGasCap, opts...)
+}
+
+// WithCallResultInterceptor returns an option to configure [DoCall] with the
+// provided interceptor.
+func WithCallResultInterceptor(fn CallResultInterceptor) CallOption {
+	return ethapi.WithCallResultInterceptor(fn)
 }
 
 // NewRevertError is identical to [ethapi.NewRevertError].
