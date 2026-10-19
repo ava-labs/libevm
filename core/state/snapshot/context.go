@@ -95,7 +95,8 @@ type generatorContext struct {
 	batch   ethdb.Batch         // Database batch for writing batch data atomically
 	logged  time.Time           // The timestamp when last generation progress was displayed
 
-	generatorPausing //libevm
+	generatorPausing  //libevm
+	generatorSkipping //libevm
 }
 
 // newGeneratorContext initializes the context for generation.
@@ -118,11 +119,13 @@ func newGeneratorContext(stats *generatorStats, db ethdb.KeyValueStore, accMarke
 func (ctx *generatorContext) openIterator(kind string, start []byte) {
 	if kind == snapAccount {
 		iter := ctx.db.NewIterator(rawdb.SnapshotAccountPrefix, start)
+		iter = ctx.skipKnownEmpty(kind, iter, start)  //libevm
 		iter = newAbortableIterator(iter, ctx.cancel) //libevm
 		ctx.account = newHoldableIterator(rawdb.NewKeyLengthIterator(iter, 1+common.HashLength))
 		return
 	}
 	iter := ctx.db.NewIterator(rawdb.SnapshotStoragePrefix, start)
+	iter = ctx.skipKnownEmpty(kind, iter, start)  //libevm
 	iter = newAbortableIterator(iter, ctx.cancel) //libevm
 	ctx.storage = newHoldableIterator(rawdb.NewKeyLengthIterator(iter, 1+2*common.HashLength))
 }
@@ -137,6 +140,7 @@ func (ctx *generatorContext) reopenIterator(kind string) {
 		iter = ctx.storage
 	}
 	hasNext := iter.Next()
+	ctx.keepRead(kind) //libevm
 	if !hasNext && iter.Error() != nil {
 		return // Keep the failed iterator so its error reaches the next reader
 	}
