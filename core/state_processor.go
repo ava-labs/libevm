@@ -135,6 +135,8 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = result.UsedGas
 
+	receipt.GasExecuted = result.GasExecuted //libevm
+
 	if tx.Type() == types.BlobTxType {
 		receipt.BlobGasUsed = uint64(len(tx.BlobHashes()) * params.BlobTxBlobGasPerBlob)
 		receipt.BlobGasPrice = evm.Context.BlobBaseFee
