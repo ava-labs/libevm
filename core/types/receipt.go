@@ -73,7 +73,7 @@ type Receipt struct {
 	TransactionIndex uint        `json:"transactionIndex"`
 
 	// libevm modifications
-	GasExecuted uint64 // Before enforcement of [params.RulesHooks.MinimumGasConsumption] but after refunds
+	GasExecuted uint64 `json:"-"` // Before enforcement of [params.RulesHooks.MinimumGasConsumption] but after refunds
 }
 
 type receiptMarshaling struct {
