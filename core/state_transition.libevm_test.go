@@ -297,6 +297,9 @@ func TestMinimumGasConsumption(t *testing.T) {
 			if gotPool != wantPool {
 				t.Errorf("After core.ApplyMessage(..., *%T); got %[1]T = %[1]d; want %d", gotPool, wantPool)
 			}
+			if got, want := receipt.GasExecuted, params.TxGas-tt.refund; got != want {
+				t.Errorf("receipt.GasExecuted got %d; want %d", got, want)
+			}
 
 			wantBalance := uint256.NewInt(startingBalance - tt.wantUsed*gasPrice)
 			if got := stateDB.GetBalance(from); !got.Eq(wantBalance) {

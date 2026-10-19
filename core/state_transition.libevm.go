@@ -83,6 +83,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	snap := st.state.Snapshot()   // computationally cheap operation
 	res, err := st.transitionDb() // original geth implementation
 
+	if err == nil { // NOTE ==
+		res.GasExecuted = st.gasExecuted
+	}
+
 	// [NOTE]: At the time of implementation of this libevm override, non-nil
 	// values of `err` and `invalid` (below) are mutually exclusive. However, as
 	// a defensive measure, we don't return early on non-nil `err` in case an
@@ -121,6 +125,12 @@ func (st *StateTransition) afterGasRefund(refunded uint64) {
 	if !st.rulesHooks().ShouldRefundGas() {
 		st.gasRemaining -= refunded
 	}
+
+	// This is placed after refund adjustment as refunds are set upstream in
+	// geth, to more closely reflect actual resource usage. We have added the
+	// gas-execution field to avoid the minimum charge (below) skewing metrics
+	// about actual throughput.
+	st.gasExecuted = st.msg.GasLimit - st.gasRemaining
 
 	c := options.As[stateTransitionConfig](st.opts...)
 	if c.disableMinimumGasConsumption {

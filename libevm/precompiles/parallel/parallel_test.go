@@ -429,6 +429,7 @@ func TestIntegration(t *testing.T) {
 			Status:           types.ReceiptStatusSuccessful,
 			TxHash:           tx.Hash(),
 			GasUsed:          gas,
+			GasExecuted:      gas, // == GasUsed because no [params.RulesHooks.MinimumGasConsumption]
 			TransactionIndex: ui,
 		}
 		if addr != handler.addr {
