@@ -156,6 +156,7 @@ func TestGeneratePOSChain(t *testing.T) {
 			if r.Logs == nil {
 				r.Logs = []*types.Log{}
 			}
+			r.GasExecuted = 0 //libevm: not persisted so absent from blockchain receipts
 		}
 		blockchainReceipts := blockchain.GetReceiptsByHash(block.Hash())
 		if !reflect.DeepEqual(genBlockReceipts, blockchainReceipts) {
