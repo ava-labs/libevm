@@ -544,7 +544,7 @@ var (
 	// Logging and debug settings
 	EthStatsURLFlag = &cli.StringFlag{
 		Name:     "ethstats",
-		Usage:    "Reporting URL of a ethstats service (nodename:secret@host:port)",
+		Usage:    "Reporting URL of an ethstats service (nodename:secret@host:port)",
 		Category: flags.MetricsCategory,
 	}
 	NoCompactionFlag = &cli.BoolFlag{

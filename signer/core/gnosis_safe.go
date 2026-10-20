@@ -50,7 +50,7 @@ type GnosisSafeTx struct {
 	ChainId        *math.HexOrDecimal256   `json:"chainId,omitempty"`
 }
 
-// ToTypedData converts the tx to a EIP-712 Typed Data structure for signing
+// ToTypedData converts the tx to an EIP-712 Typed Data structure for signing
 func (tx *GnosisSafeTx) ToTypedData() apitypes.TypedData {
 	var data hexutil.Bytes
 	if tx.Data != nil {
