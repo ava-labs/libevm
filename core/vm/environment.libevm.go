@@ -99,24 +99,60 @@ func (e *environment) BlockHeader() (types.Header, error) {
 	return *hdr, nil
 }
 
-func (e *environment) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {
-	return e.callContract(Call, addr, input, gas, value, opts...)
+// call is shared by all *CALL* implementations.
+func (e *environment) call(typ CallType, to common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {
+	ret, _, err := e.callOrCreate(
+		typ,
+		&to,
+		input,
+		&gas,
+		value,
+		nil, // CREATE2 salt
+		opts...,
+	)
+	return ret, err
 }
 
-func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {
+func (e *environment) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {
+	return e.call(Call, addr, input, gas, value, opts...)
+}
+
+// create is shared by all CREATE* implementations.
+func (e *environment) create(typ CallType, code []byte, value *uint256.Int, salt *[32]byte) ([]byte, common.Address, error) {
+	return e.callOrCreate(
+		typ,
+		nil, // *CALL* `to` address
+		code,
+		nil, // CREATEs send all gas
+		value,
+		salt,
+	)
+}
+
+func (e *environment) Create(code []byte, value *uint256.Int) ([]byte, common.Address, error) {
+	return e.create(create, code, value, nil /*salt*/)
+}
+
+func (e *environment) Create2(code []byte, value *uint256.Int, salt [32]byte) ([]byte, common.Address, error) {
+	return e.create(create2, code, value, &salt)
+}
+
+// callOrCreate is shared by all *CALL* and CREATE* implementations.
+func (e *environment) callOrCreate(typ CallType, to *common.Address, input []byte, gasRequested *uint64, value *uint256.Int, salt *[32]byte, opts ...CallOption) ([]byte, common.Address, error) {
 	if value == nil {
 		// STATIC- and DELEGATECALL pass nil values, which we would otherwise
 		// have to check repeatedly.
 		value = uint256.NewInt(0)
 	}
-	if e.ReadOnly() && !value.IsZero() {
-		return nil, ErrWriteProtection
+	writes := !value.IsZero() || typ.subType() == contractCreation
+	if e.ReadOnly() && writes {
+		return nil, common.Address{}, ErrWriteProtection
 	}
 
 	cfg := options.As[callConfig](opts...)
 
 	var caller ContractRef = e.self
-	if cfg.unsafeCallerAddressProxying {
+	if typ.subType() == contractCall && cfg.unsafeCallerAddressProxying {
 		// Note that, in addition to being unsafe, this breaks an EVM
 		// assumption that the caller ContractRef is always a *Contract.
 		caller = AccountRef(e.self.CallerAddress)
@@ -127,18 +163,13 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 		}
 	}
 
-	gas, err := e.buyCallGas(typ, cfg, addr, gas, value)
-	if err != nil {
-		return nil, err
-	}
-
+	var buyer gasBuyer
 	switch typ {
 	case Call:
-		ret, returnGas, callErr := e.evm.Call(caller, addr, input, gas, value)
-		if err := e.refundGas(returnGas); err != nil {
-			return nil, err
-		}
-		return ret, callErr
+		buyer = callGasBuyer{*to, *gasRequested, *value}
+	case create, create2:
+		buyer = createGasBuyer{input, *value}
+
 	case CallCode, DelegateCall, StaticCall:
 		// TODO(arr4n): these cases should be very similar to CALL, hence the
 		// early abstraction, to signal to future maintainers. If implementing
@@ -148,69 +179,160 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 		// demonstrate the correct type.
 		fallthrough
 	default:
-		return nil, fmt.Errorf("unimplemented precompile call type %v", typ)
+		return nil, common.Address{}, fmt.Errorf("unimplemented precompile call type %v", typ)
 	}
+	gas, err := e.buyGas(typ, cfg, buyer)
+	if err != nil {
+		return nil, common.Address{}, err
+	}
+
+	var (
+		frameRet    []byte
+		created     common.Address
+		leftOverGas uint64
+		frameErr    error
+	)
+	switch typ {
+	case Call:
+		frameRet, leftOverGas, frameErr = e.evm.Call(caller, *to, input, gas, value)
+
+	case create:
+		frameRet, created, leftOverGas, frameErr = e.evm.Create(caller, input, gas, value)
+
+	case create2:
+		frameRet, created, leftOverGas, frameErr = e.evm.Create2(caller, input, gas, value, new(uint256.Int).SetBytes32(salt[:]))
+	}
+
+	if err := e.refundGas(leftOverGas); err != nil {
+		return nil, common.Address{}, err
+	}
+	return frameRet, created, frameErr
 }
 
-func (e *environment) buyCallGas(typ CallType, cfg *callConfig, addr common.Address, gas uint64, value *uint256.Int) (bought uint64, retErr error) {
-	if cfg.legacyOutboundCallGas {
-		if !e.UseGas(gas) {
+type gasBuyer interface {
+	populateForDynamicGas(*Stack)
+	bought(*environment) (gas uint64, charged bool)
+	freeStipend() (gas uint64)
+}
+
+var _ = []gasBuyer{
+	callGasBuyer{},
+	createGasBuyer{},
+}
+
+func (e *environment) buyGas(typ CallType, cfg *callConfig, buyer gasBuyer) (bought uint64, retErr error) {
+	if b, ok := buyer.(callGasBuyer); ok && cfg.legacyOutboundCallGas {
+		g := b.gasRequested
+		if !e.UseGas(g) {
 			return 0, ErrOutOfGas
 		}
-		return gas, nil
+		return g, nil
 	}
 
-	// All dynamic-gas calculators for calls store the amount of gas to
-	// propagate in [EVM.callGasTemp] because the [gasFunc] signature doesn't
-	// allow for it to be returned.
-	old := e.evm.callGasTemp
-	stack := newstack()
-	defer func() {
-		e.evm.callGasTemp = old
-		returnStack(stack)
-	}()
-
-	// All *CALL op codes have [gas, address] on the top of the stack, while
-	// CALL and CALLCODE then have the value, while STATICCALL and DELEGATECALL
-	// have the argument offset, which doesn't affect gas.
-	stack.push(value)
-	stack.push(new(uint256.Int).SetBytes20(addr[:]))
-	stack.push(uint256.NewInt(gas))
+	op := e.evm.interpreter.table[typ.OpCode()]
+	if op.dynamicGas == nil {
+		return 0, &ErrInvalidOpCode{typ.OpCode()}
+	}
 
 	// Constant gas cost MUST be charged first otherwise the 63/64 rule of the
 	// dynamic cost will be applied to the incorrect value.
-	op := e.evm.interpreter.table[typ.OpCode()]
 	if !e.UseGas(op.constantGas) {
 		return 0, ErrOutOfGas
 	}
 
-	// Dynamic-gas calculation might warm the address before we've actually paid
-	// for the associated gas. We revert the warming in all error cases, even if
-	// it has been paid for inside [operation.dynamicGas], because this is the
-	// more conservative approach for DoS protection. The alternative is a
-	// convoluted set of checks to see if the address was warmed and whether the
-	// gas was used, which is brittle under upstream (geth) code mergers.
-	sdb := e.evm.StateDB
-	beforeAddrWarming := sdb.Snapshot()
-	defer func() {
-		if retErr != nil {
-			sdb.RevertToSnapshot(beforeAddrWarming)
-		}
-	}()
+	{
+		// Dynamic-gas calculation might warm the address before we've actually paid
+		// for the associated gas. We revert the warming in all error cases, even if
+		// it has been paid for inside [operation.dynamicGas], because this is the
+		// more conservative approach for DoS protection. The alternative is a
+		// convoluted set of checks to see if the address was warmed and whether the
+		// gas was used, which is brittle under upstream (geth) code mergers.
+		sdb := e.evm.StateDB
+		beforeAddrWarming := sdb.Snapshot()
+		defer func() {
+			if retErr != nil {
+				sdb.RevertToSnapshot(beforeAddrWarming)
+			}
+		}()
 
-	dyn, err := op.dynamicGas(e.evm, e.self, stack, NewMemory(), 0 /*memory expansion*/)
-	if err != nil {
-		return 0, err
+		// All dynamic-gas calculators for calls store the amount of gas to
+		// propagate in [EVM.callGasTemp] because the [gasFunc] signature doesn't
+		// allow for it to be returned.
+		old := e.evm.callGasTemp
+		stack := newstack()
+		defer func() {
+			e.evm.callGasTemp = old
+			returnStack(stack)
+		}()
+		buyer.populateForDynamicGas(stack)
+
+		dyn, err := op.dynamicGas(e.evm, e.self, stack, NewMemory(), 0 /*memory expansion*/)
+		if err != nil {
+			return 0, err
+		}
+		if !e.UseGas(dyn) {
+			return 0, ErrOutOfGas
+		}
 	}
-	if !e.UseGas(dyn) {
+
+	bought, charged := buyer.bought(e)
+	if !charged && !e.UseGas(bought) {
 		return 0, ErrOutOfGas
 	}
-
-	// [operation.dynamicGas] for *CALL returns a total that already includes
-	// [EVM.callGasTemp], so the propagated gas was charged above.
-	bought = e.evm.callGasTemp
-	if !value.IsZero() {
-		bought += params.CallStipend
-	}
+	bought += buyer.freeStipend()
 	return bought, nil
+}
+
+type (
+	callGasBuyer struct {
+		addr         common.Address
+		gasRequested uint64
+		value        uint256.Int
+	}
+	createGasBuyer struct {
+		initData []byte
+		value    uint256.Int
+	}
+)
+
+func (b callGasBuyer) populateForDynamicGas(s *Stack) {
+	// All *CALL op codes have [gas, address] on the top of the stack, while
+	// CALL and CALLCODE then have the value, while STATICCALL and DELEGATECALL
+	// have the argument offset, which doesn't affect gas.
+	s.push(&b.value)
+	s.push(new(uint256.Int).SetBytes20(b.addr[:]))
+	s.push(uint256.NewInt(b.gasRequested))
+}
+
+func (b callGasBuyer) bought(e *environment) (uint64, bool) {
+	// [operation.dynamicGas] for *CALL returns a total that already includes
+	// [EVM.callGasTemp], so the gas was already charged.
+	return e.evm.callGasTemp, true
+}
+
+func (b callGasBuyer) freeStipend() uint64 {
+	if b.value.IsZero() {
+		return 0
+	}
+	return params.CallStipend
+}
+
+func (b createGasBuyer) populateForDynamicGas(s *Stack) {
+	// Although [CREATE2] also has the salt on the stack, [operation.dynamicGas]
+	// doesn't read from it.
+	s.push(uint256.NewInt(uint64(len(b.initData))))
+	s.push(new(uint256.Int)) // arbitrary memory offset
+	s.push(&b.value)
+}
+
+func (b createGasBuyer) bought(e *environment) (uint64, bool) {
+	g := e.Gas()
+	if e.Rules().IsEIP150 {
+		g -= g / 64
+	}
+	return g, false
+}
+
+func (b createGasBuyer) freeStipend() uint64 {
+	return 0
 }
