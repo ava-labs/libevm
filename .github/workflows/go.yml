@@ -16,7 +16,7 @@ jobs:
   # what gates PRs.
   go:
     runs-on: ubuntu-latest
-    needs: [go_test_short, go_test_tooling, go_generate, go_tidy]
+    needs: [go_test_short, go_test_nocgo, go_test_tooling, go_generate, go_tidy]
     steps:
       - run: echo "Dependencies successful"
 
@@ -85,6 +85,19 @@ jobs:
         with:
           path: *go-cache-path
           key: *go-cache-key
+
+  go_test_nocgo:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: 0
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: "go.mod"
+      - run: go build ./...
+      - run: go test -short ./crypto/...
 
   go_test_tooling:
     runs-on: ubuntu-latest
