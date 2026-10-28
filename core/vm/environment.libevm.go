@@ -87,16 +87,8 @@ func (e *environment) StateDB() StateDB {
 	return e.evm.StateDB
 }
 
-func (e *environment) BlockHeader() (types.Header, error) {
-	hdr := e.evm.Context.Header
-	if hdr == nil {
-		// Although [core.NewEVMBlockContext] sets the field and is in the
-		// typical hot path (e.g. miner), there are other ways to create a
-		// [vm.BlockContext] (e.g. directly in tests) that may result in no
-		// available header.
-		return types.Header{}, fmt.Errorf("nil %T in current %T", hdr, e.evm.Context)
-	}
-	return *hdr, nil
+func (e *environment) BlockHeader() *types.Header {
+	return e.evm.Context.Header
 }
 
 func (e *environment) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {
