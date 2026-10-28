@@ -210,7 +210,7 @@ type PrecompileEnvironment interface {
 	UseGas(uint64) (hasEnoughGas bool)
 	Value() *uint256.Int
 
-	BlockHeader() (types.Header, error)
+	BlockHeader() *types.Header
 	BlockNumber() *big.Int
 	BlockTime() uint64
 
