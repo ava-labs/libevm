@@ -26,8 +26,9 @@ import (
 type StateDBCommitOption = options.Option[stateDBCommitConfig]
 
 type stateDBCommitConfig struct {
-	snapshotOpts []SnapshotUpdateOption
-	triedbOpts   []TrieDBUpdateOption
+	snapshotOpts      []SnapshotUpdateOption
+	triedbOpts        []TrieDBUpdateOption
+	snapshotCapLayers *int
 }
 
 // WithSnapshotUpdateOpts returns a StateDBCommitOption carrying a list of
@@ -58,6 +59,32 @@ func WithTrieDBUpdateOpts(opts ...TrieDBUpdateOption) StateDBCommitOption {
 // the provided slice of StateDBCommitOption.
 func ExtractTrieDBUpdateOpts(opts ...StateDBCommitOption) []TrieDBUpdateOption {
 	return options.As(opts...).triedbOpts
+}
+
+// DefaultSnapshotCapLayers is the number of in-memory snapshot diff layers
+// that state.StateDB.Commit() retains when capping its snapshot tree, absent
+// a [WithSnapshotCapLayers] option. It mirrors upstream geth's hardcoded
+// behaviour.
+const DefaultSnapshotCapLayers = 128
+
+// WithSnapshotCapLayers returns a StateDBCommitOption overriding the number
+// of in-memory diff layers that state.StateDB.Commit() retains when capping
+// its snapshot tree. If multiple such options are used, only the last will be
+// applied as they overwrite each other.
+func WithSnapshotCapLayers(layers int) StateDBCommitOption {
+	return options.Func[stateDBCommitConfig](func(c *stateDBCommitConfig) {
+		c.snapshotCapLayers = &layers
+	})
+}
+
+// ExtractSnapshotCapLayers returns the number of diff layers carried by a
+// [WithSnapshotCapLayers] option, defaulting to [DefaultSnapshotCapLayers] if
+// no such option is present.
+func ExtractSnapshotCapLayers(opts ...StateDBCommitOption) int {
+	if layers := options.As(opts...).snapshotCapLayers; layers != nil {
+		return *layers
+	}
+	return DefaultSnapshotCapLayers
 }
 
 // A SnapshotUpdateOption configures the behaviour of
