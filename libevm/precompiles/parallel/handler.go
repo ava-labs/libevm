@@ -17,6 +17,7 @@
 package parallel
 
 import (
+	"iter"
 	"sync"
 
 	"github.com/ava-labs/libevm/common"
@@ -42,15 +43,15 @@ import (
 //
 //	|                                      - Prefetch(i) - Process(i)
 //	|                                    /                        /
-//	| BeforeBlock() - ShouldProcess(0..n)                         - PostProcess() - AfterBlock()
+//	| BeforeBlock() - Schedule(0..n)                         - PostProcess() - AfterBlock()
 //	|                                    \                        \
 //	|                                      - Prefetch(j) - Process(j)
 //
 // IntRA-Handler guarantees:
 //
-//  1. BeforeBlock() precedes all ShouldProcess() calls.
-//  2. ShouldProcess() calls are sequential, in the same order as transactions in the block.
-//  3. Prefetch() precedes the respective Process() call. Not called if ShouldProcess() returns false.
+//  1. BeforeBlock() precedes all Schedule() calls.
+//  2. Schedule() calls are sequential, in the same order as transactions in the block.
+//  3. Prefetch() precedes the respective Process() call. Not called if Schedule() returns false.
 //  4. PostProcess() precedes AfterBlock().
 //
 // Note that PostProcess() MAY be called at any time after BeforeBlock(), and
@@ -65,18 +66,21 @@ type Handler[CommonData, Data, Result, Aggregated any] interface {
 	// BeforeBlock is called before all calls to ShouldProcess() on this
 	// Handler.
 	BeforeBlock(libevm.StateReader, *types.Header) CommonData
-	// ShouldProcess reports whether the Handler SHOULD receive the transaction
-	// for processing and, if so, how much gas to charge. Processing is
-	// performed i.f.f. the returned boolean is true and there is sufficient gas
-	// limit to cover intrinsic gas for all Handlers that returned true. If
-	// there is insufficient gas for processing then the transaction will result
-	// in [vm.ErrOutOfGas] as long as the [Processor] is registered with
-	// [vm.RegisterHooks] as a [vm.Preprocessor].
+	// Schedule reports whether the Handler SHOULD receive the transaction
+	// for processing, and if so, when and at what cost, as defined by the returned
+	// [Schedule]. The schedule is meaningful i.f.f. the returned boolean is true, otherwise
+	// it must be zero and is ignored.
+	//
+	// Processing is performed i.f.f. the return boolean is true and there is
+	// sufficient gas limit to cover intrinsic gas for all Handlers
+	// that returned true. If there is insufficient gas for processing then the
+	// transaction will result in [vm.ErrOutOfGas] as long as the [Processor] is
+	// registered with [vm.RegisterHooks] as a [vm.Preprocessor].
 	//
 	// Implementations MUST NOT perform any meaningful computation
 	// but MAY perform inter-transaction checks such as, for example,
 	// deduplication of work.
-	ShouldProcess(IndexedTx, CommonData) (do bool, gas uint64)
+	Schedule(IndexedTx, CommonData) (Schedule, bool)
 	// Prefetch is called before the respective call to Process() on this
 	// Handler. It MUST NOT perform any meaningful computation beyond what is
 	// necessary to determine the necessary state to propagate to Process().
@@ -114,8 +118,20 @@ type IndexedTx struct {
 
 // Results provides mechanisms for blocking on the output of [Handler.Process].
 type Results[R any] struct {
-	WaitForAll            func()
-	TxOrder, ProcessOrder <-chan TxResult[R]
+	WaitForAll                           func()
+	TxOrder, ProcessOrder, PriorityOrder <-chan TxResult[R]
+}
+
+// A Schedule defines when and at what cost a transaction should be processed by
+// the [Handler].
+//
+// Transactions with lower priority values are dispatched first to
+// [Handler.Prefetch] and [Handler.Process], and are delivered first on
+// [Results.PriorityOrder]. Ties are broken by transaction order within the
+// block
+type Schedule struct {
+	Priority uint64
+	Gas      uint64
 }
 
 // A TxResult couples an [IndexedTx] with its respective result from
@@ -145,10 +161,11 @@ type wrapper[CD, D, R, A any] struct {
 	common eventual.Value[CD]
 	data   []eventual.Value[D]
 
-	results                []eventual.Value[result[R]]
-	whenProcessed, txOrder chan TxResult[R]
+	results                               []eventual.Value[result[R]]
+	whenProcessed, txOrder, priorityOrder chan TxResult[R]
 
 	aggregated eventual.Value[A]
+	byPriority []*job
 }
 
 // AddHandler registers the [Handler] with the [Processor] and returns a
@@ -197,14 +214,17 @@ func (w *wrapper[CD, D, R, A]) beforeBlock(sdb libevm.StateReader, b *types.Bloc
 	}()
 }
 
-func (w *wrapper[CD, D, R, A]) shouldProcess(tx IndexedTx) (do bool, gas uint64) {
-	return w.Handler.ShouldProcess(tx, w.common.Peek())
+func (w *wrapper[CD, D, R, A]) schedule(tx IndexedTx) (Schedule, bool) {
+	return w.Handler.Schedule(tx, w.common.Peek())
 }
 
-func (w *wrapper[CD, D, R, A]) beforeWork(jobs int) {
-	w.txsBeingProcessed.Add(jobs)
-	w.whenProcessed = make(chan TxResult[R], jobs)
-	w.txOrder = make(chan TxResult[R], jobs)
+func (w *wrapper[CD, D, R, A]) beforeWork(jobs []*job) {
+	w.byPriority = jobs
+	n := len(jobs)
+	w.txsBeingProcessed.Add(n)
+	w.whenProcessed = make(chan TxResult[R], n)
+	w.txOrder = make(chan TxResult[R], n)
+	w.priorityOrder = make(chan TxResult[R], n)
 	go func() {
 		w.txsBeingProcessed.Wait()
 		// [wrapper.finishBlock] blocks until this is closed, guaranteeing
@@ -254,23 +274,43 @@ func (w *wrapper[CD, D, R, A]) result(i int) (TxResult[R], bool) {
 }
 
 func (w *wrapper[CD, D, R, A]) postProcess() {
-	go func() {
-		// [wrapper.finishBlock] blocks until this is closed, guaranteeing
-		// cleanup of this goroutine.
-		defer close(w.txOrder)
-		for i := range w.totalTxsInBlock {
-			r, ok := w.result(i)
-			if !ok {
-				continue
+	orders := map[chan<- TxResult[R]]iter.Seq[int]{
+		w.txOrder: func(yield func(int) bool) {
+			for i := range w.totalTxsInBlock {
+				if !yield(i) {
+					return
+				}
 			}
-			w.txOrder <- r
-		}
-	}()
+		},
+		w.priorityOrder: func(yield func(int) bool) {
+			for _, j := range w.byPriority {
+				if !yield(j.tx.Index) {
+					return
+				}
+			}
+		},
+	}
+
+	for ch, iter := range orders {
+		// [wrapper.finishBlock] blocks until the channels are closed,
+		// guaranteeing cleanup of the goroutines.
+		go func() {
+			defer close(ch)
+			for i := range iter {
+				r, ok := w.result(i)
+				if !ok {
+					continue
+				}
+				ch <- r
+			}
+		}()
+	}
 
 	res := Results[R]{
-		WaitForAll:   w.txsBeingProcessed.Wait,
-		TxOrder:      w.txOrder,
-		ProcessOrder: w.whenProcessed,
+		WaitForAll:    w.txsBeingProcessed.Wait,
+		TxOrder:       w.txOrder,
+		ProcessOrder:  w.whenProcessed,
+		PriorityOrder: w.priorityOrder,
 	}
 	w.aggregated.Put(w.PostProcess(w.common.Peek(), res))
 }
@@ -281,21 +321,17 @@ func (w *wrapper[CD, D, R, A]) finishBlock(sdb vm.StateDB, b *types.Block, rs ty
 	// [wrapper.postProcess] is guaranteed to have finished because it sets
 	// [wrapper.aggregated], from which we have just read. However
 	// [Handler.PostProcess] is under no obligation to block on anything, and
-	// the goroutines filling [wrapper.txOrder] and [wrapper.whenProcessed]
-	// might still be reading results. We therefore guarantee their completion
-	// before "taking" all of [wrapper.results].
+	// the goroutines filling [wrapper.txOrder], [wrapper.whenProcessed], and
+	// [wrapper.priorityOrder] might still be reading results. We therefore guarantee
+	// their completion before "taking" all of [wrapper.results].
 	var wg sync.WaitGroup
-	wg.Add(2) // TODO(arr4n) update to Go 1.25 and use `wg.Go`
-	go func() {
-		for range w.txOrder {
-		}
-		wg.Done()
-	}()
-	go func() {
-		for range w.whenProcessed {
-		}
-		wg.Done()
-	}()
+
+	for _, ch := range []chan TxResult[R]{w.txOrder, w.whenProcessed, w.priorityOrder} {
+		wg.Go(func() {
+			for range ch {
+			}
+		})
+	}
 	wg.Wait()
 
 	w.common.Take()
