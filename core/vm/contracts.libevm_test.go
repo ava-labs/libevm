@@ -163,10 +163,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 		if got, want := env.StateDB() != nil, !env.ReadOnly(); got != want {
 			return nil, 0, fmt.Errorf("PrecompileEnvironment().StateDB() must be non-nil i.f.f. not read-only; got non-nil? %t; want %t", got, want)
 		}
-		hdr, err := env.BlockHeader()
-		if err != nil {
-			return nil, 0, err
-		}
+		hdr := env.BlockHeader()
 
 		out := &statefulPrecompileOutput{
 			ChainID:          env.ChainConfig().ChainID,
