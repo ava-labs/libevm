@@ -49,6 +49,7 @@ type diskLayer struct {
 	cancelOnce sync.Once
 
 	genStats *generatorStats // Stats for snapshot generation (generation aborted/finished if non-nil)
+	genSkips generatorSkips  // Stretches the generator has found empty, for its next run
 
 	lock sync.RWMutex
 }
