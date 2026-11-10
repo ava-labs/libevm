@@ -26,7 +26,6 @@ import (
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/options"
-	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/params"
 )
 
@@ -76,10 +75,6 @@ func WithoutMinimumGasConsumption() StateTransitionOption {
 // state transitions (e.g. nonce incrementing) will be reverted to a snapshot
 // taken before execution.
 func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
-	if err := st.canExecuteTransaction(); err != nil {
-		return nil, err
-	}
-
 	snap := st.state.Snapshot()   // computationally cheap operation
 	res, err := st.transitionDb() // original geth implementation
 
@@ -97,23 +92,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		err = fmt.Errorf("execution invalidated: %w", invalid)
 	}
 	return res, err
-}
-
-// canExecuteTransaction is a convenience wrapper for calling the
-// [params.RulesHooks.CanExecuteTransaction] hook.
-func (st *StateTransition) canExecuteTransaction() error {
-	hooks := st.rulesHooks()
-	if err := hooks.CanExecuteTransaction(st.msg.From, st.msg.To, st.state); err != nil {
-		log.Debug(
-			"Transaction execution blocked by libevm hook",
-			"from", st.msg.From,
-			"to", st.msg.To,
-			"hooks", log.TypeOf(hooks),
-			"reason", err,
-		)
-		return err
-	}
-	return nil
 }
 
 // afterGasRefund updates the gas remaining to reflect the
