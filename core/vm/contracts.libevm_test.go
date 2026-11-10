@@ -136,7 +136,6 @@ FieldLoop:
 			lines = append(
 				lines,
 				fmt.Sprintf("EVMSemantic addresses: %+v", o.Addresses.EVMSemantic),
-				fmt.Sprintf("Raw addresses: %+v", o.Addresses.Raw),
 			)
 			continue FieldLoop
 		case vm.CallType:
@@ -219,13 +218,6 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	state.SetBalance(caller, new(uint256.Int).Not(uint256.NewInt(0)))
 	evm.Origin = eoa
 
-	// By definition, the raw caller and self are the same for every test case,
-	// regardless of the incoming call type.
-	rawAddresses := libevm.CallerAndSelf{
-		Caller: caller,
-		Self:   precompile,
-	}
-
 	tests := []struct {
 		name          string
 		call          func() ([]byte, uint64, error)
@@ -242,9 +234,11 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				return evm.Call(callerContract, precompile, input, gasLimit, callPrecompileValue)
 			},
 			wantAddresses: &libevm.AddressContext{
-				Origin:      eoa,
-				EVMSemantic: rawAddresses,
-				Raw:         &rawAddresses,
+				Origin: eoa,
+				EVMSemantic: libevm.CallerAndSelf{
+					Caller: caller,
+					Self:   precompile,
+				},
 			},
 			wantReadOnly:  false,
 			wantCallValue: callPrecompileValue,
@@ -261,7 +255,6 @@ func TestNewStatefulPrecompile(t *testing.T) {
 					Caller: caller,
 					Self:   caller,
 				},
-				Raw: &rawAddresses,
 			},
 			wantReadOnly:  false,
 			wantCallValue: callPrecompileValue,
@@ -278,7 +271,6 @@ func TestNewStatefulPrecompile(t *testing.T) {
 					Caller: eoa, // inherited from caller
 					Self:   caller,
 				},
-				Raw: &rawAddresses,
 			},
 			wantReadOnly:  false,
 			wantCallValue: callCallerValue, // Important difference from [vm.EVM.Call]
@@ -290,9 +282,11 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				return evm.StaticCall(callerContract, precompile, input, gasLimit)
 			},
 			wantAddresses: &libevm.AddressContext{
-				Origin:      eoa,
-				EVMSemantic: rawAddresses,
-				Raw:         &rawAddresses,
+				Origin: eoa,
+				EVMSemantic: libevm.CallerAndSelf{
+					Caller: caller,
+					Self:   precompile,
+				},
 			},
 			wantReadOnly:  true,
 			wantCallValue: uint256.NewInt(0),
@@ -810,9 +804,6 @@ func TestPrecompileMakeCall(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.incomingCallType.String(), func(t *testing.T) {
-			// From the perspective of `dest` after a CALL from `sut`.
-			tt.want.Addresses.Raw = &tt.want.Addresses.EVMSemantic
-
 			t.Logf("calldata = %q", tt.eoaTxCallData)
 			state, evm := ethtest.NewZeroEVM(t, ethtest.WithAllEIPs())
 			evm.Origin = eoa

@@ -73,10 +73,6 @@ func (e *environment) Addresses() *libevm.AddressContext {
 			Caller: e.self.CallerAddress,
 			Self:   e.self.Address(),
 		},
-		Raw: &libevm.CallerAndSelf{
-			Caller: e.rawCaller,
-			Self:   e.rawSelf,
-		},
 	}
 }
 
