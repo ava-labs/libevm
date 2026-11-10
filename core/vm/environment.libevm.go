@@ -36,8 +36,6 @@ type environment struct {
 	evm      *EVM
 	self     *Contract
 	callType CallType
-
-	rawSelf, rawCaller common.Address
 }
 
 func (e *environment) Gas() uint64            { return e.self.Gas }
