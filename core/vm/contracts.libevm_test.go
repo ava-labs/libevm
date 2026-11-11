@@ -661,9 +661,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 					opts = append(opts, vm.WithUNSAFECallerAddressProxying())
 				}
 				// We are ultimately testing env.Call(), hence why this is the
-				// SUT. If this is ever extended to include DELEGATECALL or
-				// CALLCODE then the expected [libevm.AddressContext.Raw] values
-				// of the tests cases also need to change.
+				// SUT.
 				return env.Call(dest, precompileCallData, env.Gas(), uint256.NewInt(0), opts...)
 			}),
 			dest: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
