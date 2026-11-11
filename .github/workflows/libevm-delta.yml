@@ -11,14 +11,19 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+permissions: {}
+
 jobs:
   diffs:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0 # everything
           fetch-tags: true
+          persist-credentials: false
 
       - name: Find base commit hash
         id: base-commit
@@ -33,16 +38,20 @@ jobs:
       - name: git diff ${{ steps.base-commit.outputs.LIBEVM_BASE }}
         run: |
           git diff --diff-filter=a --word-diff --unified=0 --color=always \
-            ${{ steps.base-commit.outputs.LIBEVM_BASE }} \
+            ${STEPS_BASE_COMMIT_OUTPUTS_LIBEVM_BASE} \
             ':(exclude).golangci.yml' \
             ':(exclude).github/**' \
             ':(exclude)README.md';
+        env:
+          STEPS_BASE_COMMIT_OUTPUTS_LIBEVM_BASE: ${{ steps.base-commit.outputs.LIBEVM_BASE }}
 
       - name: git diff ${{ steps.base-commit.outputs.LIBEVM_BASE }}..main
         run: |
           git checkout main --;
           git diff --diff-filter=a --word-diff --unified=0 --color=always \
-            "${{ steps.base-commit.outputs.LIBEVM_BASE }}" \
+            "${STEPS_BASE_COMMIT_OUTPUTS_LIBEVM_BASE}" \
             ':(exclude).golangci.yml' \
             ':(exclude).github/**' \
             ':(exclude)README.md';
+        env:
+          STEPS_BASE_COMMIT_OUTPUTS_LIBEVM_BASE: ${{ steps.base-commit.outputs.LIBEVM_BASE }}
