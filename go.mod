@@ -1,8 +1,6 @@
 module github.com/ava-labs/libevm
 
-go 1.25.8
-
-toolchain go1.26.10
+go 1.26.10
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.2.0

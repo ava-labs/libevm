@@ -1,8 +1,6 @@
 module github.com/ava-labs/libevm/libevm/tooling
 
-go 1.25.8
-
-toolchain go1.26.10
+go 1.26.10
 
 replace github.com/ava-labs/libevm => ../../
 
