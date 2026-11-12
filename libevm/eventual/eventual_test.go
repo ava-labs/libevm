@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"pgregory.net/rapid"
 )
 
 // TODO(arr4n) tparallel claims that the top-level test should also call
@@ -123,4 +124,124 @@ func TestValue(t *testing.T) {
 			}
 		})
 	}
+}
+
+var _ rapid.StateMachine = (*state[struct{}])(nil)
+
+type state[T comparable] struct {
+	sut    Value[T]
+	gen    *rapid.Generator[T]
+	filled bool
+	with   T
+}
+
+func properties[T comparable](t *rapid.T) {
+	s := &state[T]{
+		sut: New[T](),
+		gen: rapid.Make[T](),
+	}
+	t.Repeat(rapid.StateMachineActions(s))
+}
+
+func TestProperties(t *testing.T) {
+	rapid.Check(t, properties[int])
+	rapid.Check(t, properties[string])
+	rapid.Check(t, properties[struct {
+		x uint64
+		y [8]byte
+		z string
+	}])
+}
+
+func FuzzProperties(f *testing.F) {
+	f.Fuzz(rapid.MakeFuzz(properties[int]))
+}
+
+func (s *state[T]) Check(t *rapid.T) {
+	_, ok := s.sut.TryPeek()
+	if got, want := ok, s.filled; got != want {
+		t.Fatalf("%T.TryPeek() got %t; want %t", s.sut, got, want)
+	}
+}
+
+func (s *state[T]) Put(t *rapid.T) {
+	if s.filled {
+		t.Log("full")
+		return
+	}
+	s.with = s.gen.Draw(t, "put")
+	s.sut.Put(s.with)
+	s.filled = true
+}
+
+func (s *state[T]) Peek(t *rapid.T) {
+	s.testGet(t, s.sut.Peek)
+}
+
+func (s *state[T]) Take(t *rapid.T) {
+	s.testGet(t, s.sut.Take)
+	s.filled = false
+}
+
+func (s *state[T]) testGet(t *rapid.T, fn func() T) {
+	if !s.filled {
+		t.Log("empty")
+		return
+	}
+	if got, want := fn(), s.with; got != want {
+		t.Fatalf("got %v; want %v", got, want)
+	}
+}
+
+func (s *state[T]) TryPeek(t *rapid.T) {
+	s.testTry(t, s.sut.TryPeek)
+}
+
+func (s *state[T]) TryTake(t *rapid.T) {
+	s.testTry(t, s.sut.TryTake)
+	s.filled = false
+}
+
+func (s *state[T]) testTry(t *rapid.T, fn func() (T, bool)) {
+	got, gotOK := fn()
+	if want, wantOK := s.with, s.filled; gotOK != wantOK || (wantOK && got != want) {
+		t.Fatalf("got (%v, %t); want (%v, %t)", got, gotOK, want, wantOK)
+	}
+}
+
+func (s *state[T]) PeekCtx(t *rapid.T) {
+	s.testCtx(t, s.sut.PeekCtx)
+}
+
+func (s *state[T]) TakeCtx(t *rapid.T) {
+	if s.testCtx(t, s.sut.TakeCtx) == nil {
+		s.filled = false
+	}
+}
+
+func (s *state[T]) testCtx(t *rapid.T, fn func(context.Context) (T, error)) error {
+	ctx, cancel := context.WithCancel(t.Context())
+	if !s.filled || rapid.Bool().Draw(t, "cancel") {
+		cancel()
+	} else {
+		defer cancel()
+	}
+
+	got, err := fn(ctx)
+	switch {
+	case s.filled && err == nil:
+		if want := s.with; got != want {
+			t.Fatalf("got %v; want %v", got, want)
+		}
+	default:
+		if want := context.Canceled; err != want {
+			t.Fatalf("got error %v; want %v", err, context.Canceled)
+		}
+	}
+	return err
+}
+
+func (s *state[T]) Reset(t *rapid.T) {
+	s.sut.Reset()
+	s.filled = false
 }

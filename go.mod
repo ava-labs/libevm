@@ -76,6 +76,7 @@ require (
 	golang.org/x/tools v0.38.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v3 v3.0.1
+	pgregory.net/rapid v1.3.0
 )
 
 require (
