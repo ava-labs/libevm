@@ -19,9 +19,11 @@
 package parallel
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sync"
 
 	"github.com/ava-labs/libevm/common"
@@ -36,8 +38,8 @@ import (
 // A handler is the non-generic equivalent of a [Handler], exposed by [wrapper].
 type handler interface {
 	beforeBlock(libevm.StateReader, *types.Block)
-	shouldProcess(IndexedTx) (do bool, gas uint64)
-	beforeWork(jobs int)
+	schedule(IndexedTx) (Schedule, bool)
+	beforeWork(jobs []*job)
 	prefetch(libevm.StateReader, *prefetch)
 	nullResult(*job)
 	process(libevm.StateReader, *process)
@@ -63,8 +65,9 @@ type (
 	// generic type parameters, while prefetch and process are explicitly *not*
 	// aliases, to guarantee that they aren't considered equivalent.
 	job = struct {
-		handler handler
-		tx      IndexedTx
+		handler  handler
+		tx       IndexedTx
+		priority uint64
 	}
 	prefetch job
 	process  job
@@ -75,9 +78,15 @@ type result[T any] struct {
 	val *T
 }
 
+// scheduled pairs a [Schedule] with whether the handler wants the transaction.
+type scheduled struct {
+	Schedule
+	ok bool
+}
+
 // New constructs a new [Processor] with the specified number of concurrent
 // prefetching and processing workers. As prefetching is typically IO-bound, it
-// is reasonable to have more prefetchers than processors. The number of
+// is reasonable to have“ more prefetchers than processors. The number of
 // processors SHOULD be determined from GOMAXPROCS. Pipelining in such a fashion
 // stops prefetching for later transactions being blocked by earlier,
 // long-running processing; see the respective methods on [Handler] for more
@@ -192,7 +201,7 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 
 	txs := b.Transactions()
 	jobs := make([]*job, 0, len(p.handlers)*len(txs))
-	workloads := make([]int, len(p.handlers))
+	perHandler := make([][]*job, len(p.handlers))
 
 	for txIdx, rawTx := range txs {
 		tx := IndexedTx{
@@ -200,7 +209,7 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 			Transaction: rawTx,
 		}
 
-		do, err := p.shouldProcess(tx, rules) // MUST NOT be concurrent within a Handler
+		schedules, err := p.schedule(tx, rules) // MUST NOT be concurrent within a Handler
 		if err != nil {
 			return err
 		}
@@ -209,17 +218,23 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 				tx:      tx,
 				handler: h,
 			}
-			if !do[i] {
+			if !schedules[i].ok {
 				h.nullResult(j)
 				continue
 			}
-			workloads[i]++
+			j.priority = schedules[i].Priority
 			jobs = append(jobs, j)
+			perHandler[i] = append(perHandler[i], j)
 		}
 	}
+	// Jobs were appended in transaction order. A stable sort breaks ties
+	// in priority by transaction order.
+	byPriority := func(a, b *job) int { return cmp.Compare(a.priority, b.priority) }
+	slices.SortStableFunc(jobs, byPriority)
 
-	for i, w := range workloads {
-		p.handlers[i].beforeWork(w)
+	for i, hj := range perHandler {
+		slices.SortStableFunc(hj, byPriority)
+		p.handlers[i].beforeWork(hj)
 	}
 	// All of the following goroutines are dependent on the one(s) preceding
 	// them, while [wrapper.finishBlock] is dependent on [wrapper.postProcess].
@@ -256,23 +271,23 @@ func (p *Processor) FinishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipt
 	}
 }
 
-func (p *Processor) shouldProcess(tx IndexedTx, rules params.Rules) (process []bool, retErr error) {
+func (p *Processor) schedule(tx IndexedTx, rules params.Rules) (_ []scheduled, retErr error) {
 	// An explicit 0 is necessary to avoid [Processor.PreprocessingGasCharge]
 	// returning [ErrTxUnknown].
 	p.txGas[tx.Hash()] = 0
 
-	process = make([]bool, len(p.handlers))
+	schedules := make([]scheduled, len(p.handlers))
 	var totalCost uint64
 	for i, h := range p.handlers {
-		do, cost := h.shouldProcess(tx)
-		if !do {
+		s, ok := h.schedule(tx)
+		if !ok {
 			continue
 		}
-		process[i] = true
+		schedules[i] = scheduled{Schedule: s, ok: true}
 		// It's safe to cap total cost at [math.MaxUint64] because intrinsic gas
 		// is always non-zero and the tx would therefore OOG. Not that we could
 		// reasonably expect such high gas consumption though ¯\_(ツ)_/¯
-		totalCost += min(cost, math.MaxUint64-totalCost)
+		totalCost += min(s.Gas, math.MaxUint64-totalCost)
 	}
 
 	defer func() {
@@ -292,11 +307,9 @@ func (p *Processor) shouldProcess(tx IndexedTx, rules params.Rules) (process []b
 		return nil, core.ErrIntrinsicGas
 	}
 	if remain := tx.Gas() - spent; remain < totalCost {
-		for i := range process {
-			process[i] = false
-		}
+		clear(schedules)
 	}
-	return process, nil
+	return schedules, nil
 }
 
 func txIntrinsicGas(tx *types.Transaction, rules *params.Rules) (uint64, error) {
