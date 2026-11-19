@@ -242,7 +242,7 @@ var nodeDBSeedQueryNodes = []struct {
 }
 
 func TestDBSeedQuery(t *testing.T) {
-	// Querying seeds uses seeks an might not find all nodes
+	// Querying seeds uses seeks and might not find all nodes
 	// every time when the database is small. Run the test multiple
 	// times to avoid flakes.
 	const attempts = 15
