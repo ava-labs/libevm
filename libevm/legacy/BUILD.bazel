@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "legacy",
+    srcs = ["legacy.go"],
+    importpath = "github.com/ava-labs/libevm/libevm/legacy",
+    visibility = ["//visibility:public"],
+    deps = ["//core/vm"],
+)
+
+go_test(
+    name = "legacy_test",
+    srcs = ["legacy_test.go"],
+    embed = [":legacy"],
+    deps = [
+        "//core/vm",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)

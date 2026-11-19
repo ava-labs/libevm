@@ -1,0 +1,21 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "engine",
+    srcs = [
+        "errors.go",
+        "gen_blockparams.go",
+        "gen_ed.go",
+        "gen_epe.go",
+        "types.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/beacon/engine",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//common/hexutil",
+        "//core/types",
+        "//rpc",
+        "//trie",
+    ],
+)

@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "msgrate",
+    srcs = ["msgrate.go"],
+    importpath = "github.com/ava-labs/libevm/p2p/msgrate",
+    visibility = ["//visibility:public"],
+    deps = ["//log"],
+)
+
+go_test(
+    name = "msgrate_test",
+    srcs = ["msgrate_test.go"],
+    embed = [":msgrate"],
+)

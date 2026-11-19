@@ -1,0 +1,9 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "compiler",
+    srcs = ["compiler.go"],
+    importpath = "github.com/ava-labs/libevm/cmd/evm/internal/compiler",
+    visibility = ["//cmd/evm:__subpackages__"],
+    deps = ["//core/asm"],
+)

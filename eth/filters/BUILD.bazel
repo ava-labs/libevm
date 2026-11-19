@@ -1,0 +1,59 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "filters",
+    srcs = [
+        "api.go",
+        "filter.go",
+        "filter_system.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/eth/filters",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//:libevm",
+        "//common",
+        "//common/hexutil",
+        "//common/lru",
+        "//core",
+        "//core/bloombits",
+        "//core/rawdb",
+        "//core/types",
+        "//ethdb",
+        "//event",
+        "//internal/ethapi",
+        "//log",
+        "//params",
+        "//rpc",
+    ],
+)
+
+go_test(
+    name = "filters_test",
+    srcs = [
+        "api_test.go",
+        "bench_test.go",
+        "filter_system_test.go",
+        "filter_test.go",
+    ],
+    embed = [":filters"],
+    deps = [
+        "//:libevm",
+        "//accounts/abi",
+        "//common",
+        "//common/bitutil",
+        "//consensus/ethash",
+        "//core",
+        "//core/bloombits",
+        "//core/rawdb",
+        "//core/types",
+        "//core/vm",
+        "//crypto",
+        "//ethdb",
+        "//event",
+        "//internal/ethapi",
+        "//node",
+        "//params",
+        "//rpc",
+        "//triedb",
+    ],
+)

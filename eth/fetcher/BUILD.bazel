@@ -1,0 +1,47 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "fetcher",
+    srcs = [
+        "block_fetcher.go",
+        "tx_fetcher.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/eth/fetcher",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//common/lru",
+        "//common/mclock",
+        "//common/prque",
+        "//consensus",
+        "//core/txpool",
+        "//core/types",
+        "//eth/protocols/eth",
+        "//log",
+        "//metrics",
+        "//trie",
+    ],
+)
+
+go_test(
+    name = "fetcher_test",
+    srcs = [
+        "block_fetcher_test.go",
+        "tx_fetcher_test.go",
+    ],
+    embed = [":fetcher"],
+    deps = [
+        "//common",
+        "//common/mclock",
+        "//consensus/ethash",
+        "//core",
+        "//core/rawdb",
+        "//core/txpool",
+        "//core/types",
+        "//crypto",
+        "//eth/protocols/eth",
+        "//params",
+        "//trie",
+        "//triedb",
+    ],
+)

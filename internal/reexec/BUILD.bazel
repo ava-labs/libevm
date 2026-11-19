@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "reexec",
+    srcs = [
+        "reexec.go",
+        "self_linux.go",
+        "self_others.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/internal/reexec",
+    visibility = ["//:__subpackages__"],
+)

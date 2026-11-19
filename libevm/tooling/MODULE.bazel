@@ -1,0 +1,1 @@
+# libevm/tooling is a different Go module, currently without Bazel support

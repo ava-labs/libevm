@@ -1,0 +1,45 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "simulated",
+    srcs = [
+        "backend.go",
+        "options.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/ethclient/simulated",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//:libevm",
+        "//common",
+        "//core",
+        "//core/types",
+        "//eth",
+        "//eth/catalyst",
+        "//eth/downloader",
+        "//eth/ethconfig",
+        "//eth/filters",
+        "//ethclient",
+        "//node",
+        "//p2p",
+        "//params",
+        "//rpc",
+    ],
+)
+
+go_test(
+    name = "simulated_test",
+    srcs = [
+        "backend_test.go",
+        "options_test.go",
+    ],
+    embed = [":simulated"],
+    deps = [
+        "//:libevm",
+        "//accounts/abi/bind",
+        "//common",
+        "//core",
+        "//core/types",
+        "//crypto",
+        "//params",
+    ],
+)

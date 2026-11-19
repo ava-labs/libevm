@@ -1,0 +1,24 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "p2psim_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/ava-labs/libevm/cmd/p2psim",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//crypto",
+        "//internal/flags",
+        "//p2p",
+        "//p2p/enode",
+        "//p2p/simulations",
+        "//p2p/simulations/adapters",
+        "//rpc",
+        "@com_github_urfave_cli_v2//:cli",
+    ],
+)
+
+go_binary(
+    name = "p2psim",
+    embed = [":p2psim_lib"],
+    visibility = ["//visibility:public"],
+)

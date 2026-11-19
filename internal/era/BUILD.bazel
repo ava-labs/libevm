@@ -1,0 +1,28 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "era",
+    srcs = [
+        "accumulator.go",
+        "builder.go",
+        "era.go",
+        "iterator.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/internal/era",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//common",
+        "//core/types",
+        "//internal/era/e2store",
+        "//rlp",
+        "@com_github_ferranbt_fastssz//:fastssz",
+        "@com_github_golang_snappy//:snappy",
+    ],
+)
+
+go_test(
+    name = "era_test",
+    srcs = ["era_test.go"],
+    embed = [":era"],
+    deps = ["//common"],
+)

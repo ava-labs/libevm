@@ -1,0 +1,30 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "nodestate",
+    srcs = ["nodestate.go"],
+    importpath = "github.com/ava-labs/libevm/p2p/nodestate",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common/mclock",
+        "//ethdb",
+        "//log",
+        "//metrics",
+        "//p2p/enode",
+        "//p2p/enr",
+        "//rlp",
+    ],
+)
+
+go_test(
+    name = "nodestate_test",
+    srcs = ["nodestate_test.go"],
+    embed = [":nodestate"],
+    deps = [
+        "//common/mclock",
+        "//core/rawdb",
+        "//p2p/enode",
+        "//p2p/enr",
+        "//rlp",
+    ],
+)

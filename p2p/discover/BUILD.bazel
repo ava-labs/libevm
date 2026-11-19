@@ -1,0 +1,57 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "discover",
+    srcs = [
+        "common.go",
+        "lookup.go",
+        "metrics.go",
+        "node.go",
+        "ntp.go",
+        "table.go",
+        "v4_udp.go",
+        "v5_talk.go",
+        "v5_udp.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/p2p/discover",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//common/math",
+        "//common/mclock",
+        "//crypto",
+        "//log",
+        "//metrics",
+        "//p2p/discover/v4wire",
+        "//p2p/discover/v5wire",
+        "//p2p/enode",
+        "//p2p/enr",
+        "//p2p/netutil",
+        "@org_golang_x_exp//slices",
+    ],
+)
+
+go_test(
+    name = "discover_test",
+    srcs = [
+        "table_test.go",
+        "table_util_test.go",
+        "v4_lookup_test.go",
+        "v4_udp_test.go",
+        "v5_udp_test.go",
+    ],
+    embed = [":discover"],
+    deps = [
+        "//crypto",
+        "//internal/testlog",
+        "//log",
+        "//p2p/discover/v4wire",
+        "//p2p/discover/v5wire",
+        "//p2p/enode",
+        "//p2p/enr",
+        "//p2p/netutil",
+        "//rlp",
+        "@com_github_stretchr_testify//require",
+        "@org_golang_x_exp//slices",
+    ],
+)

@@ -1,0 +1,13 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "backends",
+    srcs = ["simulated.go"],
+    importpath = "github.com/ava-labs/libevm/accounts/abi/bind/backends",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common",
+        "//core/types",
+        "//ethclient/simulated",
+    ],
+)

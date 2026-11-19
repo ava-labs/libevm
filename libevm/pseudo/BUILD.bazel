@@ -1,0 +1,33 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "pseudo",
+    srcs = [
+        "accessor.go",
+        "constructor.go",
+        "fmt.go",
+        "reflect.go",
+        "type.go",
+    ],
+    importpath = "github.com/ava-labs/libevm/libevm/pseudo",
+    visibility = ["//visibility:public"],
+    deps = ["//rlp"],
+)
+
+go_test(
+    name = "pseudo_test",
+    srcs = [
+        "constructor_test.go",
+        "fmt_test.go",
+        "rlp_test.go",
+        "type_test.go",
+    ],
+    embed = [":pseudo"],
+    deps = [
+        "//core/types",
+        "//libevm/ethtest",
+        "//rlp",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)
