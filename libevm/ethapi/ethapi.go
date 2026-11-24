@@ -131,6 +131,22 @@ func WithCallResultInterceptor(fn CallResultInterceptor) CallOption {
 	return ethapi.WithCallResultInterceptor(fn)
 }
 
+// WithDefaultAccessListOptions returns an option to configure a
+// [BlockChainAPI] with default options to be passed to [ethapi.AccessList] by
+// [BlockChainAPI.CreateAccessList]. Repeated options result in a concatenation
+// of the arguments to each.
+func WithDefaultAccessListOptions(opts ...AccessListOption) BlockChainAPIOption {
+	return ethapi.WithDefaultAccessListOptions(opts...)
+}
+
+// An AccessListOption configures [ethapi.AccessList].
+type AccessListOption = ethapi.AccessListOption
+
+// WithVerbatimAccessTuples is identical to [ethapi.WithVerbatimAccessTuples].
+func WithVerbatimAccessTuples(addrs ...common.Address) AccessListOption {
+	return ethapi.WithVerbatimAccessTuples(addrs...)
+}
+
 // NewRevertError is identical to [ethapi.NewRevertError].
 func NewRevertError(revert []byte) *RevertError {
 	return ethapi.NewRevertError(revert)

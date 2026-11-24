@@ -1473,7 +1473,7 @@ func (s *BlockChainAPI) CreateAccessList(ctx context.Context, args TransactionAr
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	acl, gasUsed, vmerr, err := AccessList(ctx, s.b, bNrOrHash, args)
+	acl, gasUsed, vmerr, err := AccessList(ctx, s.b, bNrOrHash, args, s.libevm.accessListOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1487,7 +1487,8 @@ func (s *BlockChainAPI) CreateAccessList(ctx context.Context, args TransactionAr
 // AccessList creates an access list for the given transaction.
 // If the accesslist creation fails an error is returned.
 // If the transaction itself fails, an vmErr is returned.
-func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrHash, args TransactionArgs) (acl types.AccessList, gasUsed uint64, vmErr error, err error) {
+func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrHash, args TransactionArgs, opts ...AccessListOption) (acl types.AccessList, gasUsed uint64, vmErr error, err error) {
+	cfg := options.As[accessListConfig](opts...) //libevm
 	// Retrieve the execution context
 	db, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if db == nil || err != nil {
@@ -1507,11 +1508,13 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	isPostMerge := header.Difficulty.Cmp(common.Big0) == 0
 	// Retrieve the precompiles since they don't need to be added to the access list
 	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number, isPostMerge, header.Time))
+	precompiles = cfg.tracerExclusions(precompiles) //libevm
 
 	// Create an initial tracer
 	prevTracer := logger.NewAccessListTracer(nil, args.from(), to, precompiles)
+	traced, verbatim := cfg.split(args.AccessList) //libevm
 	if args.AccessList != nil {
-		prevTracer = logger.NewAccessListTracer(*args.AccessList, args.from(), to, precompiles)
+		prevTracer = logger.NewAccessListTracer(traced, args.from(), to, precompiles) //libevm
 	}
 	for {
 		// Retrieve the current access list to expand
@@ -1521,7 +1524,8 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		// Copy the original db so we don't modify it
 		statedb := db.Copy()
 		// Set the accesslist to the last al
-		args.AccessList = &accessList
+		sent := withVerbatim(accessList, verbatim) //libevm
+		args.AccessList = &sent                    //libevm
 		msg, err := args.ToMessage(b.RPCGasCap(), header.BaseFee)
 		if err != nil {
 			return nil, 0, nil, err
@@ -1536,7 +1540,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
 		}
 		if tracer.Equal(prevTracer) {
-			return accessList, res.UsedGas, res.Err, nil
+			return sent, res.UsedGas, res.Err, nil //libevm
 		}
 		prevTracer = tracer
 	}

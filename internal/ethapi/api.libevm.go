@@ -17,7 +17,9 @@
 package ethapi
 
 import (
+	"maps"
 	"math/big"
+	"slices"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core"
@@ -52,7 +54,8 @@ type (
 	BlockChainAPIOption = options.Option[blockChainAPIConfig]
 
 	blockChainAPIConfig struct {
-		callOpts []CallOption
+		callOpts       []CallOption
+		accessListOpts []AccessListOption
 	}
 
 	// A CallOption configures [DoCall].
@@ -97,4 +100,70 @@ func interceptCallResult(r *core.ExecutionResult, err error, opts ...CallOption)
 		return nil, err
 	}
 	return r, nil
+}
+
+type (
+	// An AccessListOption configures [AccessList].
+	AccessListOption = options.Option[accessListConfig]
+
+	accessListConfig struct {
+		verbatim map[common.Address]struct{}
+	}
+)
+
+// WithDefaultAccessListOptions returns an option to configure a
+// [BlockChainAPI] with default options to be passed to [AccessList] by
+// [BlockChainAPI.CreateAccessList]. Repeated options result in a concatenation
+// of the arguments to each.
+func WithDefaultAccessListOptions(opts ...AccessListOption) BlockChainAPIOption {
+	return options.Func[blockChainAPIConfig](func(c *blockChainAPIConfig) {
+		c.accessListOpts = append(c.accessListOpts, opts...)
+	})
+}
+
+// WithVerbatimAccessTuples returns an option to configure [AccessList] to
+// return the caller's access tuples for the given addresses unchanged and in
+// their original order, and to not generate tuples for them when they are
+// called. It is intended for precompiles whose storage keys carry data rather
+// than storage slots, which the access-list tracer would otherwise reorder and
+// deduplicate.
+func WithVerbatimAccessTuples(addrs ...common.Address) AccessListOption {
+	return options.Func[accessListConfig](func(c *accessListConfig) {
+		if c.verbatim == nil {
+			c.verbatim = make(map[common.Address]struct{})
+		}
+		for _, a := range addrs {
+			c.verbatim[a] = struct{}{}
+		}
+	})
+}
+
+// tracerExclusions returns the precompiles and the verbatim addresses, which the
+// access-list tracer excludes from the access lists that it generates.
+func (c *accessListConfig) tracerExclusions(precompiles []common.Address) []common.Address {
+	return slices.Concat(precompiles, slices.Collect(maps.Keys(c.verbatim)))
+}
+
+// split returns the tuples of acl for the access-list tracer, and the verbatim
+// tuples, in their original order.
+func (c *accessListConfig) split(acl *types.AccessList) (traced, verbatim types.AccessList) {
+	if acl == nil {
+		return nil, nil
+	}
+	for _, t := range *acl {
+		if _, ok := c.verbatim[t.Address]; ok {
+			verbatim = append(verbatim, t)
+		} else {
+			traced = append(traced, t)
+		}
+	}
+	return traced, verbatim
+}
+
+// withVerbatim returns acl followed by the verbatim tuples.
+func withVerbatim(acl, verbatim types.AccessList) types.AccessList {
+	if len(verbatim) == 0 {
+		return acl
+	}
+	return slices.Concat(acl, verbatim)
 }

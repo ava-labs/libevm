@@ -130,4 +130,7 @@ var _ = NewBlockChainAPI(
 			}),
 		),
 	),
+	WithDefaultAccessListOptions(
+		WithVerbatimAccessTuples(common.Address{}),
+	),
 )
