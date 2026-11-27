@@ -125,16 +125,16 @@ type Results[R any] struct {
 // the [Handler].
 //
 // Transactions with higher priority values are dispatched first to
-// [Handler.Prefetch] and [Handler.Process], and are delivered first on
-// [Results.PriorityOrder]. Ties are broken by transaction order within the
-// block.
+// [Handler.Prefetch] and [Handler.Process], across all Handlers, and are
+// delivered first on [Results.PriorityOrder] within a single one. Ties are
+// broken by transaction order within the block.
 //
 // A non-zero priority SHOULD only be used when all of the following criteria
 // are met:
 //
 //  1. [Handler.PostProcess] implements a non-commutative function over results of [Handler.Process];
 //  2. The order in which results should be applied is different to transaction order; and
-//  3. EVM transactions are blocked on the result of this function on their respective result.
+//  3. EVM transactions are blocked on their respective interim result of the function described in (1).
 //
 // Most [Handler] implementations SHOULD therefore return a zero priority.
 type Schedule struct {
