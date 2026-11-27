@@ -63,8 +63,7 @@ import (
 // of the block. The [StateDB] is the same one used to execute the block, before
 // being committed, and MAY be written to.
 type Handler[CommonData, Data, Result, Aggregated any] interface {
-	// BeforeBlock is called before all calls to ShouldProcess() on this
-	// Handler.
+	// BeforeBlock is called before all calls to Schedule() on this Handler.
 	BeforeBlock(libevm.StateReader, *types.Header) CommonData
 	// Schedule reports whether the Handler SHOULD receive the transaction for
 	// processing, and if so, when and at what cost, as defined by the returned
