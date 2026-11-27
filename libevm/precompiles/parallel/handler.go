@@ -41,11 +41,11 @@ import (
 //
 // A [Processor] will orchestrate calling of Handler methods as follows:
 //
-//	|                                      - Prefetch(i) - Process(i)
-//	|                                    /                        /
-//	| BeforeBlock() - Schedule(0..n)                         - PostProcess() - AfterBlock()
-//	|                                    \                        \
-//	|                                      - Prefetch(j) - Process(j)
+//	|                                 - Prefetch(i) - Process(i)
+//	|                               /                        /
+//	| BeforeBlock() - Schedule(0..n)                    - PostProcess() - AfterBlock()
+//	|                               \                        \
+//	|                                 - Prefetch(j) - Process(j)
 //
 // IntRA-Handler guarantees:
 //
@@ -66,20 +66,20 @@ type Handler[CommonData, Data, Result, Aggregated any] interface {
 	// BeforeBlock is called before all calls to ShouldProcess() on this
 	// Handler.
 	BeforeBlock(libevm.StateReader, *types.Header) CommonData
-	// Schedule reports whether the Handler SHOULD receive the transaction
-	// for processing, and if so, when and at what cost, as defined by the returned
-	// [Schedule]. The schedule is meaningful i.f.f. the returned boolean is true, otherwise
-	// it must be zero and is ignored.
+	// Schedule reports whether the Handler SHOULD receive the transaction for
+	// processing, and if so, when and at what cost, as defined by the returned
+	// [Schedule]. The schedule is meaningful i.f.f. the returned boolean is
+	// true, otherwise it is ignored.
 	//
 	// Processing is performed i.f.f. the return boolean is true and there is
-	// sufficient gas limit to cover intrinsic gas for all Handlers
-	// that returned true. If there is insufficient gas for processing then the
-	// transaction will result in [vm.ErrOutOfGas] as long as the [Processor] is
-	// registered with [vm.RegisterHooks] as a [vm.Preprocessor].
+	// sufficient gas limit to cover intrinsic and Scheduled gas for all
+	// Handlers that returned true. If there is insufficient gas for processing
+	// then the transaction will result in [vm.ErrOutOfGas] as long as the
+	// [Processor] is registered with [vm.RegisterHooks] as a [vm.Preprocessor].
 	//
-	// Implementations MUST NOT perform any meaningful computation
-	// but MAY perform inter-transaction checks such as, for example,
-	// deduplication of work.
+	// Implementations MUST NOT perform any meaningful computation but MAY
+	// perform inter-transaction checks such as, for example, deduplication of
+	// work.
 	Schedule(IndexedTx, CommonData) (Schedule, bool)
 	// Prefetch is called before the respective call to Process() on this
 	// Handler. It MUST NOT perform any meaningful computation beyond what is
@@ -122,13 +122,13 @@ type Results[R any] struct {
 	TxOrder, ProcessOrder, PriorityOrder <-chan TxResult[R]
 }
 
-// A Schedule defines when and at what cost a transaction should be processed by
+// A Schedule defines when and at what cost a transaction SHOULD be processed by
 // the [Handler].
 //
 // Transactions with lower priority values are dispatched first to
 // [Handler.Prefetch] and [Handler.Process], and are delivered first on
 // [Results.PriorityOrder]. Ties are broken by transaction order within the
-// block
+// block.
 type Schedule struct {
 	Priority uint64
 	Gas      uint64
