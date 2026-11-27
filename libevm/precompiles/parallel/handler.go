@@ -301,12 +301,12 @@ func (w *wrapper[CD, D, R, A]) postProcess() {
 		},
 	}
 
-	for ch, iter := range orders {
+	for ch, seq := range orders {
 		// [wrapper.finishBlock] blocks until the channels are closed,
 		// guaranteeing cleanup of the goroutines.
 		go func() {
 			defer close(ch)
-			for i := range iter {
+			for i := range seq {
 				r, ok := w.result(i)
 				if !ok {
 					continue
