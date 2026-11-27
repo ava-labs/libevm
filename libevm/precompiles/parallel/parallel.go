@@ -78,12 +78,6 @@ type result[T any] struct {
 	val *T
 }
 
-// scheduled pairs a [Schedule] with whether the handler wants the transaction.
-type scheduled struct {
-	Schedule
-	ok bool
-}
-
 // New constructs a new [Processor] with the specified number of concurrent
 // prefetching and processing workers. As prefetching is typically IO-bound, it
 // is reasonable to have“ more prefetchers than processors. The number of
@@ -218,7 +212,7 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 				tx:      tx,
 				handler: h,
 			}
-			if !schedules[i].ok {
+			if schedules[i] == nil {
 				h.nullResult(j)
 				continue
 			}
@@ -271,19 +265,22 @@ func (p *Processor) FinishBlock(sdb vm.StateDB, b *types.Block, rs types.Receipt
 	}
 }
 
-func (p *Processor) schedule(tx IndexedTx, rules params.Rules) (_ []scheduled, retErr error) {
+// schedule returns a pointer to the [Schedule] returned by every
+// [handler.schedule] that returns true for the tx, and a nil pointer for those
+// that return false.
+func (p *Processor) schedule(tx IndexedTx, rules params.Rules) (_ []*Schedule, retErr error) {
 	// An explicit 0 is necessary to avoid [Processor.PreprocessingGasCharge]
 	// returning [ErrTxUnknown].
 	p.txGas[tx.Hash()] = 0
 
-	schedules := make([]scheduled, len(p.handlers))
+	schedules := make([]*Schedule, len(p.handlers))
 	var totalCost uint64
 	for i, h := range p.handlers {
 		s, ok := h.schedule(tx)
 		if !ok {
 			continue
 		}
-		schedules[i] = scheduled{Schedule: s, ok: true}
+		schedules[i] = &s
 		// It's safe to cap total cost at [math.MaxUint64] because intrinsic gas
 		// is always non-zero and the tx would therefore OOG. Not that we could
 		// reasonably expect such high gas consumption though ¯\_(ツ)_/¯
