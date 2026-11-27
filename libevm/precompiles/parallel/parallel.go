@@ -80,7 +80,7 @@ type result[T any] struct {
 
 // New constructs a new [Processor] with the specified number of concurrent
 // prefetching and processing workers. As prefetching is typically IO-bound, it
-// is reasonable to have“ more prefetchers than processors. The number of
+// is reasonable to have more prefetchers than processors. The number of
 // processors SHOULD be determined from GOMAXPROCS. Pipelining in such a fashion
 // stops prefetching for later transactions being blocked by earlier,
 // long-running processing; see the respective methods on [Handler] for more
