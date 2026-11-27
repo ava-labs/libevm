@@ -23,7 +23,9 @@ import (
 	"math/big"
 	"math/rand/v2"
 	"slices"
+	"sort"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -58,8 +60,10 @@ type recorder struct {
 	gotAggregated aggregated
 }
 
+var _ Handler[commonData, prefetched, recorded, aggregated] = (*recorder)(nil)
+
 type aggregated struct {
-	txOrder, processOrder []TxResult[recorded]
+	txOrder, processOrder, priorityOrder []TxResult[recorded]
 }
 
 type recorded struct {
@@ -80,13 +84,21 @@ func (r *recorder) BeforeBlock(sdb libevm.StateReader, h *types.Header) commonDa
 	}
 }
 
-func (r *recorder) ShouldProcess(tx IndexedTx, _ commonData) (bool, uint64) {
+func (r *recorder) priority(txIdx int) uint64 {
+	return uint64((txIdx * 3) % 7) //nolint:gosec // Known positive
+}
+
+func (r *recorder) txPriority(tx IndexedTx) uint64 {
+	return r.priority(tx.Index)
+}
+
+func (r *recorder) Schedule(tx IndexedTx, _ commonData) (Schedule, bool) {
 	// TODO(arr4n) test that the [commonData] received here is the same as that
 	// returned by [recorder.BeforeBlock].
 	if to := tx.To(); to != nil && *to == r.addr {
-		return true, r.gas
+		return Schedule{Priority: r.priority(tx.Index), Gas: r.gas}, true
 	}
-	return false, 0
+	return Schedule{}, false
 }
 
 type prefetched struct {
@@ -145,6 +157,9 @@ func (r *recorder) PostProcess(cd commonData, res Results[recorded]) aggregated 
 	for res := range res.ProcessOrder {
 		out.processOrder = append(out.processOrder, res)
 	}
+	for res := range res.PriorityOrder {
+		out.priorityOrder = append(out.priorityOrder, res)
+	}
 
 	if len(out.txOrder) > 0 {
 		if diff := cmp.Diff(cd, out.txOrder[0].Result.Common); diff != "" {
@@ -179,8 +194,8 @@ func TestProcessor(t *testing.T) {
 	t.Cleanup(p.Close)
 
 	type blockParams struct {
-		numTxs                              int
-		sendToAddrEvery, sufficientGasEvery int
+		numTxs                                 int
+		sendToHandlerEvery, sufficientGasEvery int
 	}
 
 	// Each set of params is effectively a test case, but they are all run on
@@ -191,22 +206,22 @@ func TestProcessor(t *testing.T) {
 		},
 		{
 			numTxs:             500,
-			sendToAddrEvery:    7,
+			sendToHandlerEvery: 7,
 			sufficientGasEvery: 5,
 		},
 		{
 			numTxs:             1_000,
-			sendToAddrEvery:    7,
+			sendToHandlerEvery: 7,
 			sufficientGasEvery: 5,
 		},
 		{
 			numTxs:             1_000,
-			sendToAddrEvery:    11,
+			sendToHandlerEvery: 11,
 			sufficientGasEvery: 3,
 		},
 		{
 			numTxs:             100,
-			sendToAddrEvery:    1,
+			sendToHandlerEvery: 1,
 			sufficientGasEvery: 1,
 		},
 		{
@@ -218,7 +233,7 @@ func TestProcessor(t *testing.T) {
 	for range 100 {
 		tests = append(tests, blockParams{
 			numTxs:             rng.IntN(1000),
-			sendToAddrEvery:    1 + rng.IntN(30),
+			sendToHandlerEvery: 1 + rng.IntN(30),
 			sufficientGasEvery: 1 + rng.IntN(30),
 		})
 	}
@@ -246,7 +261,7 @@ func TestProcessor(t *testing.T) {
 				)
 
 				wantProcessed[i] = true
-				if i%tt.sendToAddrEvery == 0 {
+				if i%tt.sendToHandlerEvery == 0 {
 					to = handler.addr
 				} else {
 					wantProcessed[i] = false
@@ -306,22 +321,40 @@ func TestProcessor(t *testing.T) {
 				}
 			}
 
+			wantPriority := slices.Clone(wantPerTx)
+			sort.Slice(wantPriority, func(i, j int) bool {
+				a, b := wantPriority[i].Tx, wantPriority[j].Tx
+				pa, pb := handler.txPriority(a), handler.txPriority(b)
+				if pa != pb {
+					return pa > pb // higher priority first
+				}
+				return a.Index < b.Index // lower index breaks ties
+			})
+
 			p.FinishBlock(sdb, block, nil)
 			tests := []struct {
 				name string
+				want []TxResult[recorded]
 				got  []TxResult[recorded]
 				opt  cmp.Option
 			}{
 				{
 					name: "in_transaction_order",
+					want: wantPerTx,
 					got:  h.gotAggregated.txOrder,
 				},
 				{
 					name: "in_process_order",
+					want: wantPerTx,
 					got:  h.gotAggregated.processOrder,
 					opt: cmpopts.SortSlices(func(a, b TxResult[recorded]) bool {
 						return a.Tx.Index < b.Tx.Index
 					}),
+				}, {
+					name: "in_priority_order",
+					want: wantPriority,
+					got:  h.gotAggregated.priorityOrder,
+					opt:  nil, // unlike the process-order test, only the `want` should be sorted by us
 				},
 			}
 			for _, tt := range tests {
@@ -332,7 +365,7 @@ func TestProcessor(t *testing.T) {
 							return a.Hash() == b.Hash()
 						}),
 					}
-					if diff := cmp.Diff(wantPerTx, tt.got, opts); diff != "" {
+					if diff := cmp.Diff(tt.want, tt.got, opts); diff != "" {
 						t.Errorf("handler.PostProcess() argument diff (-want +got):\n%s", diff)
 					}
 				})
@@ -342,6 +375,89 @@ func TestProcessor(t *testing.T) {
 		if t.Failed() {
 			break
 		}
+	}
+}
+
+type noopHandler struct{}
+
+func (noopHandler) BeforeBlock(libevm.StateReader, *types.Header) int     { return 0 }
+func (noopHandler) Schedule(IndexedTx, int) (Schedule, bool)              { return Schedule{}, false }
+func (noopHandler) Prefetch(libevm.StateReader, IndexedTx, int) int       { return 0 }
+func (noopHandler) Process(libevm.StateReader, IndexedTx, int, int) int   { return 0 }
+func (noopHandler) PostProcess(int, Results[int]) int                     { return 0 }
+func (noopHandler) AfterBlock(StateDB, int, *types.Block, types.Receipts) {}
+
+type ordered struct {
+	noopHandler
+	priority                          []uint64
+	gotProcessOrder, gotPriorityOrder []int
+}
+
+func (o *ordered) priorityOf(tx IndexedTx) uint64 { return o.priority[tx.Index] }
+
+func (o *ordered) Schedule(tx IndexedTx, _ int) (Schedule, bool) {
+	return Schedule{Priority: o.priorityOf(tx)}, true
+}
+
+func (o *ordered) Process(_ libevm.StateReader, tx IndexedTx, _, _ int) int {
+	// Sleeping longer for high-priority txs demonstrates that
+	// [Results.PriorityOrder] is not the same as [Results.ProcessOrder].
+	time.Sleep(time.Duration(o.priorityOf(tx)) * 5 * time.Millisecond) //nolint:gosec // Known to not overflow
+	return 0
+}
+
+func (o *ordered) PostProcess(_ int, res Results[int]) int {
+	for tx := range res.ProcessOrder {
+		o.gotProcessOrder = append(o.gotProcessOrder, tx.Tx.Index)
+	}
+	for tx := range res.PriorityOrder {
+		o.gotPriorityOrder = append(o.gotPriorityOrder, tx.Tx.Index)
+	}
+	return 0
+}
+
+func TestPriorityDispatchAndDelivery(t *testing.T) {
+	for _, workers := range []int{1, 100} {
+		t.Run(fmt.Sprintf("%d_workers", workers), func(t *testing.T) {
+			p := New(workers, workers)
+			t.Cleanup(p.Close)
+
+			priority := []uint64{
+				3, 7, 1, 0, 0, 2, 5, 4, 3, 0,
+			}
+			wantOrder := []int{
+				1, 6, 7, 0, 8, 5, 2, 3, 4, 9,
+			}
+
+			h := &ordered{priority: priority}
+			AddHandler(p, h)
+
+			txs := make(types.Transactions, len(priority))
+			for i := range txs {
+				txs[i] = types.NewTx(&types.LegacyTx{
+					Gas: 1e6,
+				})
+			}
+			b := types.NewBlock(&types.Header{}, txs, nil, nil, trie.NewStackTrie(nil))
+
+			_, _, sdb := ethtest.NewEmptyStateDB(t)
+			require.NoErrorf(t, p.StartBlock(sdb, params.Rules{}, b), "%T.StartBlock()", p)
+			p.FinishBlock(sdb, b, nil)
+
+			for action, got := range map[string][]int{
+				"processed": h.gotProcessOrder,
+				"delivered": h.gotPriorityOrder,
+			} {
+				// With exactly one worker for each stage, the [Results.ProcessOrder]
+				// matches the order in which work was dispatched.
+				if action == "processed" && workers != 1 {
+					continue
+				}
+				if diff := cmp.Diff(wantOrder, got); diff != "" {
+					t.Errorf("Prioritised transactions %s out of order; indices diff (-want +got):\n%s", action, diff)
+				}
+			}
+		})
 	}
 }
 
@@ -505,15 +621,11 @@ func TestIntegration(t *testing.T) {
 }
 
 type expensive struct {
+	noopHandler
 	gasCost uint64
 }
 
-func (expensive) BeforeBlock(libevm.StateReader, *types.Header) int     { return 0 }
-func (e expensive) ShouldProcess(IndexedTx, int) (do bool, gas uint64)  { return true, e.gasCost }
-func (expensive) Prefetch(libevm.StateReader, IndexedTx, int) int       { return 0 }
-func (expensive) Process(libevm.StateReader, IndexedTx, int, int) int   { return 0 }
-func (expensive) PostProcess(int, Results[int]) int                     { return 0 }
-func (expensive) AfterBlock(StateDB, int, *types.Block, types.Receipts) {}
+func (e expensive) Schedule(IndexedTx, int) (Schedule, bool) { return Schedule{Gas: e.gasCost}, true }
 
 func TestTotalCost(t *testing.T) {
 	tx := types.NewTx(&types.LegacyTx{
