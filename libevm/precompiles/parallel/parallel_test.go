@@ -87,6 +87,10 @@ func (r *recorder) priority(txIdx int) uint64 {
 	return uint64((txIdx * 3) % 7)
 }
 
+func (r *recorder) txPriority(tx IndexedTx) uint64 {
+	return r.priority(tx.Index)
+}
+
 func (r *recorder) Schedule(tx IndexedTx, _ commonData) (Schedule, bool) {
 	// TODO(arr4n) test that the [commonData] received here is the same as that
 	// returned by [recorder.BeforeBlock].
@@ -317,9 +321,9 @@ func TestProcessor(t *testing.T) {
 			}
 
 			wantPriority := slices.Clone(wantPerTx)
-			slices.SortStableFunc(wantPriority, func(a, b TxResult[recorded]) int {
-				if x := cmp.Compare(handler.priority(a.Tx.Index), handler.priority(b.Tx.Index)); x != 0 {
-					return x
+			slices.SortFunc(wantPriority, func(a, b TxResult[recorded]) int {
+				if x := cmp.Compare(handler.txPriority(a.Tx), handler.txPriority(b.Tx)); x != 0 {
+					return -x // higher priority first
 				}
 				return cmp.Compare(a.Tx.Index, b.Tx.Index)
 			})

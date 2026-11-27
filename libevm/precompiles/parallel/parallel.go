@@ -229,7 +229,7 @@ func (p *Processor) StartBlock(sdb *state.StateDB, rules params.Rules, b *types.
 	}
 	// Jobs were appended in transaction order. A stable sort breaks ties
 	// in priority by transaction order.
-	byPriority := func(a, b *job) int { return cmp.Compare(a.priority, b.priority) }
+	byPriority := func(a, b *job) int { return -cmp.Compare(a.priority, b.priority) }
 	slices.SortStableFunc(jobs, byPriority)
 
 	for i, hj := range perHandler {

@@ -125,10 +125,19 @@ type Results[R any] struct {
 // A Schedule defines when and at what cost a transaction SHOULD be processed by
 // the [Handler].
 //
-// Transactions with lower priority values are dispatched first to
+// Transactions with higher priority values are dispatched first to
 // [Handler.Prefetch] and [Handler.Process], and are delivered first on
 // [Results.PriorityOrder]. Ties are broken by transaction order within the
 // block.
+//
+// A non-zero priority SHOULD only be used when all of the following criteria
+// are met:
+//
+//  1. [Handler.PostProcess] implements a non-commutative function over results of [Handler.Process];
+//  2. The order in which results should be applied is different to transaction order; and
+//  3. EVM transactions are blocked on the result of this function on their respective result.
+//
+// Most [Handler] implementations SHOULD therefore return a zero priority.
 type Schedule struct {
 	Priority uint64
 	Gas      uint64
