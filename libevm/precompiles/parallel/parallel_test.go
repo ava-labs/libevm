@@ -85,7 +85,7 @@ func (r *recorder) BeforeBlock(sdb libevm.StateReader, h *types.Header) commonDa
 }
 
 func (r *recorder) priority(txIdx int) uint64 {
-	return uint64((txIdx * 3) % 7)
+	return uint64((txIdx * 3) % 7) //nolint:gosec // Known positive
 }
 
 func (r *recorder) txPriority(tx IndexedTx) uint64 {
@@ -402,7 +402,7 @@ func (o *ordered) Schedule(tx IndexedTx, _ int) (Schedule, bool) {
 func (o *ordered) Process(_ libevm.StateReader, tx IndexedTx, _, _ int) int {
 	// Sleeping longer for high-priority txs demonstrates that
 	// [Results.PriorityOrder] is not the same as [Results.ProcessOrder].
-	time.Sleep(time.Duration(o.priorityOf(tx)) * 5 * time.Millisecond)
+	time.Sleep(time.Duration(o.priorityOf(tx)) * 5 * time.Millisecond) //nolint:gosec // Known to not overflow
 	return 0
 }
 
