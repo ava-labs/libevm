@@ -37,6 +37,8 @@ type ExecutionResult struct {
 	RefundedGas uint64 // Total gas refunded after execution
 	Err         error  // Any error encountered during the execution(listed in core/vm/errors.go)
 	ReturnData  []byte // Returned data from evm(function result or data supplied with revert opcode)
+
+	GasExecuted uint64 // Before enforcement of [params.RulesHooks.MinimumGasConsumption] but after refunds
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -219,7 +221,8 @@ type StateTransition struct {
 	state        vm.StateDB
 	evm          *vm.EVM
 
-	opts []StateTransitionOption //libevm
+	opts        []StateTransitionOption //libevm
+	gasExecuted uint64                  // Before enforcement of [params.RulesHooks.MinimumGasConsumption] but after refunds
 }
 
 // NewStateTransition initialises and returns a new state transition object.

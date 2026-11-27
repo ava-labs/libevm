@@ -26,7 +26,6 @@ import (
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/options"
-	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/params"
 )
 
@@ -76,12 +75,12 @@ func WithoutMinimumGasConsumption() StateTransitionOption {
 // state transitions (e.g. nonce incrementing) will be reverted to a snapshot
 // taken before execution.
 func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
-	if err := st.canExecuteTransaction(); err != nil {
-		return nil, err
-	}
-
 	snap := st.state.Snapshot()   // computationally cheap operation
 	res, err := st.transitionDb() // original geth implementation
+
+	if err == nil { // NOTE ==
+		res.GasExecuted = st.gasExecuted
+	}
 
 	// [NOTE]: At the time of implementation of this libevm override, non-nil
 	// values of `err` and `invalid` (below) are mutually exclusive. However, as
@@ -95,23 +94,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	return res, err
 }
 
-// canExecuteTransaction is a convenience wrapper for calling the
-// [params.RulesHooks.CanExecuteTransaction] hook.
-func (st *StateTransition) canExecuteTransaction() error {
-	hooks := st.rulesHooks()
-	if err := hooks.CanExecuteTransaction(st.msg.From, st.msg.To, st.state); err != nil {
-		log.Debug(
-			"Transaction execution blocked by libevm hook",
-			"from", st.msg.From,
-			"to", st.msg.To,
-			"hooks", log.TypeOf(hooks),
-			"reason", err,
-		)
-		return err
-	}
-	return nil
-}
-
 // afterGasRefund updates the gas remaining to reflect the
 // [params.RulesHooks.ShouldRefundGas] and
 // [params.RulesHooks.MinimumGasConsumption] methods. It MUST be called after
@@ -121,6 +103,12 @@ func (st *StateTransition) afterGasRefund(refunded uint64) {
 	if !st.rulesHooks().ShouldRefundGas() {
 		st.gasRemaining -= refunded
 	}
+
+	// This is placed after refund adjustment as refunds are set upstream in
+	// geth, to more closely reflect actual resource usage. We have added the
+	// gas-execution field to avoid the minimum charge (below) skewing metrics
+	// about actual throughput.
+	st.gasExecuted = st.msg.GasLimit - st.gasRemaining
 
 	c := options.As[stateTransitionConfig](st.opts...)
 	if c.disableMinimumGasConsumption {

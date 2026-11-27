@@ -48,7 +48,6 @@ type Stub struct {
 	PrecompileOverrides     map[common.Address]libevm.PrecompiledContract
 	ActivePrecompilesFn     func([]common.Address) []common.Address
 	AccessListGasFn         func(libevm.AccessList) (uint64, bool, error)
-	CanExecuteTransactionFn func(common.Address, *common.Address, libevm.StateReader) error
 	CanCreateContractFn     func(*libevm.AddressContext, uint64, libevm.StateReader) (uint64, error)
 	MinimumGasConsumptionFn func(txGasLimit uint64) uint64
 	DisableGasRefunds       bool
@@ -124,15 +123,6 @@ func (s Stub) CheckConfigCompatible(newcfg *params.ChainConfig, headNumber *big.
 // Description returns s.DescriptionSuffix.
 func (s Stub) Description() string {
 	return s.DescriptionSuffix
-}
-
-// CanExecuteTransaction proxies arguments to the s.CanExecuteTransactionFn
-// function if non-nil, otherwise it acts as a noop.
-func (s Stub) CanExecuteTransaction(from common.Address, to *common.Address, sr libevm.StateReader) error {
-	if f := s.CanExecuteTransactionFn; f != nil {
-		return f(from, to, sr)
-	}
-	return nil
 }
 
 // CanCreateContract proxies arguments to the s.CanCreateContractFn function if

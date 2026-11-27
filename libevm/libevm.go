@@ -84,16 +84,6 @@ type AddressContext struct {
 	// the type of call made to a contract; i.e. the addresses pushed to the
 	// stack by the vm.CALLER and vm.SELF op codes, respectively.
 	EVMSemantic CallerAndSelf
-	// Raw addresses are those that would be available to a contract under a
-	// standard CALL; i.e. not interpreted according EVM rules. They are the
-	// "intuitive" addresses such that the `Caller` is the account that called
-	// `Self` even if it did so via DELEGATECALL or CALLCODE (in which cases
-	// `Raw` and `EVMSemantic` would differ).
-	//
-	// Raw MUST NOT be nil when returned to a precompile implementation but MAY
-	// be nil in other situations (e.g. hooks), which MUST document behaviour on
-	// a case-by-case basis.
-	Raw *CallerAndSelf
 }
 
 // CallerAndSelf carries said addresses for use in an [AddressContext], where

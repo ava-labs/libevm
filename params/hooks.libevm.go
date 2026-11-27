@@ -82,10 +82,8 @@ type RulesHooks interface {
 // by returning a nil (allowed) or non-nil (blocked) error.
 type RulesAllowlistHooks interface {
 	// CanCreateContract is called after the deployer's nonce is incremented but
-	// before all other state-modifying actions. The [libevm.AddressContext.Raw]
-	// field will always be nil.
+	// before all other state-modifying actions.
 	CanCreateContract(_ *libevm.AddressContext, gas uint64, _ libevm.StateReader) (gasRemaining uint64, _ error)
-	CanExecuteTransaction(from common.Address, to *common.Address, _ libevm.StateReader) error
 }
 
 // Hooks returns the hooks registered with [RegisterExtras], or [NOOPHooks] if
@@ -131,11 +129,6 @@ func (NOOPHooks) CheckConfigCompatible(*ChainConfig, *big.Int, uint64) *ConfigCo
 // Description returns the empty string.
 func (NOOPHooks) Description() string {
 	return ""
-}
-
-// CanExecuteTransaction allows all (otherwise valid) transactions.
-func (NOOPHooks) CanExecuteTransaction(_ common.Address, _ *common.Address, _ libevm.StateReader) error {
-	return nil
 }
 
 // CanCreateContract allows all (otherwise valid) contract deployment, not

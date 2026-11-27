@@ -210,7 +210,7 @@ type PrecompileEnvironment interface {
 	UseGas(uint64) (hasEnoughGas bool)
 	Value() *uint256.Int
 
-	BlockHeader() (types.Header, error)
+	BlockHeader() *types.Header
 	BlockNumber() *big.Int
 	BlockTime() uint64
 
@@ -258,11 +258,9 @@ func (args *evmCallArgs) env() *environment {
 	}
 
 	return &environment{
-		evm:       args.evm,
-		self:      contract,
-		callType:  args.callType,
-		rawCaller: args.caller.Address(),
-		rawSelf:   args.addr,
+		evm:      args.evm,
+		self:     contract,
+		callType: args.callType,
 	}
 }
 
