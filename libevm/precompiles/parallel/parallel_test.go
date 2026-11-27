@@ -17,16 +17,16 @@
 package parallel
 
 import (
-	"cmp"
 	"encoding/binary"
 	"fmt"
 	"math"
 	"math/big"
 	"math/rand/v2"
 	"slices"
+	"sort"
 	"testing"
 
-	gocmp "github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
@@ -113,7 +113,7 @@ func (r *recorder) Prefetch(sdb libevm.StateReader, tx IndexedTx, cd commonData)
 }
 
 func (r *recorder) Process(sdb libevm.StateReader, tx IndexedTx, cd commonData, data prefetched) recorded {
-	if diff := gocmp.Diff(cd, data.common); diff != "" {
+	if diff := cmp.Diff(cd, data.common); diff != "" {
 		r.tb.Errorf("Mismatched CommonData propagation to Handler methods; diff (-Process, +Prefetch):\n%s", diff)
 	}
 
@@ -161,7 +161,7 @@ func (r *recorder) PostProcess(cd commonData, res Results[recorded]) aggregated 
 	}
 
 	if len(out.txOrder) > 0 {
-		if diff := gocmp.Diff(cd, out.txOrder[0].Result.Common); diff != "" {
+		if diff := cmp.Diff(cd, out.txOrder[0].Result.Common); diff != "" {
 			r.tb.Errorf("Mismatched CommonData propagation to Handler methods; diff (-PostProcess, +Process):\n%s", diff)
 		}
 	}
@@ -315,17 +315,19 @@ func TestProcessor(t *testing.T) {
 					t.Errorf("Result(%d) got ok %t; want %t", i, gotOK, wantOK)
 					continue
 				}
-				if diff := gocmp.Diff(want, got.Result); diff != "" {
+				if diff := cmp.Diff(want, got.Result); diff != "" {
 					t.Errorf("Result(%d) diff (-want +got):\n%s", i, diff)
 				}
 			}
 
 			wantPriority := slices.Clone(wantPerTx)
-			slices.SortFunc(wantPriority, func(a, b TxResult[recorded]) int {
-				if x := cmp.Compare(handler.txPriority(a.Tx), handler.txPriority(b.Tx)); x != 0 {
-					return -x // higher priority first
+			sort.Slice(wantPriority, func(i, j int) bool {
+				a, b := wantPriority[i].Tx, wantPriority[j].Tx
+				pa, pb := handler.txPriority(a), handler.txPriority(b)
+				if pa != pb {
+					return pa > pb // higher priority first
 				}
-				return cmp.Compare(a.Tx.Index, b.Tx.Index)
+				return a.Index < b.Index // lower index breaks ties
 			})
 
 			p.FinishBlock(sdb, block, nil)
@@ -333,7 +335,7 @@ func TestProcessor(t *testing.T) {
 				name string
 				want []TxResult[recorded]
 				got  []TxResult[recorded]
-				opt  gocmp.Option
+				opt  cmp.Option
 			}{
 				{
 					name: "in_transaction_order",
@@ -351,17 +353,18 @@ func TestProcessor(t *testing.T) {
 					name: "in_priority_order",
 					want: wantPriority,
 					got:  h.gotAggregated.priorityOrder,
+					opt:  nil, // unlike the process-order test, only the `want` should be sorted by us
 				},
 			}
 			for _, tt := range tests {
 				t.Run(tt.name, func(t *testing.T) {
-					opts := gocmp.Options{
+					opts := cmp.Options{
 						tt.opt,
-						gocmp.Comparer(func(a, b *types.Transaction) bool {
+						cmp.Comparer(func(a, b *types.Transaction) bool {
 							return a.Hash() == b.Hash()
 						}),
 					}
-					if diff := gocmp.Diff(tt.want, tt.got, opts); diff != "" {
+					if diff := cmp.Diff(tt.want, tt.got, opts); diff != "" {
 						t.Errorf("handler.PostProcess() argument diff (-want +got):\n%s", diff)
 					}
 				})
@@ -417,7 +420,7 @@ func TestIntegration(t *testing.T) {
 		wantReturnData [][]byte
 		wantReceipts   types.Receipts
 	)
-	ignore := gocmp.Options{
+	ignore := cmp.Options{
 		cmpopts.IgnoreFields(
 			types.Receipt{},
 			"PostState", "CumulativeGasUsed", "BlockNumber", "BlockHash", "Bloom",
@@ -505,7 +508,7 @@ func TestIntegration(t *testing.T) {
 
 			got, err := core.ApplyMessage(evm, msg, &pool)
 			require.NoError(t, err, "core.ApplyMessage()")
-			if diff := gocmp.Diff(wantReturnData[i], got.ReturnData, cmpopts.EquateEmpty()); diff != "" {
+			if diff := cmp.Diff(wantReturnData[i], got.ReturnData, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("Return data from precompile (-want +got):\n%s", diff)
 			}
 		})
@@ -527,7 +530,7 @@ func TestIntegration(t *testing.T) {
 	}
 	sut.FinishBlock(state, block, receipts)
 
-	if diff := gocmp.Diff(wantReceipts, handler.gotReceipts, ignore); diff != "" {
+	if diff := cmp.Diff(wantReceipts, handler.gotReceipts, ignore); diff != "" {
 		t.Errorf("%T diff (-want +got):\n%s", receipts, diff)
 	}
 }
