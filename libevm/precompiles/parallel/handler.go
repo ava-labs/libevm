@@ -227,13 +227,15 @@ func (w *wrapper[CD, D, R, A]) schedule(tx IndexedTx) (Schedule, bool) {
 	return w.Handler.Schedule(tx, w.common.Peek())
 }
 
-func (w *wrapper[CD, D, R, A]) beforeWork(jobs []*job) {
-	w.byPriority = jobs
-	n := len(jobs)
-	w.txsBeingProcessed.Add(n)
+func (w *wrapper[CD, D, R, A]) beforeWork(byPriority []*job) {
+	w.byPriority = byPriority
+	n := len(byPriority)
+
 	w.whenProcessed = make(chan TxResult[R], n)
 	w.txOrder = make(chan TxResult[R], n)
 	w.priorityOrder = make(chan TxResult[R], n)
+
+	w.txsBeingProcessed.Add(n)
 	go func() {
 		w.txsBeingProcessed.Wait()
 		// [wrapper.finishBlock] blocks until this is closed, guaranteeing

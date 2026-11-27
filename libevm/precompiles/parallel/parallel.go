@@ -39,7 +39,7 @@ import (
 type handler interface {
 	beforeBlock(libevm.StateReader, *types.Block)
 	schedule(IndexedTx) (Schedule, bool)
-	beforeWork(jobs []*job)
+	beforeWork(byPriority []*job)
 	prefetch(libevm.StateReader, *prefetch)
 	nullResult(*job)
 	process(libevm.StateReader, *process)
