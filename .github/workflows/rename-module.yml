@@ -13,17 +13,24 @@ on:
         type: string
         default: ""
 
+permissions: {}
+
 jobs:
   rename-module:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0 # everything
+          persist-credentials: true  # kept: job runs git commands that use the checkout token
 
       - run: git fetch --tags https://github.com/ethereum/go-ethereum.git
 
-      - run: git checkout ${{ inputs.source }}
+      - run: git checkout ${INPUTS_SOURCE}
+        env:
+          INPUTS_SOURCE: ${{ inputs.source }}
 
       - name: References pointing to source
         # NOTE: This step assumes that the source has been checked out, which
@@ -45,37 +52,45 @@ jobs:
 
       - name: Validate Go module
         if: ${{ steps.go.outputs.MODULE != 'github.com/ava-labs/libevm' && steps.go.outputs.MODULE != 'github.com/ethereum/go-ethereum' }}
-        run: echo "Unexpected Go module ${{ steps.go.outputs.MODULE }}" && exit 1;
+        run: echo "Unexpected Go module ${STEPS_GO_OUTPUTS_MODULE}" && exit 1;
+        env:
+          STEPS_GO_OUTPUTS_MODULE: ${{ steps.go.outputs.MODULE }}
 
       - name: Set variables
         id: vars
         env:
           # `cond && ifTrue || ifFalse` is effectively a ternary operator, based on short-circuiting Boolean logic (assumes `ifTrue` is truthy)
           RENAME_TO: ${{ steps.go.outputs.MODULE_SUFFIX == 'ava-labs/libevm' && 'ethereum/go-ethereum' || 'ava-labs/libevm' }}
+          STEPS_GO_OUTPUTS_MODULE_SUFFIX: ${{ steps.go.outputs.MODULE_SUFFIX}}
         run: |
-          echo "RENAME_FROM=${{ steps.go.outputs.MODULE_SUFFIX}}" >> "$GITHUB_OUTPUT";
+          echo "RENAME_FROM=${STEPS_GO_OUTPUTS_MODULE_SUFFIX}" >> "$GITHUB_OUTPUT";
           echo "RENAME_TO=${RENAME_TO}" >> "$GITHUB_OUTPUT";
           echo "WORKFLOW_HASH=${WORKFLOW_HASH}" >> "$GITHUB_OUTPUT";
           echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT";
-          echo "AUTO_BRANCH_NAME=auto/rename-module/to=${RENAME_TO}/src=$(git rev-parse HEAD)/workflow_sha=${{ github.workflow_sha }}/run=${{ github.run_id }}" \
+          echo "AUTO_BRANCH_NAME=auto/rename-module/to=${RENAME_TO}/src=$(git rev-parse HEAD)/workflow_sha=${GITHUB_WORKFLOW_SHA}/run=${{ github.run_id }}" \
             >> "$GITHUB_OUTPUT";
 
       - name: Globally rename module from ${{ steps.vars.outputs.RENAME_FROM }} to ${{ steps.vars.outputs.RENAME_TO }}
         run: |
-          go mod edit -module github.com/${{ steps.vars.outputs.RENAME_TO }};
+          go mod edit -module github.com/${STEPS_VARS_OUTPUTS_RENAME_TO};
           find . \
             -iname '*.go' \
             -o -iname '*.txt' \
             -o -iname '*.go.tpl' \
             -o -iname '*.proto' \
             -not -wholename '*/libevm/tooling/*' | xargs \
-            sed -i -E 's|(["`]github\.com/)${{ steps.vars.outputs.RENAME_FROM }}|\1${{ steps.vars.outputs.RENAME_TO }}|g';
+            sed -i -E 's|(["`]github\.com/)'"${STEPS_VARS_OUTPUTS_RENAME_FROM}"'|\1'"${STEPS_VARS_OUTPUTS_RENAME_TO}"'|g';
+        env:
+          STEPS_VARS_OUTPUTS_RENAME_TO: ${{ steps.vars.outputs.RENAME_TO }}
+          STEPS_VARS_OUTPUTS_RENAME_FROM: ${{ steps.vars.outputs.RENAME_FROM }}
 
       - name: Remnant references
         run: |
           find . -type f | \
-            xargs grep -In github.com/${{ steps.vars.outputs.RENAME_FROM }} | \
-            grep -v "https://github.com/${{ steps.vars.outputs.RENAME_FROM }}"
+            xargs grep -In github.com/${STEPS_VARS_OUTPUTS_RENAME_FROM} | \
+            grep -v "https://github.com/${STEPS_VARS_OUTPUTS_RENAME_FROM}"
+        env:
+          STEPS_VARS_OUTPUTS_RENAME_FROM: ${{ steps.vars.outputs.RENAME_FROM }}
 
       - name: Smoke tests
         # `go list -m` shows us the module name and grep will non-zero exit on mismatch
@@ -84,9 +99,11 @@ jobs:
         # - bind generates tests and a go.mod on the fly
         # - rlpgen has testdata with imports that need updating
         run: |
-          go list -m | grep github.com/${{ steps.vars.outputs.RENAME_TO }};
+          go list -m | grep github.com/${STEPS_VARS_OUTPUTS_RENAME_TO};
           go build ./...;
           go test ./accounts/abi/bind ./rlp/rlpgen
+        env:
+          STEPS_VARS_OUTPUTS_RENAME_TO: ${{ steps.vars.outputs.RENAME_TO }}
 
       - name: Set branch name
         id: branch

@@ -11,16 +11,21 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+permissions: {}
+
 jobs:
   # If adding a new job, add it to the `needs` list of the `go` job as this is
   # what gates PRs.
   go:
+    permissions: {}
     runs-on: ubuntu-latest
     needs: [go_test_short, go_test_nocgo, go_test_tooling, go_generate, go_tidy]
     steps:
       - run: echo "Dependencies successful"
 
   go_test_short:
+    permissions:
+      contents: read
     env:
       # See build/checksums.txt for the latest version and checksum
       EXECUTION_SPEC_TESTS_VERSION: v2.1.0
@@ -45,6 +50,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: recursive
+          persist-credentials: false
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
@@ -100,6 +106,8 @@ jobs:
       - run: go test ./crypto/... # btcec 2.3.4+ compatibility
 
   go_test_tooling:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -111,20 +119,25 @@ jobs:
         with:
           fetch-depth: 0 # everything
           ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: "./libevm/tooling/go.mod"
       - name: Create local `main` if non-existent
         run: git show-ref --quiet --verify refs/heads/main || git branch main origin/main
-      - run: go test -v ./... --target_branch="${{ env.TARGET_BRANCH }}"
+      - run: go test -v ./... --target_branch="${TARGET_BRANCH}"
 
   go_generate:
+    permissions:
+      contents: read
     env:
       EXCLUDE_REGEX: "ava-labs/libevm/(accounts/usbwallet/trezor)$"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
@@ -137,6 +150,8 @@ jobs:
         run: git diff --exit-code
 
   go_tidy:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -146,6 +161,8 @@ jobs:
         working-directory: ${{ matrix.dir }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
