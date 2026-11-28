@@ -484,6 +484,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 // checkAndFlush checks if an interruption signal is received or the
 // batch size has exceeded the allowance.
 func (dl *diskLayer) checkAndFlush(ctx *generatorContext, current []byte) error {
+	ctx.trimSkipsUpTo(current)
 	ctx.progress = common.CopyBytes(current)
 
 	aborting := false
@@ -703,8 +704,9 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	// For the account or storage slot at the interruption, they will be
 	// processed twice by the generator(they are already processed in the
 	// last run) but it's fine.
-	ctx := newGeneratorContext(stats, dl.diskdb, accMarker, dl.genMarker, withCancelFromDiskLayer(dl))
+	ctx := newGeneratorContext(stats, dl.diskdb, accMarker, dl.genMarker, withCancelFromDiskLayer(dl), withSkipsFromDiskLayer(dl))
 	defer ctx.close()
+	defer dl.keepSkips(ctx)
 
 	if err := generateAccounts(ctx, dl, accMarker); err != nil {
 		if err == errLibEVMIteratorAborted {

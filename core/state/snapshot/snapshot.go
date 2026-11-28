@@ -645,6 +645,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		triedb:     base.triedb,
 		genMarker:  base.genMarker,
 		genPending: base.genPending,
+		genSkips:   base.genSkips,
 	}
 	// If snapshot generation hasn't finished yet, port over all the starts and
 	// continue where the previous round left off.
